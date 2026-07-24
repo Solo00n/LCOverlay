@@ -1,0 +1,12 @@
+# Build output
+bin/
+obj/
+
+# Editor / tooling
+.vs/
+*.user
+*.suo
+.claude/
+
+# Local packaging artifacts
+*.zip

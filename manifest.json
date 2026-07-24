@@ -1,0 +1,9 @@
+{
+  "name": "LCBridgeOverlay",
+  "version_number": "1.4.0",
+  "website_url": "https://github.com/Solo00n/LCOverlay",
+  "description": "In-game GDLP HUD overlay: quota, moon, live monsters (with state icons) & traps, BCME events, plus a built-in WebSocket bridge for the OBS/HTML overlay. Built for the GDLP modpack.",
+  "dependencies": [
+    "BepInEx-BepInExPack-5.4.2305"
+  ]
+}

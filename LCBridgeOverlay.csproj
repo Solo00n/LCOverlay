@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- Lethal Company использует .NET Standard 2.1 -->
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <AssemblyName>LCBridgeOverlay</AssemblyName>
+    <Product>LCBridgeOverlay</Product>
+    <Version>1.4.0</Version>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <!-- Иконки монстров/ловушек — встраиваются прямо в DLL -->
+  <ItemGroup>
+    <EmbeddedResource Include="res/**/*.png" />
+  </ItemGroup>
+
+  <!-- Ссылки на BepInEx и игровые DLL из NuGet (как у LCBridge). -->
+  <ItemGroup>
+    <PackageReference Include="BepInEx.Analyzers" Version="1.*" PrivateAssets="all" />
+    <PackageReference Include="BepInEx.Core" Version="5.*" />
+    <PackageReference Include="BepInEx.PluginInfoProps" Version="2.*" />
+    <PackageReference Include="LethalCompany.GameLibs.Steam" Version="*-*" Publicize="true" PrivateAssets="all" />
+  </ItemGroup>
+
+</Project>
