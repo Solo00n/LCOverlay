@@ -38,6 +38,33 @@ namespace LCBridgeOverlay
             _tokens.Clear();
             _hauntTarget.Clear();
             _scanned.Clear();
+            _scanIdCache.Clear();
+            _terminal = null;
+        }
+
+        // Бестиарий игры: Terminal.scannedEnemyIDs хранит creatureScanID всех
+        // существ, которых игрок уже отсканировал. Это надёжнее ловли узла скана.
+        private static Terminal _terminal;
+        private static readonly Dictionary<int, int> _scanIdCache = new Dictionary<int, int>();
+
+        private static bool IsScannedByBestiary(EnemyAI ai)
+        {
+            try
+            {
+                if (_terminal == null) _terminal = UnityEngine.Object.FindObjectOfType<Terminal>();
+                if (_terminal == null || _terminal.scannedEnemyIDs == null) return false;
+                int id = ai.GetInstanceID();
+                int scanId;
+                if (!_scanIdCache.TryGetValue(id, out scanId))
+                {
+                    scanId = -1;
+                    var node = ai.GetComponentInChildren<ScanNodeProperties>(true);
+                    if (node != null) scanId = node.creatureScanID;
+                    _scanIdCache[id] = scanId;
+                }
+                return scanId >= 0 && _terminal.scannedEnemyIDs.Contains(scanId);
+            }
+            catch { return false; }
         }
 
         /// <summary>Отметить врага отсканированным (зовётся из патча сканера).</summary>
@@ -148,7 +175,8 @@ namespace LCBridgeOverlay
                     // оверлей рисует от этой иконки трассеры
                     if (IsTurretFiring(ai)) tok += "+Firing";
 
-                    if (_scanned.Contains(ai.GetInstanceID())) tok += "+Scanned";
+                    // отсканирован: по бестиарию игры ИЛИ пойман нашим патчем узла скана
+                    if (IsScannedByBestiary(ai) || _scanned.Contains(ai.GetInstanceID())) tok += "+Scanned";
                     if (tok.Length > 0) _tokens[ai.GetInstanceID()] = tok;
                 }
 

@@ -302,7 +302,7 @@ namespace LCBridgeOverlay
         {
             var p = DataParser.Current;
             bool connected = DataParser.Current != null && (Time.unscaledTime - DataParser.Heartbeat) < 5f;
-            bool inSave = false, paused = false, spectating = false;
+            bool inSave = false, paused = false, spectating = false, leaving = false;
             try
             {
                 var gnm = GameNetworkManager.Instance;
@@ -313,6 +313,7 @@ namespace LCBridgeOverlay
                 spectating = lp != null && lp.isPlayerDead;
                 if (lp != null && lp.quickMenuManager != null)
                     paused = lp.quickMenuManager.isMenuOpen;
+                leaving = ShipLeavingNow();
             }
             catch { }
             // при паузе оверлей НЕ прячем — он остаётся на игровом плане, но уходит
@@ -323,7 +324,7 @@ namespace LCBridgeOverlay
             if (_canvas != null) _canvas.sortingOrder = paused ? -1000 : 500;
 
             UpdateIdleFade(dt);
-            bool allowed = ConfigSettings.Enabled.Value && inSave &&
+            bool allowed = ConfigSettings.Enabled.Value && inSave && !leaving &&
                 (ConfigSettings.AlwaysVisible.Value || (connected && (spectating || (p != null && p.onShip))));
             bool target = allowed && !_userHidden;
 
@@ -354,6 +355,29 @@ namespace LCBridgeOverlay
         }
 
         private static float EaseOutCubic(float t) => 1f - Mathf.Pow(1f - t, 3f);
+
+        // Прячем оверлей во время взлёта/перелёта — когда игра показывает по центру
+        // экрана инфу и рычаг ещё нельзя дёрнуть. Ориентир — сам рычаг отлёта:
+        // пока он НЕ интерактивен (и мы не на луне), идёт переход → прячемся.
+        private static StartMatchLever _lever;
+        private bool ShipLeavingNow()
+        {
+            try
+            {
+                var sor = StartOfRound.Instance;
+                if (sor == null) return false;
+                if (sor.shipIsLeaving || sor.travellingToNewLevel) return true;
+
+                if (_lever == null) _lever = UnityEngine.Object.FindObjectOfType<StartMatchLever>();
+                if (_lever != null && _lever.triggerScript != null)
+                {
+                    // рычаг заблокирован и мы не на приземлившемся корабле → переход
+                    if (!_lever.triggerScript.interactable && !sor.shipHasLanded) return true;
+                }
+            }
+            catch { }
+            return false;
+        }
 
         // затухание оверлея, когда камера долго неподвижна
         private void UpdateIdleFade(float dt)

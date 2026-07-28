@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using GameNetcodeStuff;
+using UnityEngine;
 
 namespace LCBridgeOverlay
 {
@@ -237,9 +238,20 @@ namespace LCBridgeOverlay
             var inside = new List<string>();
             try
             {
-                // считаем по имени отдельно для улицы и комплекса
+                // считаем по имени отдельно для улицы и комплекса + ближайшую дистанцию
                 var outCount = new Dictionary<string, int>();
                 var inCount = new Dictionary<string, int>();
+                var outDist = new Dictionary<string, float>();
+                var inDist = new Dictionary<string, float>();
+
+                // позиция локального игрока — для «чем ближе, тем менее прозрачно»
+                Vector3 me = Vector3.zero; bool haveMe = false;
+                try
+                {
+                    var lp = GameNetworkManager.Instance?.localPlayerController;
+                    if (lp != null) { me = lp.transform.position; haveMe = true; }
+                }
+                catch { }
 
                 foreach (var ai in GetAllLiveEnemies())
                 {
@@ -257,10 +269,19 @@ namespace LCBridgeOverlay
                     var dict = ai.isOutside ? outCount : inCount;
                     dict.TryGetValue(name, out int c);
                     dict[name] = c + 1;
+
+                    if (haveMe)
+                    {
+                        float d = Vector3.Distance(me, ai.transform.position);
+                        var dd = ai.isOutside ? outDist : inDist;
+                        if (!dd.TryGetValue(name, out float md) || d < md) dd[name] = d;
+                    }
                 }
 
-                foreach (var kv in outCount) outside.Add(kv.Value > 1 ? $"{kv.Key} x{kv.Value}" : kv.Key);
-                foreach (var kv in inCount) inside.Add(kv.Value > 1 ? $"{kv.Key} x{kv.Value}" : kv.Key);
+                // формат записи: "Name xN @<метры>" (дистанцию оверлей вырезает из
+                // сигнатуры рейки, чтобы не пересобирать её каждую секунду)
+                foreach (var kv in outCount) outside.Add(Fmt(kv.Key, kv.Value, outDist));
+                foreach (var kv in inCount) inside.Add(Fmt(kv.Key, kv.Value, inDist));
                 // стабильный порядок → payload не меняется каждую секунду из-за перестановки
                 outside.Sort(StringComparer.Ordinal);
                 inside.Sort(StringComparer.Ordinal);
@@ -270,6 +291,14 @@ namespace LCBridgeOverlay
                 Plugin.Log?.LogDebug($"GetMonsters fail: {e.Message}");
             }
             return (outside, inside);
+        }
+
+        private static string Fmt(string name, int count, Dictionary<string, float> dist)
+        {
+            string s = count > 1 ? $"{name} x{count}" : name;
+            if (dist != null && dist.TryGetValue(name, out float d))
+                s += " @" + Mathf.RoundToInt(d);
+            return s;
         }
 
         // ---- ловушки на локации: турели, мины, шипованные потолки ----

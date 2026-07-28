@@ -32,11 +32,18 @@ namespace LCBridgeOverlay
         private class SwayItem
         {
             public RectTransform Rt;
+            public Image Img;                 // для прозрачности по дистанции
+            public string GroupKey;           // для поиска дистанции монстра
             public float Speed, Phase, Amp;   // покачивание
             public float Scale;               // целевой масштаб (для «размер по кол-ву»)
             public float Appear;              // 0..1 — анимация появления (поп-ин)
+            public float Alpha = 1f;          // текущая (сглаженная) прозрачность
         }
         private readonly List<SwayItem> _sway = new List<SwayItem>();
+
+        // ближайшая дистанция до игрока по группе монстров (обновляется каждый пакет,
+        // НЕ вызывая пересборку рейки — прозрачность крутим в Update)
+        private readonly Dictionary<string, float> _distByGroup = new Dictionary<string, float>();
 
         /// <summary>Иконки турелей на нижней рейке — эмиттеры для эффекта стрельбы.</summary>
         public readonly List<RectTransform> TurretIcons = new List<RectTransform>();
@@ -79,7 +86,25 @@ namespace LCBridgeOverlay
                 float sc = s.Scale * EaseOutBack(s.Appear);         // появление с «отскоком»
                 s.Rt.localScale = new Vector3(sc, sc, 1f);
                 s.Rt.localRotation = Quaternion.Euler(0f, 0f, Mathf.Sin((t + s.Phase) * s.Speed) * s.Amp);
+
+                // прозрачность по дистанции: чем ближе монстр — тем плотнее иконка
+                if (s.Img != null)
+                {
+                    float ta = AlphaForGroup(s.GroupKey);
+                    s.Alpha = Mathf.Lerp(s.Alpha, ta, 1f - Mathf.Exp(-6f * dt));
+                    var c = s.Img.color; c.a = s.Alpha * s.Appear; s.Img.color = c;
+                }
             }
+        }
+
+        // near=полностью, far=почти прозрачно. Без ProximityFade — всегда 1.
+        private float AlphaForGroup(string groupKey)
+        {
+            if (!ConfigSettings.ProximityFade.Value || string.IsNullOrEmpty(groupKey)) return 1f;
+            if (!_distByGroup.TryGetValue(groupKey, out float d)) return 1f;
+            const float near = 6f, far = 34f, minA = 0.28f;
+            float k = Mathf.InverseLerp(far, near, d);   // near→1, far→0
+            return Mathf.Lerp(minA, 1f, k);
         }
 
         // ease-out-back: масштаб 0 → ~1.1 → 1 (эффект «выскочил»)
@@ -93,15 +118,35 @@ namespace LCBridgeOverlay
 
         public void SetMobs(string[] outside, string[] inside)
         {
-            // сигнатура НЕ зависит от порядка (мост отдаёт список в разном порядке
-            // каждую секунду) → перестраиваем рейку только при реальном изменении
-            // состава, иначе иконки «дёргались» (пере-появлялись) каждую секунду
+            // дистанции обновляем ВСЕГДА (для живой прозрачности), не пересобирая рейку
+            UpdateDistances(outside);
+            UpdateDistances(inside);
+
+            // сигнатура НЕ зависит ни от порядка, ни от дистанции (мост шлёт список в
+            // разном порядке + дистанция меняется каждый тик) → перестраиваем рейку
+            // только при реальном изменении СОСТАВА, иначе иконки «дёргались» каждую секунду
             string sig = JoinSorted(outside) + "||" + JoinSorted(inside);
             if (sig == _sigMobs) return;
             _sigMobs = sig;
             RebuildRail(_left, outside, growLeft: true);
             RebuildRail(_right, inside, growLeft: false);
         }
+
+        // "@<метры>" в конце записи → в _distByGroup (ключ — GroupKey монстра)
+        private void UpdateDistances(string[] arr)
+        {
+            if (arr == null) return;
+            foreach (var raw in arr)
+            {
+                var d = Parse(raw);
+                if (d.Dist < 0f || string.IsNullOrEmpty(d.GroupKey)) continue;
+                if (!_distByGroup.TryGetValue(d.GroupKey, out float md) || d.Dist < md)
+                    _distByGroup[d.GroupKey] = d.Dist;
+            }
+        }
+
+        private static string StripDist(string s) =>
+            string.IsNullOrEmpty(s) ? s : Regex.Replace(s, @"\s*@\d+\s*$", "");
 
         public void SetTraps(string[] traps)
         {
@@ -114,7 +159,8 @@ namespace LCBridgeOverlay
         private static string JoinSorted(string[] arr)
         {
             if (arr == null || arr.Length == 0) return "";
-            var copy = (string[])arr.Clone();
+            var copy = new string[arr.Length];
+            for (int i = 0; i < arr.Length; i++) copy[i] = StripDist(arr[i]); // дистанцию — вон из сигнатуры
             Array.Sort(copy, StringComparer.Ordinal);
             return string.Join("|", copy);
         }
@@ -129,6 +175,7 @@ namespace LCBridgeOverlay
             // состояния из моста (см. MonsterState): зол / развернулся / вырос /
             // атакует / на потолке / застыл / отсканирован
             public bool Aggro, Angry, Adult, Attack, Ceiling, Frozen, Scanned, Firing;
+            public float Dist = -1f;   // ближайшая дистанция до игрока, м (-1 = нет)
             public string GroupKey, IconKey;
             public int Rank => (Slayer || Kamikaze ? 2 : 0) + (Turret ? 1 : 0);
         }
@@ -203,7 +250,7 @@ namespace LCBridgeOverlay
             if (n.Contains("cadaverbloom")) return "cadaverbloom";
             if (n.Contains("cadaver")) return "cadaver";
             if (n.Contains("feiopar")) return "feiopar";
-            if (n.Contains("gunkfish") || n.Contains("gunk") || n.Contains("backwater")) return "gunkfish";
+            if (n.Contains("gunkfish") || n.Contains("gunk") || n.Contains("backwater") || n.Contains("stingray")) return "gunkfish";
             if (n.Contains("manticoil")) return "manticoil";
             if (n.Contains("redlocust")) return "redlocust";
             if (n.Contains("lasso")) return "lassoman";
@@ -222,6 +269,14 @@ namespace LCBridgeOverlay
         private static Desc Parse(string entry)
         {
             string s = entry ?? "";
+            // сначала вырезаем дистанцию "@<метры>" в конце
+            float dist = -1f;
+            var dm = Regex.Match(s, @"\s*@(\d+)\s*$");
+            if (dm.Success)
+            {
+                if (int.TryParse(dm.Groups[1].Value, out int di)) dist = di;
+                s = s.Substring(0, dm.Index);
+            }
             var m = Regex.Match(s, @"^(.*?)(?:\s+x(\d+))?$");
             string nm = m.Success ? m.Groups[1].Value.Trim() : s;
             int cnt = 1;
@@ -270,6 +325,7 @@ namespace LCBridgeOverlay
                 Kamikaze = kamikaze,
                 Aggro = aggro, Angry = angry, Adult = adult,
                 Attack = attack, Ceiling = ceiling, Frozen = frozen, Scanned = scanned, Firing = firing,
+                Dist = dist,
                 GroupKey = groupKey,
                 IconKey = icon,
             };
@@ -366,7 +422,7 @@ namespace LCBridgeOverlay
                 {
                     // застывший койл (на него кто-то смотрит) — покачивание выключаем
                     float vAmp = v.Frozen ? 0f : amp;
-                    var irt = MakeIcon(rail, v.IconKey, v.Slayer || v.Kamikaze, g.Key.GetHashCode(), scale, vAmp);
+                    var irt = MakeIcon(rail, v.IconKey, v.Slayer || v.Kamikaze, g.Key.GetHashCode(), scale, vAmp, g.Key);
                     // первая иконка колоды центром на кромке (x=0), остальные — наружу
                     irt.anchoredPosition = new Vector2(growLeft ? -x : x, y);
                     // у монстра стреляет турель — трассеры полетят из его иконки
@@ -459,7 +515,7 @@ namespace LCBridgeOverlay
             }
         }
 
-        private RectTransform MakeIcon(RectTransform rail, string iconKey, bool angry, int seed, float scale, float amp)
+        private RectTransform MakeIcon(RectTransform rail, string iconKey, bool angry, int seed, float scale, float amp, string groupKey = null)
         {
             var go = OverlayManager.NewUI("Mob_" + iconKey, rail);
             var rt = (RectTransform)go.transform;
@@ -478,6 +534,8 @@ namespace LCBridgeOverlay
             _sway.Add(new SwayItem
             {
                 Rt = rt,
+                Img = img,
+                GroupKey = groupKey,
                 Speed = 2.0f + (Mathf.Abs(seed) % 7) * 0.15f,
                 Phase = (Mathf.Abs(seed) % 13) * 0.5f,
                 Amp = amp,

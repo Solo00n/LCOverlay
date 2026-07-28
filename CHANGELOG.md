@@ -16,11 +16,14 @@
 - **Camera Overhaul synergy** — the panel subtly tilts/drifts with the camera (reads the camera's real roll, so it works with any camera-motion mod, and gives a gentle sway in vanilla). Config: `CameraSway`, `CameraSwayStrength`.
 - **Multiplayer fixes:** BCME events now show on **clients** too (captured from BCME's synced tip), not just the host; and the overlay stays visible while you're **spectating** (dead).
 - Detection runs on a ~0.5 s timer (not per-frame) and is all soft/reflection — missing mods never break the overlay.
+- **Proximity fade** (`ProximityFade`, default on) — the closer a monster is to you, the more opaque its icon; distant ones fade toward transparent.
+- Scan gating now uses the **in-game bestiary** (`Terminal.scannedEnemyIDs`) — once you've scanned a creature it shows, reliably.
+- Overlay **hides during takeoff / flight** (while the game shows the center-screen info and the leave-lever is disabled), then returns.
 - **Fixes:**
   - Overlay now fills in **instantly on landing** (event + interior + monsters in one packet) — forced refresh on ship-landed and on level-generated, instead of trailing in over a second.
   - Auto-timer no longer keeps ticking **on orbit / during loads** — it runs only while actually landed on a moon.
   - **Toggle-key rebinding works** — symbol keys like `\` are accepted (were silently falling back to `I`), and the key applies live from config without a restart.
-  - Green fringe cleaned off keyed icons; **Backwater Gunkfish** icon mapping broadened (any still-unmapped monster is now logged so it can be added).
+  - **Green halo** around icons removed — the keyed-out border is now colour-bled so bilinear downscaling can't smear green; the **Gunkfish/Stingray** icon maps correctly (any still-unmapped monster is logged).
 
 ## 1.3.0
 - **LCBridge is now built in.** The overlay collects the game state itself and hosts the WebSocket bridge (`ws://localhost:8181`) that the OBS/HTML overlay reads — so **the separate LCBridge mod is no longer needed** (remove it to avoid a port conflict). One mod, no inter-mod dependency.

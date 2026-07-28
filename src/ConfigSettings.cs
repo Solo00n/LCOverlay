@@ -47,6 +47,7 @@ namespace LCBridgeOverlay
         public static ConfigEntry<bool> Scanlines;
         public static ConfigEntry<bool> ScaleMonstersByCount; // эксперимент: без цифр, размер/тряска по кол-ву
         public static ConfigEntry<bool> RequireScanToShow;    // монстр виден только после сканирования
+        public static ConfigEntry<bool> ProximityFade;        // чем ближе монстр, тем менее прозрачна иконка
 
         // --- [WebSocket] ---
         // Порт встроенного моста (мод сам собирает данные и раздаёт их по WebSocket
@@ -147,7 +148,10 @@ namespace LCBridgeOverlay
                 "ЭКСПЕРИМЕНТ: убрать цифры количества у монстров И ловушек — вместо этого чем их больше, тем крупнее иконка и тем сильнее она трясётся.");
             RequireScanToShow = cfg.Bind("Behavior", "RequireScanToShow", false,
                 "Показывать монстра в оверлее ТОЛЬКО после того, как игрок его отсканировал (сканером). " +
-                "Отсканированные запоминаются до конца дня. false — прежнее поведение (видно сразу).");
+                "Учитывается бестиарий игры: как только вид отсканирован — он показывается. false — видно сразу.");
+            ProximityFade = cfg.Bind("Behavior", "ProximityFade", true,
+                "Чем БЛИЖЕ монстр к игроку, тем менее прозрачна его иконка (дальний — почти прозрачный). " +
+                "false — все иконки полностью непрозрачные.");
 
             // [WebSocket]
             Port = cfg.Bind("WebSocket", "Port", 8181,
