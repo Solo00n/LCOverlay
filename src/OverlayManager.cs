@@ -356,27 +356,34 @@ namespace LCBridgeOverlay
 
         private static float EaseOutCubic(float t) => 1f - Mathf.Pow(1f - t, 3f);
 
-        // Прячем оверлей во время взлёта/перелёта — когда игра показывает по центру
-        // экрана инфу и рычаг ещё нельзя дёрнуть. Ориентир — сам рычаг отлёта:
-        // пока он НЕ интерактивен (и мы не на луне), идёт переход → прячемся.
+        // Прячем оверлей ТОЛЬКО во время ВЗЛЁТА с луны (moon→orbit) — когда игра
+        // показывает по центру экрана инфу, пока снова не разрешат дёрнуть рычаг.
+        // ВАЖНО: рычаг дёргают ДВАЖДЫ — чтобы приземлиться (скрывать НЕ нужно) и
+        // чтобы улететь (нужно). Взлёт уникально помечается shipIsLeaving; посадка
+        // идёт через travellingToNewLevel и shipIsLeaving НЕ ставит. Поэтому держим
+        // фазу взлёта отдельным флагом от старта shipIsLeaving до готовности рычага.
         private static StartMatchLever _lever;
+        private bool _takingOff;
         private bool ShipLeavingNow()
         {
             try
             {
                 var sor = StartOfRound.Instance;
-                if (sor == null) return false;
-                if (sor.shipIsLeaving || sor.travellingToNewLevel) return true;
+                if (sor == null) { _takingOff = false; return false; }
 
+                if (sor.shipIsLeaving) _takingOff = true;               // взлетаем с луны
+                if (sor.shipHasLanded || sor.travellingToNewLevel)
+                    _takingOff = false;                                 // сели / летим на новую луну — не взлёт
+
+                if (!_takingOff) return false;
+
+                // держим скрытым, пока снова не разрешат дёрнуть рычаг отлёта
                 if (_lever == null) _lever = UnityEngine.Object.FindObjectOfType<StartMatchLever>();
-                if (_lever != null && _lever.triggerScript != null)
-                {
-                    // рычаг заблокирован и мы не на приземлившемся корабле → переход
-                    if (!_lever.triggerScript.interactable && !sor.shipHasLanded) return true;
-                }
+                bool leverReady = _lever != null && _lever.triggerScript != null && _lever.triggerScript.interactable;
+                if (leverReady) { _takingOff = false; return false; }
+                return true;
             }
-            catch { }
-            return false;
+            catch { return false; }
         }
 
         // затухание оверлея, когда камера долго неподвижна
