@@ -91,7 +91,7 @@ namespace LCBridgeOverlay
         // --- таймер ---
         private float _timerSec;
         private bool _timerRunning;
-        private bool? _prevLoading, _prevInGame;
+        private bool? _prevWantRun;   // фронт для авто-таймера (onMoon && !loading)
         private int? _prevResetToken;
         private int? _lastQuotaIndex;
 
@@ -187,8 +187,7 @@ namespace LCBridgeOverlay
         {
             DataParser.Clear();
             _timerRunning = false;
-            _prevLoading = null;
-            _prevInGame = null;
+            _prevWantRun = null;
             _victory?.Hide();
             _dirty = true;
         }
@@ -209,19 +208,26 @@ namespace LCBridgeOverlay
             {
                 _timerSec = 0f;
                 _timerRunning = false;
-                _prevLoading = null;
-                _prevInGame = null;
+                _prevWantRun = null;
                 _lastQuotaIndex = null;
                 _victory?.Hide();
             }
             _prevResetToken = p.resetToken;
 
-            if (ConfigSettings.AutoTimer.Value &&
-                (p.loading != _prevLoading || p.inGame != _prevInGame))
+            // Авто-таймер: идёт только пока мы РЕАЛЬНО на луне (высадка), не в орбите
+            // и не на загрузке. Раньше гейтом был inGame (= shipHasLanded ||
+            // travellingToNewLevel), из-за чего таймер продолжал тикать на орбите.
+            // Теперь по фронту onMoon&&!loading запускаем/останавливаем (чтобы ручная
+            // пауза не сбрасывалась каждый тик), и ЖЁСТКО гасим, когда мы не на луне.
+            if (ConfigSettings.AutoTimer.Value)
             {
-                _timerRunning = p.inGame && !p.loading;
-                _prevLoading = p.loading;
-                _prevInGame = p.inGame;
+                bool wantRun = p.onMoon && !p.loading;
+                if (wantRun != _prevWantRun)
+                {
+                    _timerRunning = wantRun;
+                    _prevWantRun = wantRun;
+                }
+                if (!p.onMoon) _timerRunning = false; // орбита/корабль/меню — стоп
             }
 
             _events = BcmerEvents.GetEvents();

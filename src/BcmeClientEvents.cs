@@ -36,6 +36,7 @@ namespace LCBridgeOverlay
                     _entries.Add(new Entry { Header = h, Body = b, Warn = isWarning });
                 }
                 Plugin.Log?.LogInfo($"[bcme-client] анонс ивента: header=\"{h}\" body=\"{b}\" warn={isWarning}");
+                BridgeTicker.ForceImmediate(); // ивент объявлен → показать мгновенно
             }
             catch { }
         }

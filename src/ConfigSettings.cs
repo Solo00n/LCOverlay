@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using BepInEx.Configuration;
 using UnityEngine.InputSystem;
 
@@ -87,7 +88,8 @@ namespace LCBridgeOverlay
                 "true — оверлей виден всегда (даже вне корабля), клавиша показа/скрытия работает везде. " +
                 "false — оверлей виден только когда игрок на корабле.");
             ToggleKey = cfg.Bind("General", "ToggleKey", "I",
-                "Клавиша для переключения видимости (имя из UnityEngine.InputSystem.Key, например I, F7, Numpad0).");
+                "Клавиша показать/скрыть оверлей. Можно писать как символ (\\ , ` , [ , - , = , ; , ' , . , /) или имя " +
+                "из UnityEngine.InputSystem.Key (I, F7, Numpad0, Backslash, Backquote). Меняется на лету, без перезапуска.");
             Language = cfg.Bind("General", "Language", "auto",
                 "Язык надписей оверлея: \"auto\" (русский, если установлен русификатор RTLC, иначе английский), \"en\" или \"ru\".");
             Scale = cfg.Bind("General", "Scale", 1.0f,
@@ -158,18 +160,46 @@ namespace LCBridgeOverlay
             TimerResetKey.SettingChanged += (_, __) => ReparseKeys();
         }
 
+        private static bool _keyHooks;
         private static void ReparseKeys()
         {
             ToggleKeyParsed = ParseKey(ToggleKey.Value, Key.I);
             TimerPauseKeyParsed = ParseKey(TimerPauseKey.Value, Key.None);
             TimerResetKeyParsed = ParseKey(TimerResetKey.Value, Key.None);
+            // ЖИВОЕ переназначение: пере-разбираем при любом изменении в конфиге
+            // (r2modman / LethalConfig) — без перезапуска игры.
+            if (!_keyHooks)
+            {
+                _keyHooks = true;
+                ToggleKey.SettingChanged += (s, e) => ToggleKeyParsed = ParseKey(ToggleKey.Value, Key.I);
+                TimerPauseKey.SettingChanged += (s, e) => TimerPauseKeyParsed = ParseKey(TimerPauseKey.Value, Key.None);
+                TimerResetKey.SettingChanged += (s, e) => TimerResetKeyParsed = ParseKey(TimerResetKey.Value, Key.None);
+            }
         }
+
+        // символы → имена клавиш InputSystem.Key (иначе, например, "\" не парсится
+        // и молча откатывался на I — старая клавиша продолжала работать, новая нет)
+        private static readonly Dictionary<string, Key> _symbolKeys = new Dictionary<string, Key>
+        {
+            ["\\"] = Key.Backslash, ["`"] = Key.Backquote, ["~"] = Key.Backquote,
+            ["["] = Key.LeftBracket, ["]"] = Key.RightBracket,
+            ["-"] = Key.Minus, ["="] = Key.Equals, [";"] = Key.Semicolon,
+            ["'"] = Key.Quote, ["\""] = Key.Quote, [","] = Key.Comma, ["."] = Key.Period,
+            ["/"] = Key.Slash, [" "] = Key.Space, ["\t"] = Key.Tab,
+        };
 
         private static Key ParseKey(string s, Key fallback)
         {
             if (string.IsNullOrWhiteSpace(s)) return Key.None;
-            if (Enum.TryParse<Key>(s.Trim(), true, out var k)) return k;
-            Plugin.Log?.LogWarning($"Не удалось распознать клавишу '{s}', использую {fallback}.");
+            s = s.Trim();
+            if (_symbolKeys.TryGetValue(s, out var sym)) return sym;
+            // одиночная цифра "1".."9","0" → Digit1..Digit0
+            if (s.Length == 1 && s[0] >= '0' && s[0] <= '9'
+                && Enum.TryParse<Key>("Digit" + s, true, out var dk)) return dk;
+            if (Enum.TryParse<Key>(s, true, out var k)) return k;
+            Plugin.Log?.LogWarning($"Не удалось распознать клавишу '{s}'. " +
+                "Пиши символ (\\ ` [ - = ; ' . /) или имя InputSystem.Key (Backslash, F7, Numpad0). " +
+                $"Пока использую {fallback}.");
             return fallback;
         }
     }

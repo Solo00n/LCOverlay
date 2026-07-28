@@ -203,11 +203,20 @@ namespace LCBridgeOverlay
             if (n.Contains("cadaverbloom")) return "cadaverbloom";
             if (n.Contains("cadaver")) return "cadaver";
             if (n.Contains("feiopar")) return "feiopar";
-            if (n.Contains("gunkfish")) return "gunkfish";
+            if (n.Contains("gunkfish") || n.Contains("gunk") || n.Contains("backwater")) return "gunkfish";
             if (n.Contains("manticoil")) return "manticoil";
             if (n.Contains("redlocust")) return "redlocust";
             if (n.Contains("lasso")) return "lassoman";
             return null;
+        }
+
+        // раз на уникальное имя — чтобы не спамить лог
+        private static readonly HashSet<string> _loggedNoIcon = new HashSet<string>();
+        private static void LogNoIcon(string raw, string iconKey)
+        {
+            if (string.IsNullOrEmpty(raw) || !_loggedNoIcon.Add(raw)) return;
+            string why = iconKey == null ? "нет маппинга имени → иконки" : $"нет/битый спрайт '{iconKey}'";
+            Plugin.Log?.LogInfo($"[no-icon] монстр \"{raw}\" не показан ({why}). Пришли эту строку — добавлю иконку/алиас.");
         }
 
         private static Desc Parse(string entry)
@@ -317,7 +326,13 @@ namespace LCBridgeOverlay
                 var d = Parse(raw);
                 // ТЗ 3.1: с RequireScanToShow монстр появляется только после сканирования
                 if (ConfigSettings.RequireScanToShow.Value && !d.Scanned) continue;
-                if (d.IconKey == null || SpriteBank.Get(d.IconKey) == null) continue; // нет иконки → не показываем
+                if (d.IconKey == null || SpriteBank.Get(d.IconKey) == null)
+                {
+                    // диагностика: какой монстр остался без иконки (имя из игры) —
+                    // по логу видно, какой алиас/иконку добавить
+                    LogNoIcon(raw, d.IconKey);
+                    continue;
+                }
                 if (!byKey.TryGetValue(d.GroupKey, out var g))
                 {
                     g = new Group { Key = d.GroupKey };

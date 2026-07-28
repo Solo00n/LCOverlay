@@ -1,4 +1,5 @@
 using HarmonyLib;
+using UnityEngine;
 
 namespace LCBridgeOverlay
 {
@@ -19,10 +20,44 @@ namespace LCBridgeOverlay
             try
             {
                 if (node == null) return;
+
+                // 1) обычно узел сканирования — ребёнок объекта врага
                 var ai = node.GetComponentInParent<EnemyAI>();
-                if (ai != null) MonsterState.MarkScanned(ai.GetInstanceID());
+
+                // 2) если нет (узел вынесен отдельно) — берём ближайшего живого врага
+                //    к позиции узла в небольшом радиусе
+                if (ai == null) ai = NearestEnemy(node.transform.position, 8f);
+
+                if (ai != null)
+                {
+                    MonsterState.MarkScanned(ai.GetInstanceID());
+                    if (_logged.Add(ai.GetInstanceID()))
+                        Plugin.Log?.LogInfo($"[scan] отсканирован {ai.GetType().Name} (\"{node.headerText}\") — покажем в оверлее.");
+                }
             }
             catch { /* сканирование не должно ронять оверлей */ }
+        }
+
+        private static readonly System.Collections.Generic.HashSet<int> _logged =
+            new System.Collections.Generic.HashSet<int>();
+
+        private static EnemyAI NearestEnemy(Vector3 pos, float maxDist)
+        {
+            try
+            {
+                var rm = RoundManager.Instance;
+                if (rm == null || rm.SpawnedEnemies == null) return null;
+                EnemyAI best = null;
+                float bestD = maxDist * maxDist;
+                foreach (var ai in rm.SpawnedEnemies)
+                {
+                    if (ai == null || ai.isEnemyDead) continue;
+                    float d = (ai.transform.position - pos).sqrMagnitude;
+                    if (d < bestD) { bestD = d; best = ai; }
+                }
+                return best;
+            }
+            catch { return null; }
         }
     }
 }

@@ -15,9 +15,16 @@ namespace LCBridgeOverlay
         private string _lastPayload;
         private int _lastMobCount = -1;
 
+        // Внешний сигнал «собери и разошли состояние ПРЯМО сейчас» — чтобы при
+        // посадке/готовности уровня все данные (ивент, интерьер, монстры) появились
+        // мгновенно и одним пакетом, а не подхватывались в течение секунды.
+        private static volatile bool _forceNow;
+        public static void ForceImmediate() { _forceNow = true; }
+
         private void Update()
         {
             _timer += Time.deltaTime;
+            if (_forceNow) { _forceNow = false; _timer = Interval; } // тикнуть в этом кадре
             if (_timer < Interval) return;
             _timer = 0f;
 

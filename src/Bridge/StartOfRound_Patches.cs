@@ -52,5 +52,26 @@ namespace LCBridgeOverlay
             BcmeClientEvents.Clear();
             MonsterState.Reset();   // состояния и кэш сканирования — на новый день
         }
+
+        // Посадка: сразу собираем и рассылаем полный пакет (не ждём 1-сек тик) —
+        // чтобы оверлей показал всё мгновенно, а не поэтапно.
+        [HarmonyPatch("OnShipLandedMiscEvents")]
+        [HarmonyPostfix]
+        public static void OnLanded()
+        {
+            BridgeTicker.ForceImmediate();
+        }
+    }
+
+    // Уровень (интерьер) полностью сгенерирован у клиента — тип комплекса и монстры
+    // уже известны: форсируем мгновенную отправку состояния.
+    [HarmonyPatch(typeof(RoundManager), "FinishGeneratingNewLevelClientRpc")]
+    internal static class Patch_RoundManager_LevelReady
+    {
+        [HarmonyPostfix]
+        public static void Postfix()
+        {
+            BridgeTicker.ForceImmediate();
+        }
     }
 }
