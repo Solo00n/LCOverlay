@@ -1227,11 +1227,13 @@ namespace LCBridgeOverlay
             // ОДНОГО верха вниз — левая (улица) и правая (комплекс) выровнены по вертикали
             var left = Rail("MobLeft", new Vector2(0f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -64f));
             var right = Rail("MobRight", new Vector2(1f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -64f));
-            var trap = Rail("TrapRail", new Vector2(0.5f, 0f), new Vector2(0.5f, 1f), new Vector2(0f, -12f));
+            // трап-рейка — по НИЖНЕЙ кромке: pivot по центру, иконки центрируются прямо
+            // на линии (как монстры на боковых кромках), позицию ставит PositionTrapRail
+            var trap = Rail("TrapRail", new Vector2(0.5f, 0f), new Vector2(0.5f, 0.5f), Vector2.zero);
             // ОТДЕЛЬНЫЙ слой для трассеров: идентичен трап-рейке по трансформу, но НЕ
             // очищается при перестройке ловушек — иначе пул трассеров уничтожался
             // вместе с иконками (это и вызывало ошибки при «стреляющих» ивентах).
-            var trapFx = Rail("TrapFx", new Vector2(0.5f, 0f), new Vector2(0.5f, 1f), new Vector2(0f, -12f));
+            var trapFx = Rail("TrapFx", new Vector2(0.5f, 0f), new Vector2(0.5f, 0.5f), Vector2.zero);
             _trapRailRt = trap;
             _trapFxRt = trapFx;
 
@@ -1246,17 +1248,15 @@ namespace LCBridgeOverlay
             _trapFire.Emitters = _mobRail.TurretIcons;
         }
 
-        // трап-рейка стоит вплотную под панелью, а если раскрыта плашка ивента —
-        // опускается под неё (ивент над ловушками, вплотную к блоку)
+        // трап-рейка центрируется на нижней ЛИНИИ-кромке (граница фона оверлея и
+        // экрана), как монстры на боковых кромках. Без ивента — на кромке панели;
+        // при раскрытой плашке ивента линия опускается на её низ — рейка следует.
         private void PositionTrapRail()
         {
             if (_trapRailRt == null) return;
-            float y = 14f; // базовый отступ ловушек от панели
+            float y = 0f; // на самой кромке панели
             if (_eventPlate != null && _eventPlate.gameObject.activeSelf && _eventPlateRt != null)
-            {
-                float eh = _eventPlateRt.rect.height * _eventPlate.Progress;
-                y = 14f + eh + 8f; // ловушки — под плашкой ивента
-            }
+                y = _eventPlateRt.rect.height * _eventPlate.Progress; // на низ фона ивента
             _trapRailRt.anchoredPosition = new Vector2(0f, -y);
             if (_trapFxRt != null) _trapFxRt.anchoredPosition = new Vector2(0f, -y); // слой трассеров вслед за рейкой
         }

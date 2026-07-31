@@ -304,35 +304,80 @@ namespace LCBridgeOverlay
         // ---- ловушки на локации: турели, мины, шипованные потолки ----
         // возвращает список вида ["Turret x2", "Landmine x4", "Spike Trap"].
         // Ловушки — НЕ EnemyAI, это отдельные объекты сцены, ищем их по типам.
+        private static Type _grabTurret, _grabMine;
+        private static bool _grabSearched;
+
         public static List<string> GetTraps()
         {
             var result = new List<string>();
             try
             {
-                // считаем по человекочитаемому имени
-                var counts = new Dictionary<string, int>();
-
-                void CountType<T>(string label) where T : UnityEngine.Object
+                // собираем позиции по человекочитаемому имени (для количества + дистанции)
+                var pos = new Dictionary<string, List<Vector3>>();
+                void Add(string label, Vector3 p)
+                {
+                    if (!pos.TryGetValue(label, out var l)) { l = new List<Vector3>(); pos[label] = l; }
+                    l.Add(p);
+                }
+                void CollectType<T>(string label) where T : Component
                 {
                     try
                     {
                         var arr = UnityEngine.Object.FindObjectsOfType<T>();
-                        if (arr != null && arr.Length > 0)
+                        if (arr != null) foreach (var o in arr) if (o != null) Add(label, o.transform.position);
+                    }
+                    catch { }
+                }
+                // BCME может УНИЧТОЖИТЬ обычную турель/мину и заменить их на
+                // «переносные» (GrabbableTurret/GrabbableLandmine : GrabbableObject),
+                // из-за чего они пропадали из оверлея. Ловим их по типу (рефлексией).
+                void CollectGrabbable(Type t, string label)
+                {
+                    try
+                    {
+                        if (t == null) return;
+                        var arr = UnityEngine.Object.FindObjectsOfType(t);
+                        if (arr == null) return;
+                        foreach (var o in arr)
                         {
-                            counts.TryGetValue(label, out int c);
-                            counts[label] = c + arr.Length;
+                            var g = o as GrabbableObject;
+                            if (g == null || g.isHeld || g.isHeldByEnemy) continue; // в руках — не ловушка
+                            Add(label, g.transform.position);
                         }
                     }
                     catch { }
                 }
 
-                // Эти типы есть в Assembly-CSharp игры:
-                CountType<Turret>("Turret");
-                CountType<Landmine>("Landmine");
-                CountType<SpikeRoofTrap>("Spike Trap");
+                if (!_grabSearched)
+                {
+                    _grabSearched = true;
+                    _grabTurret = FindTypeByFullName("BrutalCompanyMinus.Minus.MonoBehaviours.GrabbableTurret");
+                    _grabMine = FindTypeByFullName("BrutalCompanyMinus.Minus.MonoBehaviours.GrabbableLandmine");
+                }
 
-                foreach (var kv in counts)
-                    result.Add(kv.Value > 1 ? $"{kv.Key} x{kv.Value}" : kv.Key);
+                CollectType<Turret>("Turret");
+                CollectType<Landmine>("Landmine");
+                CollectType<SpikeRoofTrap>("Spike Trap");
+                CollectGrabbable(_grabTurret, "Turret");
+                CollectGrabbable(_grabMine, "Landmine");
+
+                // позиция локального игрока — для «чем ближе, тем менее прозрачно»
+                Vector3 me = Vector3.zero; bool haveMe = false;
+                try { var lp = GameNetworkManager.Instance?.localPlayerController; if (lp != null) { me = lp.transform.position; haveMe = true; } }
+                catch { }
+
+                foreach (var kv in pos)
+                {
+                    int n = kv.Value.Count;
+                    string s = n > 1 ? $"{kv.Key} x{n}" : kv.Key;
+                    if (haveMe && n > 0)
+                    {
+                        float md = float.MaxValue;
+                        foreach (var pp in kv.Value) { float d = Vector3.Distance(me, pp); if (d < md) md = d; }
+                        if (md < float.MaxValue) s += " @" + Mathf.RoundToInt(md);
+                    }
+                    result.Add(s);
+                }
             }
             catch (Exception e)
             {

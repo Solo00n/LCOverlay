@@ -16,7 +16,9 @@
 - **Camera Overhaul synergy** — the panel subtly tilts/drifts with the camera (reads the camera's real roll, so it works with any camera-motion mod, and gives a gentle sway in vanilla). Config: `CameraSway`, `CameraSwayStrength`.
 - **Multiplayer fixes:** BCME events now show on **clients** too (captured from BCME's synced tip), not just the host; and the overlay stays visible while you're **spectating** (dead).
 - Detection runs on a ~0.5 s timer (not per-frame) and is all soft/reflection — missing mods never break the overlay.
-- **Proximity fade** (`ProximityFade`, default on) — the closer a monster is to you, the more opaque its icon; distant ones fade toward transparent.
+- **Proximity fade** (`ProximityFade`, default on) — the closer a monster **or trap** is to you, the more opaque its icon; distant ones fade toward transparent.
+- **Grabbable traps counted** — BCME's `GrabbableTurret`/`GrabbableLandmine` (which destroy & replace the normal ones) now show up as turrets/mines instead of vanishing.
+- Trap rail now behaves like the monster rails — icons centered on the bottom border line (following the event plate) and faded by proximity.
 - Scan gating now uses the **in-game bestiary** (`Terminal.scannedEnemyIDs`) — once you've scanned a creature it shows, reliably.
 - Overlay **hides during takeoff / flight** (while the game shows the center-screen info and the leave-lever is disabled), then returns.
 - **Fixes:**

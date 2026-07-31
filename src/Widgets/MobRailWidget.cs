@@ -153,10 +153,34 @@ namespace LCBridgeOverlay
 
         public void SetTraps(string[] traps)
         {
+            UpdateTrapDistances(traps);   // всегда — для живой прозрачности ловушек
             string sig = JoinSorted(traps);
             if (sig == _sigTraps) return;
             _sigTraps = sig;
             RebuildTraps(traps);
+        }
+
+        private void UpdateTrapDistances(string[] traps)
+        {
+            if (traps == null) return;
+            foreach (var raw in traps)
+            {
+                var d = Parse(raw);
+                string icon = TrapIcon(d.Name);
+                if (icon == null || d.Dist < 0f) continue;
+                if (!_distByGroup.TryGetValue(icon, out float md) || d.Dist < md)
+                    _distByGroup[icon] = d.Dist;
+            }
+        }
+
+        // имя ловушки → ключ иконки
+        private static string TrapIcon(string name)
+        {
+            string n = Norm(name);
+            if (n.Contains("turret") || n.Contains("турел")) return "turret";
+            if (n.Contains("mine") || n.Contains("мин")) return "landmine";
+            if (n.Contains("spike") || n.Contains("шип")) return "spiketrap";
+            return null;
         }
 
         private static string JoinSorted(string[] arr)
@@ -468,11 +492,7 @@ namespace LCBridgeOverlay
             foreach (var raw in traps)
             {
                 var d = Parse(raw);
-                string n = Norm(d.Name);
-                string icon =
-                    n.Contains("turret") || n.Contains("турел") ? "turret" :
-                    n.Contains("mine") || n.Contains("мин") ? "landmine" :
-                    n.Contains("spike") || n.Contains("шип") ? "spiketrap" : null;
+                string icon = TrapIcon(d.Name);
                 if (icon == null || SpriteBank.Get(icon) == null) continue;
                 if (!counts.ContainsKey(icon)) { counts[icon] = 0; order.Add(icon); }
                 counts[icon] += d.Cnt;
@@ -498,8 +518,10 @@ namespace LCBridgeOverlay
                     amp = 5f + extra * 2.2f;      // до ~22°
                 }
 
-                var irt = MakeIcon(_traps, icon, false, i * 17, scale, amp);
-                irt.anchoredPosition = new Vector2(x0 + i * step, -Icon / 2f - 2f);
+                // groupKey = ключ иконки → прозрачность по дистанции (как у монстров)
+                var irt = MakeIcon(_traps, icon, false, i * 17, scale, amp, icon);
+                // центр иконки — на линии-кромке (как монстры на боковых кромках)
+                irt.anchoredPosition = new Vector2(x0 + i * step, 0f);
                 if (icon == "turret") TurretIcons.Add(irt);
 
                 if (!exp && cnt > 1)
