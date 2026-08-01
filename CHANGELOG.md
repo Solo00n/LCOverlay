@@ -1,5 +1,14 @@
 # Changelog — LCBridgeOverlay
 
+## 1.4.1
+- **Proximity fade** (`ProximityFade`, default on) — the closer a monster **or trap** is to you, the more opaque its icon; distant ones fade toward transparent.
+- **Trap rail now matches the monster rails** — icons sit on the bottom border line (following the event plate, lowered so they don't overlap the event text) and fade by proximity.
+- **Grabbable traps counted** — BCME's `GrabbableTurret`/`GrabbableLandmine` (which destroy & replace the normal ones) now show up as turrets/mines instead of vanishing.
+- **Scan gating uses the in-game bestiary** (`Terminal.scannedEnemyIDs`) — once you've scanned a creature it shows, reliably.
+- Overlay **hides during takeoff** (while the game shows the center-screen info and the leave-lever is disabled), and stays visible on **landing**.
+- **Green halo** around icons removed — the keyed-out transparent border is colour-bled so bilinear downscaling can't smear green; **Gunkfish/Stingray** icon maps correctly.
+- README/manifest/LICENSE de-branded; docs updated.
+
 ## 1.4.0
 - **New monster icon pack** — all monster/trap icons replaced with higher-quality green-screen renders, keyed and trimmed cleanly (incl. genuinely dark monsters like the Bracken).
 - **Monster state icons.** Many monsters now switch icon by their live state, chosen by priority (angry/attacking > aggression > transformed > special > passive):
@@ -16,16 +25,10 @@
 - **Camera Overhaul synergy** — the panel subtly tilts/drifts with the camera (reads the camera's real roll, so it works with any camera-motion mod, and gives a gentle sway in vanilla). Config: `CameraSway`, `CameraSwayStrength`.
 - **Multiplayer fixes:** BCME events now show on **clients** too (captured from BCME's synced tip), not just the host; and the overlay stays visible while you're **spectating** (dead).
 - Detection runs on a ~0.5 s timer (not per-frame) and is all soft/reflection — missing mods never break the overlay.
-- **Proximity fade** (`ProximityFade`, default on) — the closer a monster **or trap** is to you, the more opaque its icon; distant ones fade toward transparent.
-- **Grabbable traps counted** — BCME's `GrabbableTurret`/`GrabbableLandmine` (which destroy & replace the normal ones) now show up as turrets/mines instead of vanishing.
-- Trap rail now behaves like the monster rails — icons centered on the bottom border line (following the event plate) and faded by proximity.
-- Scan gating now uses the **in-game bestiary** (`Terminal.scannedEnemyIDs`) — once you've scanned a creature it shows, reliably.
-- Overlay **hides during takeoff / flight** (while the game shows the center-screen info and the leave-lever is disabled), then returns.
 - **Fixes:**
   - Overlay now fills in **instantly on landing** (event + interior + monsters in one packet) — forced refresh on ship-landed and on level-generated, instead of trailing in over a second.
   - Auto-timer no longer keeps ticking **on orbit / during loads** — it runs only while actually landed on a moon.
   - **Toggle-key rebinding works** — symbol keys like `\` are accepted (were silently falling back to `I`), and the key applies live from config without a restart.
-  - **Green halo** around icons removed — the keyed-out border is now colour-bled so bilinear downscaling can't smear green; the **Gunkfish/Stingray** icon maps correctly (any still-unmapped monster is logged).
 
 ## 1.3.0
 - **LCBridge is now built in.** The overlay collects the game state itself and hosts the WebSocket bridge (`ws://localhost:8181`) that the OBS/HTML overlay reads — so **the separate LCBridge mod is no longer needed** (remove it to avoid a port conflict). One mod, no inter-mod dependency.
