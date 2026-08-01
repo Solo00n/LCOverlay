@@ -24,6 +24,7 @@ namespace LCBridgeOverlay
         private const float Icon = 42f;
         private const float Overlap = 21f;   // нахлёст вариантов в колоде
         private const float RowStep = 48f;
+        private const float TrapDrop = 20f;  // насколько опустить ловушки ниже кромки (чтобы не лезли на ивент)
 
         private OverlayManager _mgr;
         private RectTransform _left, _right, _traps;
@@ -520,8 +521,8 @@ namespace LCBridgeOverlay
 
                 // groupKey = ключ иконки → прозрачность по дистанции (как у монстров)
                 var irt = MakeIcon(_traps, icon, false, i * 17, scale, amp, icon);
-                // центр иконки — на линии-кромке (как монстры на боковых кромках)
-                irt.anchoredPosition = new Vector2(x0 + i * step, 0f);
+                // чуть НИЖЕ линии-кромки, чтобы верхушка не залезала на надпись ивента
+                irt.anchoredPosition = new Vector2(x0 + i * step, -TrapDrop);
                 if (icon == "turret") TurretIcons.Add(irt);
 
                 if (!exp && cnt > 1)
