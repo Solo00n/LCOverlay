@@ -1,16 +1,16 @@
 LCBridgeOverlay — License
-Copyright (c) 2026 Solon (GDLP)
+Copyright (c) 2026 Solon
 
 All rights reserved.
 
-This software is made for the GDLP modpack. You are free to:
+This software currently ships with a specific modpack. You are free to:
   - download and use it for personal play;
   - study the source code;
   - report issues and suggest changes.
 
 You may NOT, without prior written permission from the author:
-  - redistribute or republish this mod (in whole or in part) outside of the
-    GDLP modpack, including re-uploads to Thunderstore or other mod platforms;
+  - redistribute or republish this mod (in whole or in part), including
+    re-uploads to Thunderstore or other mod platforms;
   - present it as your own work.
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
@@ -19,4 +19,4 @@ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 AUTHOR BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY ARISING FROM THE
 USE OF THE SOFTWARE.
 
-To request redistribution permission, contact the author (Solon / GDLP).
+To request redistribution permission, contact the author (Solon).
