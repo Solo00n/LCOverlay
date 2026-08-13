@@ -114,14 +114,14 @@ namespace LCBridgeOverlay
                 if (!_multSearched)
                 {
                     _multSearched = true;
-                    // BCME: статический метод множителя стоимости лута
-                    var mgr = GameState.FindTypeFuzzy("BrutalCompanyMinus", new[] { "Manager" });
-                    if (mgr != null)
-                        _bcmeScrapValueMul = mgr.GetMethod("GetScrapValueMultiplier",
-                            BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
-                    _wtType = GameState.FindTypeFuzzy("WeatherTweaks", new[] { "Variables", "WeatherManager" });
-                    Plugin.Log?.LogInfo($"[loot-mult] BCME={( _bcmeScrapValueMul != null ? "OK" : "нет")}, " +
-                                        $"WeatherTweaks={(_wtType != null ? "OK" : "нет")}");
+                    // BCME: метод множителя стоимости лута может лежать в разных классах —
+                    // ищем по ИМЕНИ МЕТОДА во всей сборке мода, а не гадаем про класс.
+                    _bcmeScrapValueMul = FindStaticMethodInAssembly("BrutalCompany",
+                        new[] { "GetScrapValueMultiplier", "GetScrapValueMul", "ScrapValueMultiplier" });
+                    _wtType = GameState.FindTypeFuzzy("WeatherTweaks",
+                        new[] { "Variables", "WeatherManager", "Values", "Config" });
+                    Plugin.Log?.LogInfo($"[loot-mult] BCME-метод={(_bcmeScrapValueMul != null ? _bcmeScrapValueMul.DeclaringType?.FullName + "." + _bcmeScrapValueMul.Name : "не найден")}, " +
+                                        $"WeatherTweaks={(_wtType != null ? _wtType.FullName : "не найден")}");
                 }
 
                 if (_bcmeScrapValueMul != null)
@@ -129,7 +129,8 @@ namespace LCBridgeOverlay
                     try
                     {
                         var v = _bcmeScrapValueMul.Invoke(null, null);
-                        if (v is float f && f > 0f) total += (f - 1f);
+                        float f = v is float ff ? ff : (v is double dd ? (float)dd : -1f);
+                        if (f > 0f) total += (f - 1f);
                     }
                     catch { }
                 }
@@ -138,12 +139,51 @@ namespace LCBridgeOverlay
                 if (_wtType != null)
                 {
                     float wf = ReadStaticFloat(_wtType, "ScrapValueMultiplier", "scrapValueMultiplier",
-                                                        "ScrapMultiplier", "scrapMultiplier");
+                                                        "ScrapMultiplier", "scrapMultiplier",
+                                                        "ScrapAmountMultiplier", "scrapAmountMultiplier");
                     if (wf > 0f) total += (wf - 1f);
                 }
             }
             catch { }
             return Mathf.Clamp(total, 0f, 100f);
+        }
+
+        /// <summary>Ищет статический метод без аргументов по имени во ВСЕЙ сборке мода.</summary>
+        private static MethodInfo FindStaticMethodInAssembly(string asmContains, string[] methodNames)
+        {
+            try
+            {
+                foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
+                {
+                    string an = asm.GetName().Name ?? "";
+                    if (an.IndexOf(asmContains, StringComparison.OrdinalIgnoreCase) < 0) continue;
+                    Type[] types;
+                    try { types = asm.GetTypes(); }
+                    catch (ReflectionTypeLoadException e)
+                    {
+                        var list = new List<Type>();
+                        foreach (var t in e.Types) if (t != null) list.Add(t);
+                        types = list.ToArray();
+                    }
+                    foreach (var t in types)
+                    {
+                        foreach (var n in methodNames)
+                        {
+                            try
+                            {
+                                var m = t.GetMethod(n,
+                                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static,
+                                    null, Type.EmptyTypes, null);
+                                if (m != null && (m.ReturnType == typeof(float) || m.ReturnType == typeof(double)))
+                                    return m;
+                            }
+                            catch { }
+                        }
+                    }
+                }
+            }
+            catch { }
+            return null;
         }
 
         private static float ReadStaticFloat(Type t, params string[] names)
@@ -209,6 +249,11 @@ namespace LCBridgeOverlay
         /// Если игрок стоит у двери комплекса — возвращает позицию ПО ТУ СТОРОНУ этой
         /// двери (точку выхода парной двери) и её тип. Иначе hasDoor = false.
         /// </summary>
+        /// <summary>На каком расстоянии от двери считаем, что игрок «стоит у неё».</summary>
+        private const float NearDoor = 14f;
+        private static int _lastDoorId = int.MinValue;
+        private static bool _lastDoorSide;
+
         public static bool DoorProbe(Vector3 playerPos, out Vector3 otherSide, out bool otherSideIsInside)
         {
             otherSide = Vector3.zero;
@@ -218,13 +263,16 @@ namespace LCBridgeOverlay
                 var doors = UnityEngine.Object.FindObjectsOfType<EntranceTeleport>();
                 if (doors == null || doors.Length == 0) return false;
 
-                // ближайшая к игроку дверь в пределах 6 м — «мы у неё стоим»
+                // ближайшая к игроку дверь. Раньше порог был 6 м и «у двери» почти
+                // никогда не срабатывало — берём заметно шире.
                 EntranceTeleport near = null;
-                float best = 6f * 6f;
+                float best = NearDoor * NearDoor;
                 foreach (var d in doors)
                 {
                     if (d == null) continue;
-                    float sq = (d.transform.position - playerPos).sqrMagnitude;
+                    // позиция двери — по её точке входа, если она есть
+                    Vector3 dp = d.entrancePoint != null ? d.entrancePoint.position : d.transform.position;
+                    float sq = (dp - playerPos).sqrMagnitude;
                     if (sq < best) { best = sq; near = d; }
                 }
                 if (near == null) return false;
@@ -238,6 +286,15 @@ namespace LCBridgeOverlay
                     otherSide = d.entrancePoint != null ? d.entrancePoint.position : d.transform.position;
                     // если ЭТА дверь ведёт внутрь здания, то по ту сторону — улица, и наоборот
                     otherSideIsInside = near.isEntranceToBuilding;
+
+                    if (_lastDoorId != near.entranceId || _lastDoorSide != near.isEntranceToBuilding)
+                    {
+                        _lastDoorId = near.entranceId;
+                        _lastDoorSide = near.isEntranceToBuilding;
+                        Plugin.Log?.LogInfo($"[door] у двери id={near.entranceId} " +
+                            $"({(near.isEntranceToBuilding ? "вход внутрь" : "выход наружу")}), " +
+                            $"смотрим за неё в радиусе {ConfigSettings.DoorRadarRadius.Value:0} м.");
+                    }
                     return true;
                 }
             }

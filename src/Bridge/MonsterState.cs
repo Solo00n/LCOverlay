@@ -43,15 +43,24 @@ namespace LCBridgeOverlay
             _terminal = null;
         }
 
-        // 2.13: недавно получившие урон (id -> момент времени). Токен +Hurt держим
-        // короткое время, чтобы иконка успела вспыхнуть и вернуться в обычный вид.
-        private const float HurtHold = 0.6f;
+        // 2.13: недавно получившие урон (id -> момент времени).
+        // ВАЖНО: состояния пересчитываются из тикера моста, то есть раз в СЕКУНДУ.
+        // При коротком удержании (0.6 с) метка успевала истечь до того, как её
+        // прочитают, и вспышка не срабатывала вообще. Держим дольше секунды и
+        // дополнительно просим тикер отправить пакет немедленно.
+        private const float HurtHold = 1.6f;
         private static readonly Dictionary<int, float> _hurt = new Dictionary<int, float>();
 
         /// <summary>Враг получил урон (зовётся из патча EnemyAI.HitEnemy).</summary>
         public static void MarkHurt(int instanceId)
         {
-            try { _hurt[instanceId] = Time.unscaledTime; } catch { }
+            try
+            {
+                _hurt[instanceId] = Time.unscaledTime;
+                _next = 0f;                      // пробить собственный интервал пересчёта
+                BridgeTicker.ForceImmediate();   // показать вспышку сразу, не ждать тик
+            }
+            catch { }
         }
 
         // Бестиарий игры: Terminal.scannedEnemyIDs хранит creatureScanID всех

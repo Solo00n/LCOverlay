@@ -135,12 +135,14 @@ namespace LCBridgeOverlay
             // дистанции обновляем ВСЕГДА (для живой прозрачности), не пересобирая рейку.
             // ВАЖНО: чистим перед заполнением — иначе копился бы «минимум за всё время»
             // (иконка близко подошедшего монстра навсегда оставалась бы непрозрачной).
+            // ВАЖНО: ключи раздельные для улицы и комплекса — иначе одинаковый монстр
+            // снаружи и внутри делил бы одну дистанцию и подсвечивался одинаково.
             _distByGroup.Clear();
-            UpdateDistances(outside);
-            UpdateDistances(inside);
+            UpdateDistances(outside, true);
+            UpdateDistances(inside, false);
             // 2.13: вспышки урона — тоже без пересборки рейки
-            TriggerHurt(outside);
-            TriggerHurt(inside);
+            TriggerHurt(outside, true);
+            TriggerHurt(inside, false);
 
             // сигнатура НЕ зависит ни от порядка, ни от дистанции (мост шлёт список в
             // разном порядке + дистанция меняется каждый тик) → перестраиваем рейку
@@ -152,8 +154,13 @@ namespace LCBridgeOverlay
             RebuildRail(_right, inside, growLeft: false);
         }
 
+        /// <summary>Ключ подсветки: сторона + группа. Один и тот же монстр снаружи и
+        /// внутри — это ДВЕ разные иконки, и подсвечиваться они должны независимо.</summary>
+        private static string SideKey(bool outsideRail, string groupKey) =>
+            (outsideRail ? "o|" : "i|") + (groupKey ?? "");
+
         // монстр с меткой +Hurt → запускаем вспышку у его иконки (рейку не трогаем)
-        private void TriggerHurt(string[] arr)
+        private void TriggerHurt(string[] arr, bool outsideRail)
         {
             if (arr == null || !ConfigSettings.DamageFlash.Value) return;
             foreach (var raw in arr)
@@ -161,21 +168,23 @@ namespace LCBridgeOverlay
                 if (raw == null || raw.IndexOf("+Hurt", StringComparison.OrdinalIgnoreCase) < 0) continue;
                 var d = Parse(raw);
                 if (string.IsNullOrEmpty(d.GroupKey)) continue;
-                if (_byGroup.TryGetValue(d.GroupKey, out var item) && item != null && item.Rt != null)
+                if (_byGroup.TryGetValue(SideKey(outsideRail, d.GroupKey), out var item) &&
+                    item != null && item.Rt != null)
                     item.HurtFlash = 1f;
             }
         }
 
-        // "@<метры>" в конце записи → в _distByGroup (ключ — GroupKey монстра)
-        private void UpdateDistances(string[] arr)
+        // "@<метры>" в конце записи → в _distByGroup (ключ — сторона + группа)
+        private void UpdateDistances(string[] arr, bool outsideRail)
         {
             if (arr == null) return;
             foreach (var raw in arr)
             {
                 var d = Parse(raw);
                 if (d.Dist < 0f || string.IsNullOrEmpty(d.GroupKey)) continue;
-                if (!_distByGroup.TryGetValue(d.GroupKey, out float md) || d.Dist < md)
-                    _distByGroup[d.GroupKey] = d.Dist;
+                string k = SideKey(outsideRail, d.GroupKey);
+                if (!_distByGroup.TryGetValue(k, out float md) || d.Dist < md)
+                    _distByGroup[k] = d.Dist;
             }
         }
 
@@ -515,7 +524,9 @@ namespace LCBridgeOverlay
                 {
                     // застывший койл (на него кто-то смотрит) — покачивание выключаем
                     float vAmp = v.Frozen ? 0f : amp;
-                    var irt = MakeIcon(rail, v.IconKey, v.Slayer || v.Kamikaze, g.Key.GetHashCode(), scale, vAmp, g.Key, v.Hurt);
+                    // ключ подсветки — со стороной рейки (улица/комплекс раздельно)
+                    var irt = MakeIcon(rail, v.IconKey, v.Slayer || v.Kamikaze, g.Key.GetHashCode(),
+                                       scale, vAmp, SideKey(growLeft, g.Key), v.Hurt);
                     // первая иконка колоды центром на кромке (x=0), остальные — наружу
                     irt.anchoredPosition = new Vector2(growLeft ? -x : x, y);
                     // у монстра стреляет турель — трассеры полетят из его иконки

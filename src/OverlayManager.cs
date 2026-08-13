@@ -52,6 +52,7 @@ namespace LCBridgeOverlay
         private Image _lampImg;                       // 2.14: иконка аппарата у интерьера
         private TextMeshProUGUI _multText;            // 2.11: суммарный множитель лута
         private TextMeshProUGUI _endOfDayText;        // 2.12: отсчёт до конца дня
+        private GameObject _endOfDayGo;               // его контейнер (по центру экрана)
         private readonly Image[] _qtabBgs = new Image[3];
         private readonly TextMeshProUGUI[] _qtabTexts = new TextMeshProUGUI[3];
         private TextMeshProUGUI _lootQuotaText, _barText;
@@ -165,6 +166,7 @@ namespace LCBridgeOverlay
             }
 
             UpdateVisibility(Time.unscaledDeltaTime);
+            UpdateEndOfDay();      // независимо от панели: цифры по центру экрана
             PositionTrapRail();
 
             // таймер обновляем КАЖДЫЙ кадр — с миллисекундами
@@ -184,6 +186,25 @@ namespace LCBridgeOverlay
             // перспектива запечена под старый размер панели — при изменении высоты
             // (баннер победы и т.п.) пересчитываем, иначе Q1/Q2/Q3 «уезжают» из рамок
             RewarpOnResize();
+        }
+
+        /// <summary>
+        /// Зашли в сейв (в том числе ПЕРЕзашли): сбрасываем состояние оверлея, чтобы
+        /// метки квот/таймер/баннер не тянулись из прошлой сессии.
+        /// </summary>
+        public void NotifyEnteredSave()
+        {
+            _timerSec = 0f;
+            _timerRunning = false;
+            _prevWantRun = null;
+            _lastQuotaIndex = null;
+            _prevResetToken = null;
+            _marksShown = -1;          // линия меток перерисуется с нуля
+            _showingLastRun = false;
+            _userHidden = false;
+            _victory?.Hide();
+            _dirty = true;
+            Plugin.Log?.LogInfo("Вход в сейв — состояние оверлея сброшено.");
         }
 
         public void NotifyDisconnectedFromGame()
@@ -329,16 +350,19 @@ namespace LCBridgeOverlay
         private bool _showingLastRun; // 2.9: на экране аналитика прошлого забега
 
         // ---- 2.1: метки пройденных троек квот ----
-        private GameObject _marksGo;      // контейнер рядов меток
-        private int _marksShown = -1;     // сколько меток уже нарисовано
-        private const int MarksPerRow = 15;   // сколько влезает в ряд
+        // ОДНА линия из MarksPerRow прямоугольничков по центру. Новые ряды НЕ
+        // создаются: когда линия заполнилась, она перекрашивается в следующий цвет
+        // и заполняется заново — так блок не растёт бесконечно.
+        private GameObject _marksGo;      // контейнер линии
+        private int _marksShown = -1;     // что уже нарисовано (для сравнения)
+        private const int MarksPerRow = 5;    // длина линии в прямоугольничках
         private const int MarksMax = 100;     // дальше счёт не ведём
-        private const float MarkW = 12f, MarkH = 6f;
+        private const float MarkW = 22f, MarkH = 6f;
 
-        /// <summary>
-        /// Перестроить ряды меток: одна метка = одна пройденная тройка квот.
-        /// В ряду MarksPerRow штук; после первого ряда метки меняют цвет.
-        /// </summary>
+        // цвета «кругов» заполнения линии: каждый следующий проход — новый цвет
+        private static readonly string[] MarkCycle =
+            { "FF5141", "FFB000", "36D1FF", "9B6BFF", "3BE07A" };
+
         private void RebuildQuotaMarks(int triples)
         {
             if (_marksGo == null) return;
@@ -346,29 +370,48 @@ namespace LCBridgeOverlay
             if (triples == _marksShown) return;
             _marksShown = triples;
 
-            for (int i = _marksGo.transform.childCount - 1; i >= 0; i--)
-                Destroy(_marksGo.transform.GetChild(i).gameObject);
-
             _marksGo.SetActive(triples > 0);
-            if (triples <= 0) return;
-
-            GameObject row = null;
-            for (int i = 0; i < triples; i++)
+            if (triples <= 0)
             {
-                if (i % MarksPerRow == 0)
+                for (int i = _marksGo.transform.childCount - 1; i >= 0; i--)
+                    Destroy(_marksGo.transform.GetChild(i).gameObject);
+                return;
+            }
+
+            // сколько заполнено в текущем проходе и какой у него цвет
+            int cycle = (triples - 1) / MarksPerRow;              // 0,1,2...
+            int filled = triples - cycle * MarksPerRow;           // 1..MarksPerRow
+            var onColor = OverlayStyle.FromHex(MarkCycle[cycle % MarkCycle.Length]);
+            var offColor = OverlayStyle.WithA(S.Frame, 0.18f);
+
+            // линию строим один раз, дальше только перекрашиваем
+            if (_marksGo.transform.childCount == 0)
+            {
+                var row = Row(_marksGo.transform, 4f);
+                var hl = row.GetComponent<HorizontalLayoutGroup>();
+                hl.childForceExpandWidth = false;
+                hl.childAlignment = TextAnchor.MiddleCenter;   // по центру блока
+                for (int i = 0; i < MarksPerRow; i++)
                 {
-                    row = Row(_marksGo.transform, 3f);
-                    row.GetComponent<HorizontalLayoutGroup>().childForceExpandWidth = false;
-                    row.GetComponent<HorizontalLayoutGroup>().childAlignment = TextAnchor.MiddleLeft;
+                    var m = NewUI("Mark", row.transform);
+                    AddImage(m, offColor);
+                    var le = m.AddComponent<LayoutElement>();
+                    le.preferredWidth = MarkW; le.minWidth = MarkW;
+                    le.preferredHeight = MarkH; le.minHeight = MarkH;
+                    AddPerspective(m.GetComponent<Image>(), false);
                 }
-                var m = NewUI("Mark", row.transform);
-                // после первого ряда — другой цвет (вышли за «стандартные» 15 троек)
-                var col = i < MarksPerRow ? S.Danger : OverlayStyle.FromHex("FFB000");
-                AddImage(m, col);
-                var le = m.AddComponent<LayoutElement>();
-                le.preferredWidth = MarkW; le.minWidth = MarkW;
-                le.preferredHeight = MarkH; le.minHeight = MarkH;
-                AddPerspective(m.GetComponent<Image>(), false);
+            }
+
+            var line = _marksGo.transform.GetChild(0);
+            for (int i = 0; i < line.childCount && i < MarksPerRow; i++)
+            {
+                var img = line.GetChild(i).GetComponent<Image>();
+                if (img == null) continue;
+                // прошлые полные проходы «подсвечены» предыдущим цветом, текущий — своим
+                if (i < filled) img.color = onColor;
+                else if (cycle > 0) img.color = OverlayStyle.WithA(
+                    OverlayStyle.FromHex(MarkCycle[(cycle - 1) % MarkCycle.Length]), 0.45f);
+                else img.color = offColor;
             }
         }
 
@@ -435,6 +478,26 @@ namespace LCBridgeOverlay
         }
 
         private static float EaseOutCubic(float t) => 1f - Mathf.Pow(1f - t, 3f);
+
+        /// <summary>
+        /// 2.12: отсчёт конца дня по центру экрана — только цифры, последние 10 секунд.
+        /// Не зависит от видимости панели и от того, скрыл ли игрок оверлей.
+        /// </summary>
+        private void UpdateEndOfDay()
+        {
+            if (_endOfDayGo == null) return;
+            var p = DataParser.Current;
+            bool show = ConfigSettings.ShowEndOfDayCountdown.Value &&
+                        p != null && p.onMoon && p.endOfDaySec >= 0 && p.endOfDaySec <= 10;
+
+            if (_endOfDayGo.activeSelf != show) _endOfDayGo.SetActive(show);
+            if (!show) return;
+
+            _endOfDayText.text = p.endOfDaySec.ToString();
+            // пульс на последних секундах — заметнее, но без резких скачков размера
+            float k = 1f + 0.12f * Mathf.Abs(Mathf.Sin(Time.unscaledTime * 6f));
+            _endOfDayGo.transform.localScale = new Vector3(k, k, 1f);
+        }
 
         // Прячем оверлей ТОЛЬКО во время ВЗЛЁТА с луны (moon→orbit) — когда игра
         // показывает по центру экрана инфу, пока снова не разрешат дёрнуть рычаг.
@@ -614,15 +677,6 @@ namespace LCBridgeOverlay
                     _multText.text = $"{Localization.T("mult")} <b>x{p.lootMultiplier:0.##}</b>";
             }
 
-            // 2.12: отсчёт до конца дня — последние 10 секунд
-            if (_endOfDayText != null)
-            {
-                bool showEod = ConfigSettings.ShowEndOfDayCountdown.Value &&
-                               onMoon && p.endOfDaySec >= 0 && p.endOfDaySec <= 10;
-                _endOfDayText.gameObject.SetActive(showEod);
-                if (showEod)
-                    _endOfDayText.text = $"{Localization.T("endOfDay")} <b>{p.endOfDaySec}</b>";
-            }
 
             // ---- квота ----
             int qi = p != null ? Mathf.Max(1, p.quotaIndex) : 1;
@@ -987,6 +1041,7 @@ namespace LCBridgeOverlay
             BuildVictory(rootGo.transform);
             BuildTicker(rootGo.transform);
 
+            BuildEndOfDay();                  // отсчёт конца дня — по центру экрана, вне панели
             BuildFrame(rootGo);
             BuildScanlines(rootGo);           // едва заметные горизонтальные полосы (CRT)
             BuildRails();                     // рейки монстров/ловушек по бортам
@@ -1268,10 +1323,28 @@ namespace LCBridgeOverlay
                                  TextAlignmentOptions.Right, bold: true);
             _multText.gameObject.SetActive(false);
 
-            // 2.12: отсчёт до конца дня — крупно и заметно, появляется за 10 секунд
-            _endOfDayText = MakeText(_quotaGo.transform, "", 20f, S.Danger,
+        }
+
+        /// <summary>
+        /// 2.12: отсчёт конца дня — ОТДЕЛЬНО от панели, по центру экрана (просто цифры).
+        /// Живёт прямо на канвасе, поэтому не наследует наклон/перспективу/скрытие панели.
+        /// </summary>
+        private void BuildEndOfDay()
+        {
+            var go = NewUI("EndOfDay", transform);
+            var rt = (RectTransform)go.transform;
+            rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.sizeDelta = new Vector2(400f, 140f);
+            rt.anchoredPosition = new Vector2(0f, 120f);   // чуть выше центра, не на прицеле
+
+            _endOfDayText = MakeText(go.transform, "", 92f, S.Danger,
                                      TextAlignmentOptions.Center, bold: true, big: true);
-            _endOfDayText.gameObject.SetActive(false);
+            StretchInto(_endOfDayText.rectTransform);
+            _endOfDayText.enableWordWrapping = false;
+            _endOfDayText.overflowMode = TextOverflowModes.Overflow;
+            go.SetActive(false);
+            _endOfDayGo = go;
         }
 
         private void BuildDayDeaths(Transform parent)

@@ -19,4 +19,25 @@ namespace LCBridgeOverlay
             OverlayManager.Instance?.NotifyDisconnectedFromGame();
         }
     }
+
+    /// <summary>
+    /// Перезаход в сейв: оверлей должен начинать «с чистого листа», иначе на новом
+    /// заходе оставались метки квот, таймер и состояние прошлой сессии.
+    /// StartOfRound.Start вызывается при каждой загрузке корабля.
+    /// </summary>
+    [HarmonyPatch(typeof(StartOfRound), "Start")]
+    internal static class Patch_StartOfRound_Start
+    {
+        private static void Postfix()
+        {
+            try
+            {
+                MonsterState.Reset();
+                BcmeClientEvents.Clear();
+                OverlayManager.Instance?.NotifyEnteredSave();
+                BridgeTicker.ForceImmediate();
+            }
+            catch { }
+        }
+    }
 }
