@@ -56,7 +56,15 @@ namespace LCBridgeOverlay
         }
 
         // ---------- 2.12 отсчёт до конца дня ----------
-        /// <summary>Секунд до автоматического отлёта корабля; -1 если неизвестно/не на луне.</summary>
+        /// <summary>
+        /// Реальных секунд до конца дня (автоотлёта); -1 если неизвестно/не на луне.
+        ///
+        /// ВАЖНО про единицы: currentDayTime считается в «дневных» единицах и растёт
+        /// со скоростью globalTimeSpeedMultiplier, а shipLeaveAutomaticallyTime —
+        /// НОРМАЛИЗОВАННЫЙ порог (0..1). Раньше мы вычитали одно из другого напрямую,
+        /// получали отрицательное число и всегда возвращали 0 — из-за этого отсчёт
+        /// висел на нуле и, как следствие, показывался постоянно.
+        /// </summary>
         public static int SecondsToEndOfDay()
         {
             try
@@ -64,16 +72,28 @@ namespace LCBridgeOverlay
                 var tod = TimeOfDay.Instance;
                 var sor = StartOfRound.Instance;
                 if (tod == null || sor == null || !sor.shipHasLanded) return -1;
-                if (tod.globalTimeAtEndOfDay <= 0f) return -1;
 
-                // нормализованное время суток -> сколько ещё «игровых» секунд до конца дня
-                float left = (tod.shipLeaveAutomaticallyTime > 0f
-                                ? tod.shipLeaveAutomaticallyTime
-                                : tod.globalTimeAtEndOfDay) - tod.currentDayTime;
-                if (left <= 0f) return 0;
-                // currentDayTime идёт в «ускоренном» времени — переводим в реальные секунды
+                float total = tod.totalTime;
+                if (total <= 0f) return -1;
+
+                // доля прошедшего дня 0..1
+                float norm = tod.normalizedTimeOfDay;
+                if (norm < 0f) norm = Mathf.Clamp01(tod.currentDayTime / total);
+
+                // порог автоотлёта: если поле нормализовано (0..1] — берём его,
+                // иначе считаем концом дня единицу
+                float endNorm = 1f;
+                float sl = tod.shipLeaveAutomaticallyTime;
+                if (sl > 0f && sl <= 1f) endNorm = sl;
+
+                float leftNorm = endNorm - norm;
+                if (leftNorm <= 0f) return 0;
+
+                // сколько РЕАЛЬНЫХ секунд длится весь день
                 float speed = Mathf.Max(0.0001f, tod.globalTimeSpeedMultiplier);
-                int sec = Mathf.RoundToInt(left / speed);
+                float dayRealSeconds = total / speed;
+
+                int sec = Mathf.RoundToInt(leftNorm * dayRealSeconds);
                 return Mathf.Clamp(sec, 0, 24 * 3600);
             }
             catch { return -1; }
@@ -102,7 +122,7 @@ namespace LCBridgeOverlay
 
         // ---------- 2.11 суммарный множитель стоимости лута ----------
         private static bool _multSearched;
-        private static MethodInfo _bcmeScrapValueMul;
+        private static FieldInfo _bcmeMulField;
         private static Type _wtType;
 
         /// <summary>Суммарный множитель стоимости лута (1.0 = без изменений).</summary>
@@ -114,22 +134,23 @@ namespace LCBridgeOverlay
                 if (!_multSearched)
                 {
                     _multSearched = true;
-                    // BCME: метод множителя стоимости лута может лежать в разных классах —
-                    // ищем по ИМЕНИ МЕТОДА во всей сборке мода, а не гадаем про класс.
-                    _bcmeScrapValueMul = FindStaticMethodInAssembly("BrutalCompany",
-                        new[] { "GetScrapValueMultiplier", "GetScrapValueMul", "ScrapValueMultiplier" });
+                    // BCME хранит текущий множитель стоимости лута в СТАТИЧЕСКОМ ПОЛЕ
+                    // Manager.scrapValueMultiplier (метод GetScrapValueMultiplier есть
+                    // только у экземпляра LevelProperties — раньше мы искали не там).
+                    _bcmeMulField = FindStaticFloatFieldInAssembly("BrutalCompany",
+                        new[] { "Manager" }, new[] { "scrapValueMultiplier" });
                     _wtType = GameState.FindTypeFuzzy("WeatherTweaks",
                         new[] { "Variables", "WeatherManager", "Values", "Config" });
-                    Plugin.Log?.LogInfo($"[loot-mult] BCME-метод={(_bcmeScrapValueMul != null ? _bcmeScrapValueMul.DeclaringType?.FullName + "." + _bcmeScrapValueMul.Name : "не найден")}, " +
+                    Plugin.Log?.LogInfo($"[loot-mult] BCME-поле={(_bcmeMulField != null ? _bcmeMulField.DeclaringType?.Name + "." + _bcmeMulField.Name : "не найдено")}, " +
                                         $"WeatherTweaks={(_wtType != null ? _wtType.FullName : "не найден")}");
                 }
 
-                if (_bcmeScrapValueMul != null)
+                if (_bcmeMulField != null)
                 {
                     try
                     {
-                        var v = _bcmeScrapValueMul.Invoke(null, null);
-                        float f = v is float ff ? ff : (v is double dd ? (float)dd : -1f);
+                        var v = _bcmeMulField.GetValue(null);
+                        float f = v is float ff ? ff : -1f;
                         if (f > 0f) total += (f - 1f);
                     }
                     catch { }
@@ -148,8 +169,8 @@ namespace LCBridgeOverlay
             return Mathf.Clamp(total, 0f, 100f);
         }
 
-        /// <summary>Ищет статический метод без аргументов по имени во ВСЕЙ сборке мода.</summary>
-        private static MethodInfo FindStaticMethodInAssembly(string asmContains, string[] methodNames)
+        /// <summary>Ищет СТАТИЧЕСКОЕ float-поле в указанных классах сборки мода.</summary>
+        private static FieldInfo FindStaticFloatFieldInAssembly(string asmContains, string[] typeNames, string[] fieldNames)
         {
             try
             {
@@ -167,15 +188,16 @@ namespace LCBridgeOverlay
                     }
                     foreach (var t in types)
                     {
-                        foreach (var n in methodNames)
+                        bool nameOk = false;
+                        foreach (var tn in typeNames)
+                            if (string.Equals(t.Name, tn, StringComparison.OrdinalIgnoreCase)) { nameOk = true; break; }
+                        if (!nameOk) continue;
+                        foreach (var fn in fieldNames)
                         {
                             try
                             {
-                                var m = t.GetMethod(n,
-                                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static,
-                                    null, Type.EmptyTypes, null);
-                                if (m != null && (m.ReturnType == typeof(float) || m.ReturnType == typeof(double)))
-                                    return m;
+                                var f = t.GetField(fn, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
+                                if (f != null && f.FieldType == typeof(float)) return f;
                             }
                             catch { }
                         }

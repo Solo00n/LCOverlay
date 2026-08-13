@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Reflection;
 using GameNetcodeStuff;
 using HarmonyLib;
 using UnityEngine;
@@ -29,10 +30,38 @@ namespace LCBridgeOverlay
 
     /// <summary>
     /// 2.13 — монстр получил урон: помечаем его, чтобы иконка коротко вспыхнула красным.
+    ///
+    /// ВАЖНО: HitEnemy — виртуальный метод, и 21 монстр в игре его ПЕРЕОПРЕДЕЛЯЕТ
+    /// (Bracken, Thumper, Hoarder, Nutcracker, Masked и др.). Патч только на базовый
+    /// EnemyAI.HitEnemy их не перехватывал — поэтому вспышка почти никогда не
+    /// срабатывала. Патчим базовый метод И все переопределения.
     /// </summary>
-    [HarmonyPatch(typeof(EnemyAI), "HitEnemy")]
+    [HarmonyPatch]
     internal static class Patch_EnemyAI_HitEnemy
     {
+        [HarmonyTargetMethods]
+        internal static IEnumerable<MethodBase> Targets()
+        {
+            var list = new List<MethodBase>();
+            const BindingFlags F = BindingFlags.Public | BindingFlags.NonPublic |
+                                   BindingFlags.Instance | BindingFlags.DeclaredOnly;
+            var baseM = AccessTools.Method(typeof(EnemyAI), "HitEnemy");
+            if (baseM != null) list.Add(baseM);
+            try
+            {
+                foreach (var t in typeof(EnemyAI).Assembly.GetTypes())
+                {
+                    if (t == null || !t.IsSubclassOf(typeof(EnemyAI))) continue;
+                    MethodInfo m = null;
+                    try { m = t.GetMethod("HitEnemy", F); } catch { }
+                    if (m != null && !m.IsAbstract) list.Add(m);
+                }
+            }
+            catch { }
+            Plugin.Log?.LogInfo($"[hit] патчим HitEnemy: {list.Count} методов (база + переопределения).");
+            return list;
+        }
+
         [HarmonyPostfix]
         public static void Postfix(EnemyAI __instance, int force)
         {
@@ -56,7 +85,13 @@ namespace LCBridgeOverlay
         [HarmonyPostfix]
         public static void Postfix()
         {
-            try { RunSnapshot.OnLeverPulled(); }
+            try
+            {
+                RunSnapshot.OnLeverPulled();
+                // 2.1/2.9: игрок решил играть дальше — панель возвращается к обычному
+                // размеру, аналитика убирается с экрана.
+                OverlayManager.Instance?.HideAnalytics();
+            }
             catch { }
         }
     }

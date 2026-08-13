@@ -207,6 +207,17 @@ namespace LCBridgeOverlay
             Plugin.Log?.LogInfo("Вход в сейв — состояние оверлея сброшено.");
         }
 
+        /// <summary>
+        /// Убрать баннер аналитики и вернуть панель к обычному размеру.
+        /// Зовётся при дёргании рычага: игрок продолжает забег после своих 3 квот.
+        /// </summary>
+        public void HideAnalytics()
+        {
+            _showingLastRun = false;
+            _victory?.Hide();
+            _dirty = true;
+        }
+
         public void NotifyDisconnectedFromGame()
         {
             DataParser.Clear();
@@ -487,8 +498,9 @@ namespace LCBridgeOverlay
         {
             if (_endOfDayGo == null) return;
             var p = DataParser.Current;
+            // строго 1..10 — чтобы «застрявший» ноль не висел на экране весь день
             bool show = ConfigSettings.ShowEndOfDayCountdown.Value &&
-                        p != null && p.onMoon && p.endOfDaySec >= 0 && p.endOfDaySec <= 10;
+                        p != null && p.onMoon && p.endOfDaySec >= 1 && p.endOfDaySec <= 10;
 
             if (_endOfDayGo.activeSelf != show) _endOfDayGo.SetActive(show);
             if (!show) return;
@@ -667,14 +679,20 @@ namespace LCBridgeOverlay
                                               hasInterior && p.apparatusInside &&
                                               _lampImg.sprite != null);
 
-            // 2.11: суммарный множитель стоимости лута (показываем, если он не 1.0)
+            // 2.11: суммарный множитель стоимости лута. Показываем ВСЕГДА (пока включено
+            // в конфиге) — иначе при множителе 1.0 строка пропадала и выглядело так,
+            // будто функция не работает.
             if (_multText != null)
             {
-                bool showMult = ConfigSettings.ShowLootMultiplier.Value && p.lootMultiplier > 0f &&
-                                Mathf.Abs(p.lootMultiplier - 1f) > 0.01f;
+                bool showMult = ConfigSettings.ShowLootMultiplier.Value && onMoon;
                 _multText.gameObject.SetActive(showMult);
                 if (showMult)
-                    _multText.text = $"{Localization.T("mult")} <b>x{p.lootMultiplier:0.##}</b>";
+                {
+                    float m = p.lootMultiplier > 0f ? p.lootMultiplier : 1f;
+                    var col = Mathf.Abs(m - 1f) > 0.01f ? OverlayStyle.FromHex("FFB000") : S.TextDim;
+                    _multText.color = col;
+                    _multText.text = $"{Localization.T("mult")} <b>x{m:0.##}</b>";
+                }
             }
 
 
