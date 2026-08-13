@@ -1321,7 +1321,7 @@ namespace LCBridgeOverlay
             lrt.anchorMin = lrt.anchorMax = new Vector2(0.5f, 0.5f);
             lrt.pivot = new Vector2(0.5f, 0.5f);
             lrt.sizeDelta = new Vector2(26f, 20f);
-            lrt.anchoredPosition = new Vector2(0f, 3f);   // подъём к оптическому центру строки
+            lrt.anchoredPosition = new Vector2(0f, 6f);   // подъём к оптическому центру строки
             _lampImg = lampGo.AddComponent<Image>();
             _lampImg.sprite = SpriteBank.Get("apparatus");
             _lampImg.preserveAspect = true;
