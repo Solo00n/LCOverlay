@@ -5,16 +5,19 @@ namespace LCBridgeOverlay
     [HarmonyPatch(typeof(StartOfRound))]
     public static class StartOfRound_Patches
     {
-        // Полный сброс компании (новый файл / банкротство) — обнуляем всю статистику забега.
+        // Конец забега (eject / банкротство / новый файл). 2.9: НЕ стираем статистику
+        // сразу — иначе после eject игрок не успевает увидеть итоги. Замораживаем
+        // аналитику прошлого забега и показываем её до тех пор, пока не дёрнут рычаг
+        // (см. RunSnapshot / Patch_StartMatchLever_PullLever).
         [HarmonyPatch("ResetShip")]
         [HarmonyPostfix]
         public static void OnResetShip()
         {
-            GameState.ResetDeaths(); // обнуляет смерти + RunStats + bump resetToken
+            RunSnapshot.CaptureRunEnd();
         }
 
         // Загрузка настроек сейва: если это НОВАЯ игра (день 0 / ничего не отработано) —
-        // гарантированно сбрасываем всё, чтобы не копить статистику со старого файла.
+        // тоже фиксируем итоги прошлого забега, а обнуление произойдёт по рычагу.
         [HarmonyPatch("SetTimeAndPlanetToSavedSettings")]
         [HarmonyPostfix]
         public static void OnLoadSavedSettings()
@@ -28,7 +31,7 @@ namespace LCBridgeOverlay
                     (TimeOfDay.Instance != null && TimeOfDay.Instance.timesFulfilledQuota <= 0
                         && TimeOfDay.Instance.daysUntilDeadline >= 3);
                 if (freshSave)
-                    GameState.ResetDeaths();
+                    RunSnapshot.CaptureRunEnd();
             }
             catch { }
         }

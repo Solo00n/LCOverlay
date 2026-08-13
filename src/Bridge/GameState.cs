@@ -79,7 +79,42 @@ namespace LCBridgeOverlay
             RunStats.ResetRun();
         }
 
-        public static int GetDeaths() => _deaths;
+        // Счётчик смертей. При TeamDeaths берём ОБЩЕЕ число смертей команды из
+        // статистики игры (gameStats.deaths) — оно считается сервером и включает
+        // смерти, которых локальный игрок не видел. Иначе — старый локальный подсчёт.
+        // При DeathsOnlyOnLeave показываем «замороженное» значение, обновляя его
+        // только при отлёте с луны.
+        private static int _deathsShown;      // то, что реально отдаём наружу
+        private static int _deathsPending;    // последнее известное значение
+        private static bool _wasOnMoonDeaths;
+
+        public static int GetDeaths()
+        {
+            try
+            {
+                int live = _deaths;
+                if (ConfigSettings.TeamDeaths.Value)
+                {
+                    var sor = StartOfRound.Instance;
+                    if (sor != null && sor.gameStats != null)
+                        live = Mathf.Max(sor.gameStats.deaths, 0);
+                }
+                _deathsPending = live;
+
+                if (!ConfigSettings.DeathsOnlyOnLeave.Value)
+                {
+                    _deathsShown = live;
+                    return _deathsShown;
+                }
+
+                // режим «только при отлёте»: фиксируем значение в момент ухода с луны
+                bool onMoon = GetOnMoon();
+                if (_wasOnMoonDeaths && !onMoon) _deathsShown = _deathsPending;
+                _wasOnMoonDeaths = onMoon;
+                return _deathsShown;
+            }
+            catch { return _deaths; }
+        }
 
         // ===================== СТАТИСТИКА ЗАБЕГА =====================
         // кто убивал игрока (имя монстра/причина -> число смертей)
@@ -253,6 +288,16 @@ namespace LCBridgeOverlay
                 }
                 catch { }
 
+                // 2.3: если стоим у двери комплекса — «виртуальный радар» по ту сторону.
+                // Монстры рядом с этой точкой попадают в оверлей, даже если мы их не видим.
+                Vector3 probePos = Vector3.zero; bool haveProbe = false; bool probeInside = false;
+                float probeR = 0f;
+                if (haveMe && ConfigSettings.DoorRadar.Value)
+                {
+                    haveProbe = GameExtras.DoorProbe(me, out probePos, out probeInside);
+                    probeR = Mathf.Clamp(ConfigSettings.DoorRadarRadius.Value, 5f, 60f);
+                }
+
                 foreach (var ai in GetAllLiveEnemies())
                 {
                     if (ai == null) continue;
@@ -273,6 +318,13 @@ namespace LCBridgeOverlay
                     if (haveMe)
                     {
                         float d = Vector3.Distance(me, ai.transform.position);
+                        // монстр по ту сторону двери, в радиусе радара — считаем его
+                        // «близким», чтобы он подсветился игроку у этой двери
+                        if (haveProbe && ai.isOutside != probeInside)
+                        {
+                            float dp = Vector3.Distance(probePos, ai.transform.position);
+                            if (dp <= probeR && dp < d) d = dp;
+                        }
                         var dd = ai.isOutside ? outDist : inDist;
                         if (!dd.TryGetValue(name, out float md) || d < md) dd[name] = d;
                     }
@@ -392,6 +444,12 @@ namespace LCBridgeOverlay
         private static int _landedScrap;
         private static bool _wasLanded;
         private static bool _scrapLocked;
+        private static float _scrapSettleUntil;   // до какого времени ещё «досматриваем» значение
+
+        // Окно, в течение которого после посадки мы продолжаем принимать БОЛЬШЕЕ значение.
+        // Раньше снимок «залипал» на первом же ненулевом числе, и лут, доспавненный
+        // ивентами Brutal Company через пару секунд после высадки, в подсчёт не попадал.
+        private const float ScrapSettleSeconds = 20f;
 
         public static int GetLevelScrap()
         {
@@ -402,12 +460,17 @@ namespace LCBridgeOverlay
 
                 if (landed)
                 {
-                    if (!_wasLanded) { _wasLanded = true; _scrapLocked = false; _landedScrap = 0; }
-                    // пока не зафиксировали — пробуем поймать ненулевое значение
-                    if (!_scrapLocked && rm != null)
+                    if (!_wasLanded)
+                    {
+                        _wasLanded = true; _scrapLocked = false; _landedScrap = 0;
+                        _scrapSettleUntil = Time.unscaledTime + ScrapSettleSeconds;
+                    }
+                    if (rm != null && !_scrapLocked)
                     {
                         int v = (int)rm.totalScrapValueInLevel;
-                        if (v > 0) { _landedScrap = v; _scrapLocked = true; }
+                        if (v > _landedScrap) _landedScrap = v;   // берём максимум за окно
+                        // окно закончилось и что-то поймали — фиксируем
+                        if (_landedScrap > 0 && Time.unscaledTime >= _scrapSettleUntil) _scrapLocked = true;
                     }
                 }
                 else
@@ -562,6 +625,10 @@ namespace LCBridgeOverlay
 
         // true, если корабль сел на луну — ВКЛЮЧАЯ луну компании (Gordion):
         // на компании тоже показываем монстров/интерьер/предметы (по просьбе).
+        // ВАЖНО (2.5): shipHasLanded истинно и на луне компании (Gordion), и ложно на
+        // орбите. Авто-таймер оверлея гейтится именно по этому флагу — поэтому он
+        // корректно ИДЁТ на Gordion и СТОИТ на орбите. Не менять на проверку
+        // «настоящей» луны, иначе таймер перестанет идти на Gordion.
         public static bool GetOnMoon()
         {
             try
@@ -829,7 +896,7 @@ namespace LCBridgeOverlay
         // ====================================================================
         //  ВСПОМОГАТЕЛЬНЫЕ методы рефлексии
         // ====================================================================
-        private static Type FindTypeByFullName(string fullName)
+        internal static Type FindTypeByFullName(string fullName)
         {
             try
             {
@@ -844,7 +911,7 @@ namespace LCBridgeOverlay
             return null;
         }
 
-        private static Type FindTypeFuzzy(string asmNameContains, string[] typeNameCandidates)
+        internal static Type FindTypeFuzzy(string asmNameContains, string[] typeNameCandidates)
         {
             try
             {

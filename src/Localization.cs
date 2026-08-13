@@ -58,6 +58,11 @@ namespace LCBridgeOverlay
             ["vicNoLosses"] = "no losses",
             ["vicEvent"] = "event",
             ["vicDeath"] = "deaths",
+            // v1.5
+            ["vicSold"] = "SOLD",
+            ["mult"] = "MULT",
+            ["endOfDay"] = "SHIP LEAVES IN",
+            ["lastRun"] = "PREVIOUS RUN",
         };
 
         private static readonly Dictionary<string, string> Ru = new Dictionary<string, string>
@@ -105,6 +110,11 @@ namespace LCBridgeOverlay
             ["vicNoLosses"] = "без потерь",
             ["vicEvent"] = "ивент",
             ["vicDeath"] = "смерти",
+            // v1.5
+            ["vicSold"] = "ПРОДАНО",
+            ["mult"] = "МНОЖ",
+            ["endOfDay"] = "КОРАБЛЬ УЛЕТИТ ЧЕРЕЗ",
+            ["lastRun"] = "ПРОШЛЫЙ ЗАБЕГ",
         };
 
         /// <summary>Перевод по ключу для текущего языка из конфига.</summary>

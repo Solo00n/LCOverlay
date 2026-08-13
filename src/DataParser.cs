@@ -52,6 +52,14 @@ namespace LCBridgeOverlay
         public int itemsOutside;
         public bool hasOldBird;
         public bool onShip;
+
+        // ---- поля v1.5 ----
+        public bool popupActive;          // идёт игровое всплывающее окно
+        public bool storeAdActive;        // идёт реклама магазина
+        public int endOfDaySec = -1;      // секунд до конца дня (-1 = неизвестно)
+        public bool apparatusInside;      // аппарат («лампа») ещё в комплексе
+        public float lootMultiplier = 1f; // суммарный множитель стоимости лута
+        public int soldLoot;              // продано компании за весь забег
     }
 
     [Serializable]

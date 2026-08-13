@@ -48,6 +48,17 @@ namespace LCBridgeOverlay
         public static ConfigEntry<bool> ScaleMonstersByCount; // эксперимент: без цифр, размер/тряска по кол-ву
         public static ConfigEntry<bool> RequireScanToShow;    // монстр виден только после сканирования
         public static ConfigEntry<bool> ProximityFade;        // чем ближе монстр, тем менее прозрачна иконка
+        public static ConfigEntry<bool> TeamDeaths;           // считать смерти всей команды
+        public static ConfigEntry<bool> DeathsOnlyOnLeave;    // засчитывать смерти только при отлёте с луны
+        public static ConfigEntry<bool> HideOnPopups;         // прятать оверлей на игровых окнах
+        public static ConfigEntry<bool> HideOnStoreAd;        // прятать оверлей на рекламе магазина
+        public static ConfigEntry<bool> DoorRadar;            // монстры за дверью
+        public static ConfigEntry<float> DoorRadarRadius;     // радиус «виртуального радара» за дверью
+        public static ConfigEntry<bool> NearestVariantOnly;   // из версий монстра — только ближайшая
+        public static ConfigEntry<bool> DamageFlash;          // вспышка иконки при уроне
+        public static ConfigEntry<bool> ShowEndOfDayCountdown;// таймер конца дня
+        public static ConfigEntry<bool> ShowLootMultiplier;   // суммарный множитель стоимости лута
+        public static ConfigEntry<bool> ShowApparatusIcon;    // иконка лампы (аппарата) у интерьера
 
         // --- [WebSocket] ---
         // Порт встроенного моста (мод сам собирает данные и раздаёт их по WebSocket
@@ -152,6 +163,30 @@ namespace LCBridgeOverlay
             ProximityFade = cfg.Bind("Behavior", "ProximityFade", true,
                 "Чем БЛИЖЕ монстр к игроку, тем менее прозрачна его иконка (дальний — почти прозрачный). " +
                 "false — все иконки полностью непрозрачные.");
+            TeamDeaths = cfg.Bind("Behavior", "TeamDeaths", true,
+                "Считать смерти ВСЕЙ команды (даже если ты не видел смерть), а не только замеченные локально. " +
+                "Полностью заменяет старый способ подсчёта.");
+            DeathsOnlyOnLeave = cfg.Bind("Behavior", "DeathsOnlyOnLeave", false,
+                "Обновлять счётчик смертей только при отлёте корабля с луны (по итогам вылазки), а не мгновенно.");
+            HideOnPopups = cfg.Bind("Behavior", "HideOnPopups", true,
+                "Прятать оверлей во время игровых всплывающих окон (подсказки, сдача квоты, экран конца дня) " +
+                "и возвращать после закрытия.");
+            HideOnStoreAd = cfg.Bind("Behavior", "HideOnStoreAd", true,
+                "Прятать оверлей во время рекламы магазина. Пока реклама идёт, вернуть его клавишей нельзя.");
+            DoorRadar = cfg.Bind("Behavior", "DoorRadar", true,
+                "У двери комплекса (главный вход/пожарный выход) показывать монстров, которые находятся ПО ТУ СТОРОНУ двери.");
+            DoorRadarRadius = cfg.Bind("Behavior", "DoorRadarRadius", 22f,
+                "Радиус «виртуального радара» за дверью, метров (5–60).");
+            NearestVariantOnly = cfg.Bind("Behavior", "NearestVariantOnly", true,
+                "Если у монстра есть несколько версий (например, обычный и с турелью) — показывать только ближайшую к игроку.");
+            DamageFlash = cfg.Bind("Behavior", "DamageFlash", true,
+                "Иконка монстра кратко вспыхивает красным, когда монстр получает урон.");
+            ShowEndOfDayCountdown = cfg.Bind("Behavior", "ShowEndOfDayCountdown", true,
+                "Отсчёт до конца дня (появляется за 10 секунд).");
+            ShowLootMultiplier = cfg.Bind("Behavior", "ShowLootMultiplier", true,
+                "Показывать суммарный множитель стоимости лута (погода + ивенты) отдельным числом.");
+            ShowApparatusIcon = cfg.Bind("Behavior", "ShowApparatusIcon", true,
+                "Иконка лампы (аппарата) рядом с интерьером, пока аппарат не вынесли из комплекса.");
 
             // [WebSocket]
             Port = cfg.Bind("WebSocket", "Port", 8181,

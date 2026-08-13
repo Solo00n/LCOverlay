@@ -79,6 +79,12 @@ namespace LCBridgeOverlay
                 $"{Localization.T("vicDeaths")} <b>{(p != null ? p.deaths : 0)}</b>";
             _mgr.MakeText(_content.transform, totals, 13f, OverlayStyle.FromHex("FFB000"), TextAlignmentOptions.Center);
 
+            // 2.8: суммарно ПРОДАНО компании за весь забег (не путать с лутом на планете)
+            if (p != null && p.soldLoot > 0)
+                _mgr.MakeText(_content.transform,
+                    $"{Localization.T("vicSold")} <b>${p.soldLoot}</b>", 13f,
+                    OverlayStyle.FromHex("FFB000"), TextAlignmentOptions.Center);
+
             var run = p?.run;
             if (run == null) return;
 

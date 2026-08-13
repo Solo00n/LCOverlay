@@ -81,6 +81,13 @@ namespace LCBridgeOverlay
             string topKiller = GameState.GetTopKiller();
             string topMonster = GameState.GetTopMonster();
             string deadliestEvent = GameState.GetDeadliestEvent();
+            // v1.5: новые аддитивные поля
+            bool popup = GameExtras.PopupActive();
+            bool storeAd = GameExtras.StoreAdActive();
+            int endOfDaySec = GameExtras.SecondsToEndOfDay();
+            bool apparatus = GameExtras.ApparatusInside();
+            float lootMult = GameExtras.LootMultiplier();
+            int soldLoot = RunStats.SoldTotal;
 
             // диагностика: логируем счётчики при изменении, чтобы видеть что мост реально находит
             int totalMobs = outside.Count + inside.Count;
@@ -118,6 +125,13 @@ namespace LCBridgeOverlay
             sb.Append("\"itemsOutside\":").Append(itemsOutside).Append(',');
             sb.Append("\"hasOldBird\":").Append(oldBird ? "true" : "false").Append(',');
             sb.Append("\"onShip\":").Append(onShip ? "true" : "false").Append(',');
+            // v1.5: аддитивные поля
+            sb.Append("\"popupActive\":").Append(popup ? "true" : "false").Append(',');
+            sb.Append("\"storeAdActive\":").Append(storeAd ? "true" : "false").Append(',');
+            sb.Append("\"endOfDaySec\":").Append(endOfDaySec).Append(',');
+            sb.Append("\"apparatusInside\":").Append(apparatus ? "true" : "false").Append(',');
+            sb.Append("\"lootMultiplier\":").Append(lootMult.ToString("0.##", CultureInfo.InvariantCulture)).Append(',');
+            sb.Append("\"soldLoot\":").Append(soldLoot).Append(',');
             sb.Append("\"topKiller\":").Append(JsonStr(topKiller ?? "")).Append(',');
             sb.Append("\"topMonster\":").Append(JsonStr(topMonster ?? "")).Append(',');
             sb.Append("\"deadliestEvent\":").Append(JsonStr(deadliestEvent ?? "")).Append(',');

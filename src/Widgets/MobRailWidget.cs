@@ -39,12 +39,19 @@ namespace LCBridgeOverlay
             public float Scale;               // целевой масштаб (для «размер по кол-ву»)
             public float Appear;              // 0..1 — анимация появления (поп-ин)
             public float Alpha = 1f;          // текущая (сглаженная) прозрачность
+            public Color BaseColor = Color.white; // обычный цвет иконки
+            public float HurtFlash;           // 1 → 0, вспышка при получении урона
         }
+
+        private const float HurtFlashTime = 0.45f;
+        private static readonly Color HurtColor = new Color(1f, 0.22f, 0.18f, 1f);
         private readonly List<SwayItem> _sway = new List<SwayItem>();
 
         // ближайшая дистанция до игрока по группе монстров (обновляется каждый пакет,
         // НЕ вызывая пересборку рейки — прозрачность крутим в Update)
         private readonly Dictionary<string, float> _distByGroup = new Dictionary<string, float>();
+        // иконка по ключу группы — чтобы запустить вспышку урона без пересборки рейки
+        private readonly Dictionary<string, SwayItem> _byGroup = new Dictionary<string, SwayItem>();
 
         /// <summary>Иконки турелей на нижней рейке — эмиттеры для эффекта стрельбы.</summary>
         public readonly List<RectTransform> TurretIcons = new List<RectTransform>();
@@ -88,12 +95,18 @@ namespace LCBridgeOverlay
                 s.Rt.localScale = new Vector3(sc, sc, 1f);
                 s.Rt.localRotation = Quaternion.Euler(0f, 0f, Mathf.Sin((t + s.Phase) * s.Speed) * s.Amp);
 
-                // прозрачность по дистанции: чем ближе монстр — тем плотнее иконка
+                // цвет иконки = прозрачность по дистанции + красная вспышка урона
                 if (s.Img != null)
                 {
                     float ta = AlphaForGroup(s.GroupKey);
                     s.Alpha = Mathf.Lerp(s.Alpha, ta, 1f - Mathf.Exp(-6f * dt));
-                    var c = s.Img.color; c.a = s.Alpha * s.Appear; s.Img.color = c;
+
+                    // 2.13: вспышка затухает сама, чтобы иконка вернулась в обычный вид
+                    if (s.HurtFlash > 0f) s.HurtFlash = Mathf.MoveTowards(s.HurtFlash, 0f, dt / HurtFlashTime);
+
+                    var c = Color.Lerp(s.BaseColor, HurtColor, s.HurtFlash);
+                    c.a = s.Alpha * s.Appear;
+                    s.Img.color = c;
                 }
             }
         }
@@ -125,6 +138,9 @@ namespace LCBridgeOverlay
             _distByGroup.Clear();
             UpdateDistances(outside);
             UpdateDistances(inside);
+            // 2.13: вспышки урона — тоже без пересборки рейки
+            TriggerHurt(outside);
+            TriggerHurt(inside);
 
             // сигнатура НЕ зависит ни от порядка, ни от дистанции (мост шлёт список в
             // разном порядке + дистанция меняется каждый тик) → перестраиваем рейку
@@ -134,6 +150,20 @@ namespace LCBridgeOverlay
             _sigMobs = sig;
             RebuildRail(_left, outside, growLeft: true);
             RebuildRail(_right, inside, growLeft: false);
+        }
+
+        // монстр с меткой +Hurt → запускаем вспышку у его иконки (рейку не трогаем)
+        private void TriggerHurt(string[] arr)
+        {
+            if (arr == null || !ConfigSettings.DamageFlash.Value) return;
+            foreach (var raw in arr)
+            {
+                if (raw == null || raw.IndexOf("+Hurt", StringComparison.OrdinalIgnoreCase) < 0) continue;
+                var d = Parse(raw);
+                if (string.IsNullOrEmpty(d.GroupKey)) continue;
+                if (_byGroup.TryGetValue(d.GroupKey, out var item) && item != null && item.Rt != null)
+                    item.HurtFlash = 1f;
+            }
         }
 
         // "@<метры>" в конце записи → в _distByGroup (ключ — GroupKey монстра)
@@ -149,8 +179,12 @@ namespace LCBridgeOverlay
             }
         }
 
-        private static string StripDist(string s) =>
-            string.IsNullOrEmpty(s) ? s : Regex.Replace(s, @"\s*@\d+\s*$", "");
+        // Из СИГНАТУРЫ рейки убираем всё, что меняется часто: дистанцию и метку урона.
+        // Иначе рейка пересобиралась бы при каждом попадании по монстру и иконки бы
+        // «дёргались» (пере-появлялись). Вспышку урона запускаем отдельно, без пересборки.
+        private static string StripVolatile(string s) =>
+            string.IsNullOrEmpty(s) ? s
+            : Regex.Replace(Regex.Replace(s, @"\s*@\d+\s*$", ""), @"\+hurt", "", RegexOptions.IgnoreCase);
 
         public void SetTraps(string[] traps)
         {
@@ -188,7 +222,7 @@ namespace LCBridgeOverlay
         {
             if (arr == null || arr.Length == 0) return "";
             var copy = new string[arr.Length];
-            for (int i = 0; i < arr.Length; i++) copy[i] = StripDist(arr[i]); // дистанцию — вон из сигнатуры
+            for (int i = 0; i < arr.Length; i++) copy[i] = StripVolatile(arr[i]); // дистанцию и +Hurt — вон из сигнатуры
             Array.Sort(copy, StringComparer.Ordinal);
             return string.Join("|", copy);
         }
@@ -202,7 +236,7 @@ namespace LCBridgeOverlay
             public bool Turret, Slayer, Kamikaze;
             // состояния из моста (см. MonsterState): зол / развернулся / вырос /
             // атакует / на потолке / застыл / отсканирован
-            public bool Aggro, Angry, Adult, Attack, Ceiling, Frozen, Scanned, Firing;
+            public bool Aggro, Angry, Adult, Attack, Ceiling, Frozen, Scanned, Firing, Hurt;
             public float Dist = -1f;   // ближайшая дистанция до игрока, м (-1 = нет)
             public string GroupKey, IconKey;
             public int Rank => (Slayer || Kamikaze ? 2 : 0) + (Turret ? 1 : 0);
@@ -323,9 +357,10 @@ namespace LCBridgeOverlay
             bool frozen  = low.Contains("+frozen");
             bool scanned = low.Contains("+scanned");
             bool firing  = low.Contains("+firing");   // турель на монстре ведёт огонь
+            bool hurt    = low.Contains("+hurt");     // только что получил урон
 
             string baseName = Regex.Replace(nm,
-                @"\+turret|\+slayer|\+aggro|\+angry|\+adult|\+attack|\+ceiling|\+frozen|\+scanned|\+firing",
+                @"\+turret|\+slayer|\+aggro|\+angry|\+adult|\+attack|\+ceiling|\+frozen|\+scanned|\+firing|\+hurt",
                 "", RegexOptions.IgnoreCase).Trim();
             baseName = Canon(baseName);
             string groupKey = Norm(baseName);
@@ -353,6 +388,7 @@ namespace LCBridgeOverlay
                 Kamikaze = kamikaze,
                 Aggro = aggro, Angry = angry, Adult = adult,
                 Attack = attack, Ceiling = ceiling, Frozen = frozen, Scanned = scanned, Firing = firing,
+                Hurt = hurt,
                 Dist = dist,
                 GroupKey = groupKey,
                 IconKey = icon,
@@ -387,6 +423,11 @@ namespace LCBridgeOverlay
         private void ClearRail(RectTransform rail)
         {
             _sway.RemoveAll(x => x.Rt == null || x.Rt.IsChildOf(rail));
+            // ссылки на уничтоженные иконки убираем, иначе вспышка ушла бы «в никуда»
+            var stale = new List<string>();
+            foreach (var kv in _byGroup)
+                if (kv.Value == null || kv.Value.Rt == null || kv.Value.Rt.IsChildOf(rail)) stale.Add(kv.Key);
+            foreach (var k in stale) _byGroup.Remove(k);
             for (int i = rail.childCount - 1; i >= 0; i--)
                 Destroy(rail.GetChild(i).gameObject);
         }
@@ -428,6 +469,30 @@ namespace LCBridgeOverlay
                 else g.Variants.Add(d);
                 g.Total += d.Cnt;
             }
+            // 2.10: если у монстра несколько версий (обычный / с турелью / slayer) —
+            // показываем только БЛИЖАЙШУЮ к игроку. Смысла подсвечивать дальнего
+            // обычного коилхеда, когда рядом стоит версия с турелью, нет.
+            if (ConfigSettings.NearestVariantOnly.Value)
+            {
+                foreach (var g in groups)
+                {
+                    if (g.Variants.Count < 2) continue;
+                    Desc best = null;
+                    foreach (var v in g.Variants)
+                    {
+                        if (best == null) { best = v; continue; }
+                        // без дистанции вариант считаем «дальним»
+                        float bd = best.Dist < 0f ? float.MaxValue : best.Dist;
+                        float vd = v.Dist < 0f ? float.MaxValue : v.Dist;
+                        if (vd < bd) best = v;
+                    }
+                    if (best == null) continue;
+                    g.Variants.Clear();
+                    g.Variants.Add(best);
+                    g.Total = best.Cnt;   // счётчик — по показанной версии
+                }
+            }
+
             groups.Sort((a, b) => b.Total.CompareTo(a.Total)); // многочисленные — выше
 
             bool exp = ConfigSettings.ScaleMonstersByCount.Value;
@@ -450,7 +515,7 @@ namespace LCBridgeOverlay
                 {
                     // застывший койл (на него кто-то смотрит) — покачивание выключаем
                     float vAmp = v.Frozen ? 0f : amp;
-                    var irt = MakeIcon(rail, v.IconKey, v.Slayer || v.Kamikaze, g.Key.GetHashCode(), scale, vAmp, g.Key);
+                    var irt = MakeIcon(rail, v.IconKey, v.Slayer || v.Kamikaze, g.Key.GetHashCode(), scale, vAmp, g.Key, v.Hurt);
                     // первая иконка колоды центром на кромке (x=0), остальные — наружу
                     irt.anchoredPosition = new Vector2(growLeft ? -x : x, y);
                     // у монстра стреляет турель — трассеры полетят из его иконки
@@ -541,7 +606,7 @@ namespace LCBridgeOverlay
             }
         }
 
-        private RectTransform MakeIcon(RectTransform rail, string iconKey, bool angry, int seed, float scale, float amp, string groupKey = null)
+        private RectTransform MakeIcon(RectTransform rail, string iconKey, bool angry, int seed, float scale, float amp, string groupKey = null, bool hurt = false)
         {
             var go = OverlayManager.NewUI("Mob_" + iconKey, rail);
             var rt = (RectTransform)go.transform;
@@ -557,7 +622,7 @@ namespace LCBridgeOverlay
             img.preserveAspect = true;
             img.raycastTarget = false;
             _mgr.AddPerspective(img, true); // иконка под тем же углом/перспективой (качается → пересчёт)
-            _sway.Add(new SwayItem
+            var item = new SwayItem
             {
                 Rt = rt,
                 Img = img,
@@ -567,7 +632,11 @@ namespace LCBridgeOverlay
                 Amp = amp,
                 Scale = scale,
                 Appear = 0f,
-            });
+                BaseColor = Color.white,
+                HurtFlash = hurt ? 1f : 0f,
+            };
+            _sway.Add(item);
+            _byGroup[groupKey ?? ""] = item;   // чтобы вспышку можно было запустить без пересборки
             return rt;
         }
     }

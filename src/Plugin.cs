@@ -1,4 +1,4 @@
-using BepInEx;
+﻿using BepInEx;
 using BepInEx.Logging;
 using HarmonyLib;
 using System;
@@ -7,8 +7,8 @@ using UnityEngine;
 namespace LCBridgeOverlay
 {
     [BepInPlugin(GUID, NAME, VERSION)]
-    // Мост теперь встроен прямо сюда (см. Bridge/*) — отдельный мод LCBridge больше не нужен.
-    // Ниже — только мягкие зависимости: без них оверлей работает, просто данных меньше.
+    // РњРѕСЃС‚ С‚РµРїРµСЂСЊ РІСЃС‚СЂРѕРµРЅ РїСЂСЏРјРѕ СЃСЋРґР° (СЃРј. Bridge/*) вЂ” РѕС‚РґРµР»СЊРЅС‹Р№ РјРѕРґ LCBridge Р±РѕР»СЊС€Рµ РЅРµ РЅСѓР¶РµРЅ.
+    // РќРёР¶Рµ вЂ” С‚РѕР»СЊРєРѕ РјСЏРіРєРёРµ Р·Р°РІРёСЃРёРјРѕСЃС‚Рё: Р±РµР· РЅРёС… РѕРІРµСЂР»РµР№ СЂР°Р±РѕС‚Р°РµС‚, РїСЂРѕСЃС‚Рѕ РґР°РЅРЅС‹С… РјРµРЅСЊС€Рµ.
     [BepInDependency("SoftDiamond.BrutalCompanyMinusExtraReborn", BepInDependency.DependencyFlags.SoftDependency)]
     [BepInDependency("mrov.WeatherTweaks", BepInDependency.DependencyFlags.SoftDependency)]
     [BepInDependency("Timofey.MonstersGordion", BepInDependency.DependencyFlags.SoftDependency)]
@@ -18,16 +18,16 @@ namespace LCBridgeOverlay
     {
         public const string GUID = "gdlp.lcbridgeoverlay";
         public const string NAME = "LCBridgeOverlay";
-        public const string VERSION = "1.4.1";
+        public const string VERSION = "1.5.0";
 
         public static Plugin Instance { get; private set; }
         public static ManualLogSource Log { get; private set; }
 
         private Harmony _harmony;
 
-        // Lethal Company при загрузке главного меню уничтожает компоненты плагинов.
-        // Поэтому и оверлей, и тикер моста висят на HideAndDontSave-объектах,
-        // а сервер гасится только при реальном выходе из игры.
+        // Lethal Company РїСЂРё Р·Р°РіСЂСѓР·РєРµ РіР»Р°РІРЅРѕРіРѕ РјРµРЅСЋ СѓРЅРёС‡С‚РѕР¶Р°РµС‚ РєРѕРјРїРѕРЅРµРЅС‚С‹ РїР»Р°РіРёРЅРѕРІ.
+        // РџРѕСЌС‚РѕРјСѓ Рё РѕРІРµСЂР»РµР№, Рё С‚РёРєРµСЂ РјРѕСЃС‚Р° РІРёСЃСЏС‚ РЅР° HideAndDontSave-РѕР±СЉРµРєС‚Р°С…,
+        // Р° СЃРµСЂРІРµСЂ РіР°СЃРёС‚СЃСЏ С‚РѕР»СЊРєРѕ РїСЂРё СЂРµР°Р»СЊРЅРѕРј РІС‹С…РѕРґРµ РёР· РёРіСЂС‹.
         private static bool _quitting;
         private static GameObject _tickerGo;
 
@@ -40,75 +40,75 @@ namespace LCBridgeOverlay
 
             if (!ConfigSettings.Enabled.Value)
             {
-                Log.LogInfo($"{NAME} выключен в конфиге (General.Enabled = false).");
+                Log.LogInfo($"{NAME} РІС‹РєР»СЋС‡РµРЅ РІ РєРѕРЅС„РёРіРµ (General.Enabled = false).");
                 return;
             }
 
-            // Harmony-патчи: разом применяются и патчи UI-оверлея (Disconnect),
-            // и патчи сбора данных встроенного моста (PlayerControllerB / StartOfRound).
+            // Harmony-РїР°С‚С‡Рё: СЂР°Р·РѕРј РїСЂРёРјРµРЅСЏСЋС‚СЃСЏ Рё РїР°С‚С‡Рё UI-РѕРІРµСЂР»РµСЏ (Disconnect),
+            // Рё РїР°С‚С‡Рё СЃР±РѕСЂР° РґР°РЅРЅС‹С… РІСЃС‚СЂРѕРµРЅРЅРѕРіРѕ РјРѕСЃС‚Р° (PlayerControllerB / StartOfRound).
             try
             {
                 _harmony = new Harmony(GUID);
                 _harmony.PatchAll(System.Reflection.Assembly.GetExecutingAssembly());
-                Log.LogInfo("Harmony-патчи применены.");
+                Log.LogInfo("Harmony-РїР°С‚С‡Рё РїСЂРёРјРµРЅРµРЅС‹.");
             }
             catch (Exception e)
             {
-                Log.LogWarning($"Не удалось применить Harmony-патчи: {e.Message}");
+                Log.LogWarning($"РќРµ СѓРґР°Р»РѕСЃСЊ РїСЂРёРјРµРЅРёС‚СЊ Harmony-РїР°С‚С‡Рё: {e.Message}");
             }
 
-            // Отдельно, через рефлексию (мягкая зависимость): патчим анонс ивентов BCME,
-            // чтобы КЛИЕНТЫ тоже видели ивенты (у них EventManager.currentEvents пуст).
+            // РћС‚РґРµР»СЊРЅРѕ, С‡РµСЂРµР· СЂРµС„Р»РµРєСЃРёСЋ (РјСЏРіРєР°СЏ Р·Р°РІРёСЃРёРјРѕСЃС‚СЊ): РїР°С‚С‡РёРј Р°РЅРѕРЅСЃ РёРІРµРЅС‚РѕРІ BCME,
+            // С‡С‚РѕР±С‹ РљР›РР•РќРўР« С‚РѕР¶Рµ РІРёРґРµР»Рё РёРІРµРЅС‚С‹ (Сѓ РЅРёС… EventManager.currentEvents РїСѓСЃС‚).
             TryPatchBcmeTips();
 
-            // --- встроенный мост: WebSocket-сервер + тикер сбора состояния ---
+            // --- РІСЃС‚СЂРѕРµРЅРЅС‹Р№ РјРѕСЃС‚: WebSocket-СЃРµСЂРІРµСЂ + С‚РёРєРµСЂ СЃР±РѕСЂР° СЃРѕСЃС‚РѕСЏРЅРёСЏ ---
             int port = ConfigSettings.Port.Value;
             try
             {
                 BridgeServer.Start(port);
-                Log.LogInfo($"Встроенный мост запущен на ws://localhost:{port} (для HTML-оверлея/OBS).");
+                Log.LogInfo($"Р’СЃС‚СЂРѕРµРЅРЅС‹Р№ РјРѕСЃС‚ Р·Р°РїСѓС‰РµРЅ РЅР° ws://localhost:{port} (РґР»СЏ HTML-РѕРІРµСЂР»РµСЏ/OBS).");
             }
             catch (Exception e)
             {
-                // Частая причина — рядом ещё стоит старый мод LCBridge и держит порт.
-                Log.LogError($"Не удалось поднять мост на порту {port} (возможно, порт занят — удали старый мод LCBridge): {e.Message}");
+                // Р§Р°СЃС‚Р°СЏ РїСЂРёС‡РёРЅР° вЂ” СЂСЏРґРѕРј РµС‰С‘ СЃС‚РѕРёС‚ СЃС‚Р°СЂС‹Р№ РјРѕРґ LCBridge Рё РґРµСЂР¶РёС‚ РїРѕСЂС‚.
+                Log.LogError($"РќРµ СѓРґР°Р»РѕСЃСЊ РїРѕРґРЅСЏС‚СЊ РјРѕСЃС‚ РЅР° РїРѕСЂС‚Сѓ {port} (РІРѕР·РјРѕР¶РЅРѕ, РїРѕСЂС‚ Р·Р°РЅСЏС‚ вЂ” СѓРґР°Р»Рё СЃС‚Р°СЂС‹Р№ РјРѕРґ LCBridge): {e.Message}");
             }
             EnsureTicker();
             Application.quitting += OnApplicationQuitting;
 
             CreateOverlay();
 
-            Log.LogInfo($"{NAME} v{VERSION} готов (мост встроен, отдельный LCBridge не требуется).");
+            Log.LogInfo($"{NAME} v{VERSION} РіРѕС‚РѕРІ (РјРѕСЃС‚ РІСЃС‚СЂРѕРµРЅ, РѕС‚РґРµР»СЊРЅС‹Р№ LCBridge РЅРµ С‚СЂРµР±СѓРµС‚СЃСЏ).");
         }
 
         /// <summary>
-        /// Патчит Net.DisplayTipClientRpc из BCME (мягкая зависимость, через рефлексию),
-        /// чтобы ловить анонсы ивентов на клиентах. Если BCME нет или сигнатура другая —
-        /// тихо пропускаем, оверлей продолжает работать.
+        /// РџР°С‚С‡РёС‚ Net.DisplayTipClientRpc РёР· BCME (РјСЏРіРєР°СЏ Р·Р°РІРёСЃРёРјРѕСЃС‚СЊ, С‡РµСЂРµР· СЂРµС„Р»РµРєСЃРёСЋ),
+        /// С‡С‚РѕР±С‹ Р»РѕРІРёС‚СЊ Р°РЅРѕРЅСЃС‹ РёРІРµРЅС‚РѕРІ РЅР° РєР»РёРµРЅС‚Р°С…. Р•СЃР»Рё BCME РЅРµС‚ РёР»Рё СЃРёРіРЅР°С‚СѓСЂР° РґСЂСѓРіР°СЏ вЂ”
+        /// С‚РёС…Рѕ РїСЂРѕРїСѓСЃРєР°РµРј, РѕРІРµСЂР»РµР№ РїСЂРѕРґРѕР»Р¶Р°РµС‚ СЂР°Р±РѕС‚Р°С‚СЊ.
         /// </summary>
         private void TryPatchBcmeTips()
         {
             try
             {
                 var netType = AccessTools.TypeByName("BrutalCompanyMinus.Net");
-                if (netType == null) { Log.LogInfo("BCME.Net не найден — ловля ивентов на клиенте пропущена."); return; }
+                if (netType == null) { Log.LogInfo("BCME.Net РЅРµ РЅР°Р№РґРµРЅ вЂ” Р»РѕРІР»СЏ РёРІРµРЅС‚РѕРІ РЅР° РєР»РёРµРЅС‚Рµ РїСЂРѕРїСѓС‰РµРЅР°."); return; }
                 var target = AccessTools.Method(netType, "DisplayTipClientRpc");
-                if (target == null) { Log.LogWarning("BCME.Net.DisplayTipClientRpc не найден — сигнатура изменилась?"); return; }
+                if (target == null) { Log.LogWarning("BCME.Net.DisplayTipClientRpc РЅРµ РЅР°Р№РґРµРЅ вЂ” СЃРёРіРЅР°С‚СѓСЂР° РёР·РјРµРЅРёР»Р°СЃСЊ?"); return; }
                 var postfix = new HarmonyMethod(typeof(BcmeClientEvents).GetMethod(
                     nameof(BcmeClientEvents.OnDisplayTip),
                     System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static));
                 _harmony.Patch(target, postfix: postfix);
-                Log.LogInfo("BCME.Net.DisplayTipClientRpc пропатчен — клиенты будут видеть ивенты.");
+                Log.LogInfo("BCME.Net.DisplayTipClientRpc РїСЂРѕРїР°С‚С‡РµРЅ вЂ” РєР»РёРµРЅС‚С‹ Р±СѓРґСѓС‚ РІРёРґРµС‚СЊ РёРІРµРЅС‚С‹.");
             }
             catch (Exception e)
             {
-                Log.LogWarning($"Не удалось пропатчить BCME-анонсы ивентов: {e.Message}");
+                Log.LogWarning($"РќРµ СѓРґР°Р»РѕСЃСЊ РїСЂРѕРїР°С‚С‡РёС‚СЊ BCME-Р°РЅРѕРЅСЃС‹ РёРІРµРЅС‚РѕРІ: {e.Message}");
             }
         }
 
-        /// <summary>Тикер собирает состояние раз в секунду и (а) раздаёт по WebSocket
-        /// HTML-оверлею, (б) отдаёт напрямую внутриигровому оверлею. Живёт на
-        /// неубиваемом объекте, переживает зачистку сцены главного меню.</summary>
+        /// <summary>РўРёРєРµСЂ СЃРѕР±РёСЂР°РµС‚ СЃРѕСЃС‚РѕСЏРЅРёРµ СЂР°Р· РІ СЃРµРєСѓРЅРґСѓ Рё (Р°) СЂР°Р·РґР°С‘С‚ РїРѕ WebSocket
+        /// HTML-РѕРІРµСЂР»РµСЋ, (Р±) РѕС‚РґР°С‘С‚ РЅР°РїСЂСЏРјСѓСЋ РІРЅСѓС‚СЂРёРёРіСЂРѕРІРѕРјСѓ РѕРІРµСЂР»РµСЋ. Р–РёРІС‘С‚ РЅР°
+        /// РЅРµСѓР±РёРІР°РµРјРѕРј РѕР±СЉРµРєС‚Рµ, РїРµСЂРµР¶РёРІР°РµС‚ Р·Р°С‡РёСЃС‚РєСѓ СЃС†РµРЅС‹ РіР»Р°РІРЅРѕРіРѕ РјРµРЅСЋ.</summary>
         private static void EnsureTicker()
         {
             if (_tickerGo != null) return;
@@ -118,9 +118,9 @@ namespace LCBridgeOverlay
         }
 
         /// <summary>
-        /// Создаёт объект-долгожитель с оверлеем. ВАЖНО: HideAndDontSave —
-        /// Lethal Company при загрузке главного меню уничтожает «посторонние»
-        /// DontDestroyOnLoad-объекты без этого флага.
+        /// РЎРѕР·РґР°С‘С‚ РѕР±СЉРµРєС‚-РґРѕР»РіРѕР¶РёС‚РµР»СЊ СЃ РѕРІРµСЂР»РµРµРј. Р’РђР–РќРћ: HideAndDontSave вЂ”
+        /// Lethal Company РїСЂРё Р·Р°РіСЂСѓР·РєРµ РіР»Р°РІРЅРѕРіРѕ РјРµРЅСЋ СѓРЅРёС‡С‚РѕР¶Р°РµС‚ В«РїРѕСЃС‚РѕСЂРѕРЅРЅРёРµВ»
+        /// DontDestroyOnLoad-РѕР±СЉРµРєС‚С‹ Р±РµР· СЌС‚РѕРіРѕ С„Р»Р°РіР°.
         /// </summary>
         private static void CreateOverlay()
         {
@@ -129,8 +129,8 @@ namespace LCBridgeOverlay
             go.AddComponent<OverlayManager>();
         }
 
-        // сторожевой таймер: если объект оверлея или тикер всё же уничтожили —
-        // пересоздаём. Plugin-компонент BepInEx живёт всегда, поэтому Update надёжен.
+        // СЃС‚РѕСЂРѕР¶РµРІРѕР№ С‚Р°Р№РјРµСЂ: РµСЃР»Рё РѕР±СЉРµРєС‚ РѕРІРµСЂР»РµСЏ РёР»Рё С‚РёРєРµСЂ РІСЃС‘ Р¶Рµ СѓРЅРёС‡С‚РѕР¶РёР»Рё вЂ”
+        // РїРµСЂРµСЃРѕР·РґР°С‘Рј. Plugin-РєРѕРјРїРѕРЅРµРЅС‚ BepInEx Р¶РёРІС‘С‚ РІСЃРµРіРґР°, РїРѕСЌС‚РѕРјСѓ Update РЅР°РґС‘Р¶РµРЅ.
         private float _watchdogT;
 
         private void Update()
@@ -142,7 +142,7 @@ namespace LCBridgeOverlay
             if (_tickerGo == null) EnsureTicker();
             if (OverlayManager.Instance == null)
             {
-                Log.LogWarning("Объект оверлея был уничтожен — пересоздаю.");
+                Log.LogWarning("РћР±СЉРµРєС‚ РѕРІРµСЂР»РµСЏ Р±С‹Р» СѓРЅРёС‡С‚РѕР¶РµРЅ вЂ” РїРµСЂРµСЃРѕР·РґР°СЋ.");
                 CreateOverlay();
             }
         }
@@ -155,10 +155,10 @@ namespace LCBridgeOverlay
 
         private void OnDestroy()
         {
-            // смена сцены — НЕ выход из игры: мост и тикер продолжают работать
+            // СЃРјРµРЅР° СЃС†РµРЅС‹ вЂ” РќР• РІС‹С…РѕРґ РёР· РёРіСЂС‹: РјРѕСЃС‚ Рё С‚РёРєРµСЂ РїСЂРѕРґРѕР»Р¶Р°СЋС‚ СЂР°Р±РѕС‚Р°С‚СЊ
             if (!_quitting)
             {
-                Log?.LogInfo("Компонент LCBridgeOverlay уничтожен сменой сцены — мост и тикер продолжают работать.");
+                Log?.LogInfo("РљРѕРјРїРѕРЅРµРЅС‚ LCBridgeOverlay СѓРЅРёС‡С‚РѕР¶РµРЅ СЃРјРµРЅРѕР№ СЃС†РµРЅС‹ вЂ” РјРѕСЃС‚ Рё С‚РёРєРµСЂ РїСЂРѕРґРѕР»Р¶Р°СЋС‚ СЂР°Р±РѕС‚Р°С‚СЊ.");
                 return;
             }
             try { BridgeServer.Stop(); } catch { }
@@ -166,3 +166,4 @@ namespace LCBridgeOverlay
         }
     }
 }
+

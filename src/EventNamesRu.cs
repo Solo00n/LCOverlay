@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Text;
 
@@ -26,6 +27,23 @@ namespace LCBridgeOverlay
             if (_loggedMiss.Add(key))
                 Plugin.Log?.LogInfo($"[event-ru] нет перевода для ивента \"{raw}\" (ключ: {key}) — показываю как есть.");
             return raw;
+        }
+
+        /// <summary>
+        /// Известно ли нам такое имя ивента. Нужно, чтобы выцепить названия ивентов
+        /// из синхронизированного текста панели BCME у КЛИЕНТОВ: там же лежат
+        /// сложность/квота/погода — их отбрасываем.
+        /// </summary>
+        public static bool IsKnownEvent(string raw)
+        {
+            if (string.IsNullOrEmpty(raw)) return false;
+            string key = Norm(raw);
+            if (key.Length >= 3 && Map.ContainsKey(key)) return true;
+            // если стоит русификатор BCME — сверяем ещё и с переводами
+            string t = raw.Trim();
+            foreach (var kv in Map)
+                if (string.Equals(kv.Value, t, StringComparison.OrdinalIgnoreCase)) return true;
+            return false;
         }
 
         private static string Norm(string s)

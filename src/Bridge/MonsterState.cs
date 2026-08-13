@@ -39,7 +39,19 @@ namespace LCBridgeOverlay
             _hauntTarget.Clear();
             _scanned.Clear();
             _scanIdCache.Clear();
+            _hurt.Clear();
             _terminal = null;
+        }
+
+        // 2.13: недавно получившие урон (id -> момент времени). Токен +Hurt держим
+        // короткое время, чтобы иконка успела вспыхнуть и вернуться в обычный вид.
+        private const float HurtHold = 0.6f;
+        private static readonly Dictionary<int, float> _hurt = new Dictionary<int, float>();
+
+        /// <summary>Враг получил урон (зовётся из патча EnemyAI.HitEnemy).</summary>
+        public static void MarkHurt(int instanceId)
+        {
+            try { _hurt[instanceId] = Time.unscaledTime; } catch { }
         }
 
         // Бестиарий игры: Terminal.scannedEnemyIDs хранит creatureScanID всех
@@ -174,6 +186,11 @@ namespace LCBridgeOverlay
                     // турель НА монстре (ToilHead / MantiToil): если она стреляет —
                     // оверлей рисует от этой иконки трассеры
                     if (IsTurretFiring(ai)) tok += "+Firing";
+
+                    // недавно получил урон — иконка вспыхнет красным (2.13)
+                    if (ConfigSettings.DamageFlash.Value &&
+                        _hurt.TryGetValue(ai.GetInstanceID(), out float ht) &&
+                        Time.unscaledTime - ht <= HurtHold) tok += "+Hurt";
 
                     // отсканирован: по бестиарию игры ИЛИ пойман нашим патчем узла скана
                     if (IsScannedByBestiary(ai) || _scanned.Contains(ai.GetInstanceID())) tok += "+Scanned";

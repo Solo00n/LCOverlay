@@ -1,5 +1,22 @@
 # Changelog — LCBridgeOverlay
 
+## 1.5.0
+- **Quota marks & endless runs.** Every completed set of 3 quotas adds a small mark under the quota block (15 per row, colour changes after the first row, counts up to 100), and the tab labels roll onward: `Q1 Q2 Q3` → `Q4 Q5 Q6` → … Run analytics now appear at the end of **every** set of three and are **cumulative for the whole run**.
+- **Team-wide death counter** (`TeamDeaths`, on by default) — counts every player's death, even ones you didn't witness. Optional `DeathsOnlyOnLeave` updates the counter only when the ship leaves a moon.
+- **Monsters behind the door** (`DoorRadar`) — standing at a main entrance or fire exit reveals what's on the other side, via a virtual radar at the paired door (radius configurable, default 22 m).
+- **Auto-hide on game popups** (`HideOnPopups`) — tips, quota-delivery and end-of-day screens hide the overlay, which then returns to its previous state.
+- **Auto-hide on store ads** (`HideOnStoreAd`) — during a discount ad the overlay hides and can't be toggled back until it ends.
+- **Sold-loot total** in the analytics — how much was actually sold to the company across the run.
+- **Previous-run analytics after `eject`** — the summary stays up on the new ship and resets only when someone pulls the lever (kept in memory for the session only).
+- **Nearest variant only** (`NearestVariantOnly`) — when a monster exists in several versions (e.g. plain and turret-equipped), only the one closest to you is shown.
+- **Combined loot multiplier** (`ShowLootMultiplier`) — weather and event scrap-value multipliers summed into a single number.
+- **End-of-day countdown** (`ShowEndOfDayCountdown`) — appears in the last 10 seconds.
+- **Damage flash** (`DamageFlash`) — a monster's icon briefly flashes red when it takes damage (separate from the slayer blood-splatter).
+- **Apparatus icon** next to the interior while the apparatus is still inside; it disappears once it's carried out.
+- **New eye icon** for the connection indicator.
+- **Fixes:** the outside-scrap count no longer misses loot that Brutal Company events spawn shortly after landing (the snapshot used to lock on the first non-zero value); BCME events now also read BCME's synced panel variable, so **clients** see them even when the announce RPC is missed.
+- Verified: the timer runs on the Company moon (Gordion) and stops in orbit.
+
 ## 1.4.1
 - **Proximity fade** (`ProximityFade`, default on) — the closer a monster **or trap** is to you, the more opaque its icon; distant ones fade toward transparent.
 - **Trap rail now matches the monster rails** — icons sit on the bottom border line (following the event plate, lowered so they don't overlap the event text) and fade by proximity.

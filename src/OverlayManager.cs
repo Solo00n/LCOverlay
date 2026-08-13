@@ -49,6 +49,9 @@ namespace LCBridgeOverlay
         private TextMeshProUGUI _timerText;
         private EyeWidget _topEye;     // глаз-индикатор связи сверху (закрывается при уходе с корабля)
         private TextMeshProUGUI _moonText, _interiorText, _itemsText, _oldBirdText;
+        private Image _lampImg;                       // 2.14: иконка аппарата у интерьера
+        private TextMeshProUGUI _multText;            // 2.11: суммарный множитель лута
+        private TextMeshProUGUI _endOfDayText;        // 2.12: отсчёт до конца дня
         private readonly Image[] _qtabBgs = new Image[3];
         private readonly TextMeshProUGUI[] _qtabTexts = new TextMeshProUGUI[3];
         private TextMeshProUGUI _lootQuotaText, _barText;
@@ -210,9 +213,26 @@ namespace LCBridgeOverlay
                 _timerRunning = false;
                 _prevWantRun = null;
                 _lastQuotaIndex = null;
+                _marksShown = -1;      // метки троек квот пересоберутся
                 _victory?.Hide();
             }
             _prevResetToken = p.resetToken;
+
+            // 2.9: забег завершён (eject/банкротство) — держим аналитику прошлого забега
+            // на экране, пока не дёрнут рычаг. Скрываем, как только рычаг дёрнули.
+            if (ConfigSettings.ShowVictoryBanner.Value)
+            {
+                if (RunSnapshot.ShowLastRun && !_showingLastRun)
+                {
+                    _showingLastRun = true;
+                    _victory?.Show(p, (int)_timerSec);
+                }
+                else if (!RunSnapshot.ShowLastRun && _showingLastRun)
+                {
+                    _showingLastRun = false;
+                    _victory?.Hide();
+                }
+            }
 
             // Авто-таймер: идёт только пока мы РЕАЛЬНО на луне (высадка), не в орбите
             // и не на загрузке. Раньше гейтом был inGame (= shipHasLanded ||
@@ -243,10 +263,16 @@ namespace LCBridgeOverlay
             }
 
             int qi = Mathf.Max(1, p.quotaIndex);
-            if (_lastQuotaIndex != null && qi > _lastQuotaIndex && qi >= 4 &&
+            // 2.1: аналитику показываем в конце КАЖДОЙ тройки квот (3, 6, 9, ...),
+            // а не только после первой. Данные в RunStats копятся за весь забег,
+            // поэтому баннер всегда накопительный.
+            if (_lastQuotaIndex != null && qi > _lastQuotaIndex &&
                 ConfigSettings.ShowVictoryBanner.Value)
             {
-                _victory.Show(p, (int)_timerSec);
+                int triplesNow = (qi - 1) / 3;
+                int triplesWas = (_lastQuotaIndex.Value - 1) / 3;
+                if (triplesNow > triplesWas && triplesNow >= 1)
+                    _victory.Show(p, (int)_timerSec);
             }
             _lastQuotaIndex = qi;
         }
@@ -259,6 +285,8 @@ namespace LCBridgeOverlay
 
             if (KeyPressed(ConfigSettings.ToggleKeyParsed))
             {
+                // во время рекламы магазина показ заблокирован (2.6)
+                if (_adBlocked) return;
                 var p = DataParser.Current;
                 bool onShip = p != null && p.onShip;
                 if (ConfigSettings.AlwaysVisible.Value || onShip)
@@ -297,6 +325,52 @@ namespace LCBridgeOverlay
         // чтобы он оставался на заднем плане и не мешал меню.
         private const float PauseDimAlpha = 0.06f;
         private float _pauseFade; // 0 = обычный, 1 = приглушён под паузу
+        private bool _adBlocked;      // идёт реклама магазина — ручной показ заблокирован (2.6)
+        private bool _showingLastRun; // 2.9: на экране аналитика прошлого забега
+
+        // ---- 2.1: метки пройденных троек квот ----
+        private GameObject _marksGo;      // контейнер рядов меток
+        private int _marksShown = -1;     // сколько меток уже нарисовано
+        private const int MarksPerRow = 15;   // сколько влезает в ряд
+        private const int MarksMax = 100;     // дальше счёт не ведём
+        private const float MarkW = 12f, MarkH = 6f;
+
+        /// <summary>
+        /// Перестроить ряды меток: одна метка = одна пройденная тройка квот.
+        /// В ряду MarksPerRow штук; после первого ряда метки меняют цвет.
+        /// </summary>
+        private void RebuildQuotaMarks(int triples)
+        {
+            if (_marksGo == null) return;
+            triples = Mathf.Clamp(triples, 0, MarksMax);
+            if (triples == _marksShown) return;
+            _marksShown = triples;
+
+            for (int i = _marksGo.transform.childCount - 1; i >= 0; i--)
+                Destroy(_marksGo.transform.GetChild(i).gameObject);
+
+            _marksGo.SetActive(triples > 0);
+            if (triples <= 0) return;
+
+            GameObject row = null;
+            for (int i = 0; i < triples; i++)
+            {
+                if (i % MarksPerRow == 0)
+                {
+                    row = Row(_marksGo.transform, 3f);
+                    row.GetComponent<HorizontalLayoutGroup>().childForceExpandWidth = false;
+                    row.GetComponent<HorizontalLayoutGroup>().childAlignment = TextAnchor.MiddleLeft;
+                }
+                var m = NewUI("Mark", row.transform);
+                // после первого ряда — другой цвет (вышли за «стандартные» 15 троек)
+                var col = i < MarksPerRow ? S.Danger : OverlayStyle.FromHex("FFB000");
+                AddImage(m, col);
+                var le = m.AddComponent<LayoutElement>();
+                le.preferredWidth = MarkW; le.minWidth = MarkW;
+                le.preferredHeight = MarkH; le.minHeight = MarkH;
+                AddPerspective(m.GetComponent<Image>(), false);
+            }
+        }
 
         private void UpdateVisibility(float dt)
         {
@@ -324,7 +398,13 @@ namespace LCBridgeOverlay
             if (_canvas != null) _canvas.sortingOrder = paused ? -1000 : 500;
 
             UpdateIdleFade(dt);
-            bool allowed = ConfigSettings.Enabled.Value && inSave && !leaving &&
+
+            // 2.4 / 2.6: игровые окна и реклама магазина. Реклама ЖЁСТЧЕ — пока она
+            // идёт, оверлей нельзя вернуть клавишей (см. HandleInput).
+            bool popup = ConfigSettings.HideOnPopups.Value && p != null && p.popupActive;
+            _adBlocked = ConfigSettings.HideOnStoreAd.Value && p != null && p.storeAdActive;
+
+            bool allowed = ConfigSettings.Enabled.Value && inSave && !leaving && !popup && !_adBlocked &&
                 (ConfigSettings.AlwaysVisible.Value || (connected && (spectating || (p != null && p.onShip))));
             bool target = allowed && !_userHidden;
 
@@ -518,18 +598,52 @@ namespace LCBridgeOverlay
 
             _oldBirdText.gameObject.SetActive(onMoon && p.hasOldBird);
 
+            // 2.14: лампа (аппарат) — пока он в комплексе
+            if (_lampImg != null)
+                _lampImg.gameObject.SetActive(ConfigSettings.ShowApparatusIcon.Value &&
+                                              hasInterior && p.apparatusInside &&
+                                              _lampImg.sprite != null);
+
+            // 2.11: суммарный множитель стоимости лута (показываем, если он не 1.0)
+            if (_multText != null)
+            {
+                bool showMult = ConfigSettings.ShowLootMultiplier.Value && p.lootMultiplier > 0f &&
+                                Mathf.Abs(p.lootMultiplier - 1f) > 0.01f;
+                _multText.gameObject.SetActive(showMult);
+                if (showMult)
+                    _multText.text = $"{Localization.T("mult")} <b>x{p.lootMultiplier:0.##}</b>";
+            }
+
+            // 2.12: отсчёт до конца дня — последние 10 секунд
+            if (_endOfDayText != null)
+            {
+                bool showEod = ConfigSettings.ShowEndOfDayCountdown.Value &&
+                               onMoon && p.endOfDaySec >= 0 && p.endOfDaySec <= 10;
+                _endOfDayText.gameObject.SetActive(showEod);
+                if (showEod)
+                    _endOfDayText.text = $"{Localization.T("endOfDay")} <b>{p.endOfDaySec}</b>";
+            }
+
             // ---- квота ----
             int qi = p != null ? Mathf.Max(1, p.quotaIndex) : 1;
+            // 2.1: блок показывает ТЕКУЩУЮ тройку. Пройденные тройки уходят в метки,
+            // а подписи сдвигаются: Q1..Q3 → Q4..Q6 → ... (до Q28..Q30 и дальше).
+            int triples = (qi - 1) / 3;                 // сколько троек уже пройдено
+            int baseQ = triples * 3;                    // с какой квоты начинается текущая тройка
+            int inTriple = qi - baseQ;                  // позиция внутри тройки: 1..3
             for (int i = 0; i < 3; i++)
             {
-                bool done = i < qi - 1;
-                bool active = !done && i == qi - 1;
+                bool done = i < inTriple - 1;
+                bool active = !done && i == inTriple - 1;
                 _qtabBgs[i].color = done ? S.Frame
                     : active ? OverlayStyle.WithA(S.Frame, S.LegacyCorners ? 0.10f : 0.22f)
                     : new Color(1f, 1f, 1f, S.LegacyCorners ? 0f : 0.06f);
                 _qtabTexts[i].color = done ? (S.LegacyCorners ? Color.white : Color.black)
                     : active ? S.Accent : S.TextDim;
+                string want = "Q" + (baseQ + i + 1);
+                if (_qtabTexts[i].text != want) _qtabTexts[i].text = want;
             }
+            RebuildQuotaMarks(triples);
             int quota = p != null ? Mathf.Max(0, p.quotaValue) : 0;
             int loot = p != null ? Mathf.Max(0, p.shipLoot) : 0;
             _lootQuotaText.text = $"<b>{loot}</b><color=#{OverlayStyle.Hex(S.TextDim)}>/</color>{quota}";
@@ -1072,7 +1186,22 @@ namespace LCBridgeOverlay
             _locationGo = Col(parent, 2f);
             MakeText(_locationGo.transform, Localization.T("location"), 13f, S.TextDim, bold: true);
             _moonText = MakeText(_locationGo.transform, "- -", 26f, S.Text, big: true);
-            _interiorText = MakeText(_locationGo.transform, "", 15f, S.Text);
+
+            // 2.14: строка интерьера + иконка лампы (аппарата), пока он в комплексе
+            var intRow = Row(_locationGo.transform, 5f);
+            intRow.GetComponent<HorizontalLayoutGroup>().childAlignment = TextAnchor.MiddleLeft;
+            _interiorText = MakeText(intRow.transform, "", 15f, S.Text);
+            var lampGo = NewUI("Lamp", intRow.transform);
+            _lampImg = lampGo.AddComponent<Image>();
+            _lampImg.sprite = SpriteBank.Get("apparatus");
+            _lampImg.preserveAspect = true;
+            _lampImg.raycastTarget = false;
+            var lampLe = lampGo.AddComponent<LayoutElement>();
+            lampLe.preferredWidth = 22f; lampLe.minWidth = 22f;
+            lampLe.preferredHeight = 16f; lampLe.minHeight = 16f;
+            AddPerspective(_lampImg, false);
+            lampGo.SetActive(false);
+
             _itemsText = MakeText(_locationGo.transform, "", 14f, S.TextDim);
             _oldBirdText = MakeText(_locationGo.transform, Localization.T("oldBird"), 17f, S.Danger, bold: true);
             _oldBirdText.gameObject.SetActive(false);
@@ -1097,6 +1226,11 @@ namespace LCBridgeOverlay
                 StretchInto(t.rectTransform);
                 _qtabTexts[i] = t;
             }
+
+            // 2.1: контейнер под ряды меток пройденных троек квот (заполняется в Refresh)
+            _marksGo = Col(_quotaGo.transform, 3f);
+            _marksGo.name = "QuotaMarks";
+            _marksGo.SetActive(false);
 
             var lootRow = Row(_quotaGo.transform, 8f);
             var lbl = MakeText(lootRow.transform, Localization.T("lootQuota"), 14f, S.TextDim, bold: true);
@@ -1128,6 +1262,16 @@ namespace LCBridgeOverlay
             Flexible(opLabel.gameObject, 1f);
             _onPlanetVal = MakeText(_onPlanetGo.transform, "$0", 20f, S.Text, TextAlignmentOptions.Right, big: true);
             _onPlanetGo.SetActive(false);
+
+            // 2.11: суммарный множитель стоимости лута (погода + ивенты) одним числом
+            _multText = MakeText(_quotaGo.transform, "", 13f, OverlayStyle.FromHex("FFB000"),
+                                 TextAlignmentOptions.Right, bold: true);
+            _multText.gameObject.SetActive(false);
+
+            // 2.12: отсчёт до конца дня — крупно и заметно, появляется за 10 секунд
+            _endOfDayText = MakeText(_quotaGo.transform, "", 20f, S.Danger,
+                                     TextAlignmentOptions.Center, bold: true, big: true);
+            _endOfDayText.gameObject.SetActive(false);
         }
 
         private void BuildDayDeaths(Transform parent)

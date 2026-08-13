@@ -57,6 +57,15 @@ namespace LCBridgeOverlay
         // общий таймер забега (секунды), считаем сами по тикам в игре
         private static int _runSeconds;
 
+        /// <summary>2.8: суммарная стоимость лута, ПРОДАННОГО компании за весь забег.
+        /// Копится патчем на прилавке (DepositItemsDesk).</summary>
+        public static int SoldTotal { get; private set; }
+
+        public static void AddSold(int value)
+        {
+            if (value > 0) SoldTotal += value;
+        }
+
         public static void ResetRun()
         {
             _quotas.Clear(); _curQuota = null; _lastQuotaIndex = -1;
@@ -67,6 +76,7 @@ namespace LCBridgeOverlay
             _secInside = 0; _secOutside = 0;
             _timeline.Clear(); _lastDayLogged = -1; _lastEventLogged = null;
             _runSeconds = 0;
+            SoldTotal = 0;
         }
 
         // регистрируется из RegisterDeath, чтобы таймлайн знал контекст смерти
