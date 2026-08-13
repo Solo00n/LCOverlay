@@ -50,6 +50,7 @@ namespace LCBridgeOverlay
         private EyeWidget _topEye;     // глаз-индикатор связи сверху (закрывается при уходе с корабля)
         private TextMeshProUGUI _moonText, _interiorText, _itemsText, _oldBirdText;
         private Image _lampImg;                       // 2.14: иконка аппарата у интерьера
+        private GameObject _lampSlot;                 // её место в строке интерьера
         private TextMeshProUGUI _multText;            // 2.11: суммарный множитель лута
         private TextMeshProUGUI _endOfDayText;        // 2.12: отсчёт до конца дня
         private GameObject _endOfDayGo;               // его контейнер (по центру экрана)
@@ -713,10 +714,10 @@ namespace LCBridgeOverlay
             _oldBirdText.gameObject.SetActive(onMoon && p.hasOldBird);
 
             // 2.14: лампа (аппарат) — пока он в комплексе
-            if (_lampImg != null)
-                _lampImg.gameObject.SetActive(ConfigSettings.ShowApparatusIcon.Value &&
-                                              hasInterior && p.apparatusInside &&
-                                              _lampImg.sprite != null);
+            if (_lampSlot != null)
+                _lampSlot.SetActive(ConfigSettings.ShowApparatusIcon.Value &&
+                                    hasInterior && p.apparatusInside &&
+                                    _lampImg != null && _lampImg.sprite != null);
 
             // 2.11: суммарный множитель стоимости лута. Показываем ВСЕГДА (пока включено
             // в конфиге) — иначе при множителе 1.0 строка пропадала и выглядело так,
@@ -1299,20 +1300,35 @@ namespace LCBridgeOverlay
             MakeText(_locationGo.transform, Localization.T("location"), 13f, S.TextDim, bold: true);
             _moonText = MakeText(_locationGo.transform, "- -", 26f, S.Text, big: true);
 
-            // 2.14: строка интерьера + иконка лампы (аппарата), пока он в комплексе
-            var intRow = Row(_locationGo.transform, 5f);
+            // 2.14: строка интерьера + иконка лампы (аппарата), пока он в комплексе.
+            // Иконка стоит СПРАВА от надписи, ровно по строке.
+            var intRow = Row(_locationGo.transform, 6f);
             intRow.GetComponent<HorizontalLayoutGroup>().childAlignment = TextAnchor.MiddleLeft;
             _interiorText = MakeText(intRow.transform, "", 15f, S.Text);
-            var lampGo = NewUI("Lamp", intRow.transform);
+            _interiorText.enableWordWrapping = false;   // не переносить, иначе строка «поедет»
+
+            // Контейнер задаёт место в раскладке, а сама картинка внутри него свободна —
+            // это позволяет поднять её к ОПТИЧЕСКОМУ центру строки. TMP центрирует всю
+            // строку вместе с подстрочным просветом, поэтому геометрически выровненная
+            // иконка визуально висит ниже заглавных букв.
+            var lampSlot = NewUI("LampSlot", intRow.transform);
+            var lampLe = lampSlot.AddComponent<LayoutElement>();
+            lampLe.preferredWidth = 26f; lampLe.minWidth = 26f;
+            lampLe.preferredHeight = 20f; lampLe.minHeight = 20f;
+
+            var lampGo = NewUI("Lamp", lampSlot.transform);
+            var lrt = (RectTransform)lampGo.transform;
+            lrt.anchorMin = lrt.anchorMax = new Vector2(0.5f, 0.5f);
+            lrt.pivot = new Vector2(0.5f, 0.5f);
+            lrt.sizeDelta = new Vector2(26f, 20f);
+            lrt.anchoredPosition = new Vector2(0f, 3f);   // подъём к оптическому центру строки
             _lampImg = lampGo.AddComponent<Image>();
             _lampImg.sprite = SpriteBank.Get("apparatus");
             _lampImg.preserveAspect = true;
             _lampImg.raycastTarget = false;
-            var lampLe = lampGo.AddComponent<LayoutElement>();
-            lampLe.preferredWidth = 22f; lampLe.minWidth = 22f;
-            lampLe.preferredHeight = 16f; lampLe.minHeight = 16f;
             AddPerspective(_lampImg, false);
-            lampGo.SetActive(false);
+            lampSlot.SetActive(false);
+            _lampSlot = lampSlot;
 
             _itemsText = MakeText(_locationGo.transform, "", 14f, S.TextDim);
             _oldBirdText = MakeText(_locationGo.transform, Localization.T("oldBird"), 17f, S.Danger, bold: true);
