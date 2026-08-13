@@ -123,7 +123,44 @@ namespace LCBridgeOverlay
         // ---------- 2.11 суммарный множитель стоимости лута ----------
         private static bool _multSearched;
         private static FieldInfo _bcmeMulField;
-        private static Type _wtType;
+        private static MethodInfo _wrGetCurrent;      // WeatherManager.GetCurrentWeather(level)
+        private static PropertyInfo _wrScrapEnabled;  // Settings.ScrapMultipliers
+        private static PropertyInfo _weatherScrapProp;// Weather.ScrapValueMultiplier
+
+        /// <summary>
+        /// Множитель стоимости лута от ТЕКУЩЕЙ погоды (1 — нет вклада).
+        /// Учитывается только если сам WeatherRegistry включил множители.
+        /// </summary>
+        private static float WeatherScrapMultiplier()
+        {
+            try
+            {
+                if (_wrGetCurrent == null) return -1f;
+
+                // мод может отключить множители — тогда погода на цену не влияет
+                if (_wrScrapEnabled != null)
+                {
+                    var on = _wrScrapEnabled.GetValue(null);
+                    if (on is bool b && !b) return -1f;
+                }
+
+                var sor = StartOfRound.Instance;
+                var level = sor != null ? sor.currentLevel : null;
+                if (level == null) return -1f;
+
+                var weather = _wrGetCurrent.Invoke(null, new object[] { level });
+                if (weather == null) return -1f;
+
+                if (_weatherScrapProp == null || _weatherScrapProp.DeclaringType != weather.GetType())
+                    _weatherScrapProp = weather.GetType().GetProperty("ScrapValueMultiplier",
+                        BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                if (_weatherScrapProp == null) return -1f;
+
+                var v = _weatherScrapProp.GetValue(weather);
+                return v is float f ? f : -1f;
+            }
+            catch { return -1f; }
+        }
 
         /// <summary>Суммарный множитель стоимости лута (1.0 = без изменений).</summary>
         public static float LootMultiplier()
@@ -139,10 +176,24 @@ namespace LCBridgeOverlay
                     // только у экземпляра LevelProperties — раньше мы искали не там).
                     _bcmeMulField = FindStaticFloatFieldInAssembly("BrutalCompany",
                         new[] { "Manager" }, new[] { "scrapValueMultiplier" });
-                    _wtType = GameState.FindTypeFuzzy("WeatherTweaks",
-                        new[] { "Variables", "WeatherManager", "Values", "Config" });
+                    // Погодный множитель живёт в WeatherRegistry: это СВОЙСТВО ЭКЗЕМПЛЯРА
+                    // Weather.ScrapValueMultiplier (а не статическое поле, как я искал
+                    // раньше). Текущую погоду отдаёт WeatherManager.GetCurrentWeather(level).
+                    var wm = GameState.FindTypeByFullName("WeatherRegistry.WeatherManager")
+                          ?? GameState.FindTypeFuzzy("WeatherRegistry", new[] { "WeatherManager" });
+                    if (wm != null)
+                        _wrGetCurrent = wm.GetMethod("GetCurrentWeather",
+                            BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static,
+                            null, new[] { typeof(SelectableLevel) }, null);
+
+                    // включён ли учёт множителей в самом WeatherRegistry
+                    var settings = GameState.FindTypeFuzzy("WeatherRegistry", new[] { "Settings" });
+                    if (settings != null)
+                        _wrScrapEnabled = settings.GetProperty("ScrapMultipliers",
+                            BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
+
                     Plugin.Log?.LogInfo($"[loot-mult] BCME-поле={(_bcmeMulField != null ? _bcmeMulField.DeclaringType?.Name + "." + _bcmeMulField.Name : "не найдено")}, " +
-                                        $"WeatherTweaks={(_wtType != null ? _wtType.FullName : "не найден")}");
+                                        $"WeatherRegistry.GetCurrentWeather={(_wrGetCurrent != null ? "OK" : "не найден")}");
                 }
 
                 if (_bcmeMulField != null)
@@ -156,14 +207,9 @@ namespace LCBridgeOverlay
                     catch { }
                 }
 
-                // погодный множитель ищем среди статических полей/свойств WeatherTweaks
-                if (_wtType != null)
-                {
-                    float wf = ReadStaticFloat(_wtType, "ScrapValueMultiplier", "scrapValueMultiplier",
-                                                        "ScrapMultiplier", "scrapMultiplier",
-                                                        "ScrapAmountMultiplier", "scrapAmountMultiplier");
-                    if (wf > 0f) total += (wf - 1f);
-                }
+                // множитель ТЕКУЩЕЙ погоды (WeatherRegistry/WeatherTweaks)
+                float wf = WeatherScrapMultiplier();
+                if (wf > 0f) total += (wf - 1f);
             }
             catch { }
             return Mathf.Clamp(total, 0f, 100f);
@@ -206,23 +252,6 @@ namespace LCBridgeOverlay
             }
             catch { }
             return null;
-        }
-
-        private static float ReadStaticFloat(Type t, params string[] names)
-        {
-            const BindingFlags F = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static;
-            foreach (var n in names)
-            {
-                try
-                {
-                    var f = t.GetField(n, F);
-                    if (f != null && f.FieldType == typeof(float)) return (float)f.GetValue(null);
-                    var p = t.GetProperty(n, F);
-                    if (p != null && p.PropertyType == typeof(float)) return (float)p.GetValue(null);
-                }
-                catch { }
-            }
-            return -1f;
         }
 
         // ---------- мелкие помощники рефлексии ----------
