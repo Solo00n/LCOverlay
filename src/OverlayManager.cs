@@ -207,6 +207,12 @@ namespace LCBridgeOverlay
             Plugin.Log?.LogInfo("Вход в сейв — состояние оверлея сброшено.");
         }
 
+        /// <summary>Зажечь иконку монстра при попадании по нему (из патча HitEnemy).</summary>
+        public void FlashMonster(string rawName, bool outside)
+        {
+            try { _mobRail?.FlashMonster(rawName, outside); } catch { }
+        }
+
         /// <summary>
         /// Убрать баннер аналитики и вернуть панель к обычному размеру.
         /// Зовётся при дёргании рычага: игрок продолжает забег после своих 3 квот.
@@ -490,25 +496,58 @@ namespace LCBridgeOverlay
 
         private static float EaseOutCubic(float t) => 1f - Mathf.Pow(1f - t, 3f);
 
+        // ---- 2.12: состояние отсчёта конца дня ----
+        private int _eodTarget = -1;     // значение из последнего пакета
+        private float _eodStamp;         // когда это значение пришло
+        private int _eodLastShown = -1;  // какая цифра сейчас на экране
+
         /// <summary>
-        /// 2.12: отсчёт конца дня по центру экрана — только цифры, последние 10 секунд.
-        /// Не зависит от видимости панели и от того, скрыл ли игрок оверлей.
+        /// Отсчёт конца дня по центру экрана. Цифры «налетают» на зрителя: растут из
+        /// маленьких в большие и по мере приближения тают.
+        ///
+        /// Секунды считаем ЛОКАЛЬНО от последнего пакета: пакет приходит раз в секунду,
+        /// и из-за округления одна из цифр (например, 5) могла просто не попасть в кадр.
         /// </summary>
         private void UpdateEndOfDay()
         {
             if (_endOfDayGo == null) return;
             var p = DataParser.Current;
-            // строго 1..10 — чтобы «застрявший» ноль не висел на экране весь день
-            bool show = ConfigSettings.ShowEndOfDayCountdown.Value &&
-                        p != null && p.onMoon && p.endOfDaySec >= 1 && p.endOfDaySec <= 10;
 
+            if (!ConfigSettings.ShowEndOfDayCountdown.Value || p == null || !p.onMoon || p.endOfDaySec < 0)
+            {
+                if (_endOfDayGo.activeSelf) _endOfDayGo.SetActive(false);
+                _eodTarget = -1; _eodLastShown = -1;
+                return;
+            }
+
+            // новое значение из пакета — перезапускаем локальный отсчёт от него
+            if (p.endOfDaySec != _eodTarget)
+            {
+                _eodTarget = p.endOfDaySec;
+                _eodStamp = Time.unscaledTime;
+            }
+
+            float remaining = _eodTarget - (Time.unscaledTime - _eodStamp);
+            int shown = Mathf.CeilToInt(remaining);
+
+            bool show = shown >= 1 && shown <= 10;
             if (_endOfDayGo.activeSelf != show) _endOfDayGo.SetActive(show);
-            if (!show) return;
+            if (!show) { _eodLastShown = -1; return; }
 
-            _endOfDayText.text = p.endOfDaySec.ToString();
-            // пульс на последних секундах — заметнее, но без резких скачков размера
-            float k = 1f + 0.12f * Mathf.Abs(Mathf.Sin(Time.unscaledTime * 6f));
-            _endOfDayGo.transform.localScale = new Vector3(k, k, 1f);
+            if (shown != _eodLastShown)
+            {
+                _eodLastShown = shown;
+                _endOfDayText.text = shown.ToString();
+            }
+
+            // фаза внутри текущей секунды: 0 — только появилась, 1 — вот-вот сменится
+            float phase = Mathf.Clamp01(1f - (remaining - Mathf.Floor(remaining)));
+            // «летит на зрителя»: растёт и одновременно тает
+            float scale = Mathf.Lerp(0.55f, 2.1f, phase);
+            float alpha = Mathf.Clamp01(1f - Mathf.Pow(phase, 1.6f));
+
+            _endOfDayGo.transform.localScale = new Vector3(scale, scale, 1f);
+            var c = _endOfDayText.color; c.a = alpha; _endOfDayText.color = c;
         }
 
         // Прячем оверлей ТОЛЬКО во время ВЗЛЁТА с луны (moon→orbit) — когда игра

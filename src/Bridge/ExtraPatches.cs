@@ -69,6 +69,14 @@ namespace LCBridgeOverlay
             {
                 if (__instance == null || force <= 0) return;
                 MonsterState.MarkHurt(__instance.GetInstanceID());
+
+                // ПРЯМАЯ подсветка: коллектор и UI живут в одном процессе, поэтому не
+                // ждём кругосветку через пакет моста (он идёт раз в секунду и метка
+                // могла не дожить) — зажигаем иконку сразу.
+                string nm = null;
+                try { nm = EnemyResolver.Resolve(__instance); } catch { }
+                if (!string.IsNullOrEmpty(nm))
+                    OverlayManager.Instance?.FlashMonster(nm, __instance.isOutside);
             }
             catch { }
         }

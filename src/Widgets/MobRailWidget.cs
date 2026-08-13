@@ -159,6 +159,24 @@ namespace LCBridgeOverlay
         private static string SideKey(bool outsideRail, string groupKey) =>
             (outsideRail ? "o|" : "i|") + (groupKey ?? "");
 
+        /// <summary>
+        /// Зажечь иконку монстра красным ПРЯМО СЕЙЧАС (зовётся из патча HitEnemy).
+        /// Имя — как его отдаёт EnemyResolver; сторона — улица/комплекс.
+        /// </summary>
+        public void FlashMonster(string rawName, bool outside)
+        {
+            try
+            {
+                if (!ConfigSettings.DamageFlash.Value || string.IsNullOrEmpty(rawName)) return;
+                var d = Parse(rawName);
+                if (string.IsNullOrEmpty(d.GroupKey)) return;
+                if (_byGroup.TryGetValue(SideKey(outside, d.GroupKey), out var item) &&
+                    item != null && item.Rt != null)
+                    item.HurtFlash = 1f;
+            }
+            catch { }
+        }
+
         // монстр с меткой +Hurt → запускаем вспышку у его иконки (рейку не трогаем)
         private void TriggerHurt(string[] arr, bool outsideRail)
         {
