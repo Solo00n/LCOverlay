@@ -1,5 +1,14 @@
 # Changelog — LCBridgeOverlay
 
+## 1.5.1
+- **Damage flash now works.** `HitEnemy` is virtual and 21 enemies override it, so patching the base method alone missed almost every monster. All overrides are patched, and the flash is triggered directly instead of travelling through the one-second bridge tick.
+- **End-of-day countdown fixed and restyled.** It used to read `0` permanently (a normalised threshold was subtracted from day units), so it also sat on screen all day. It is now a centre-screen number over the last ten seconds, counted locally so no digit is skipped, and each second grows and fades as it flies toward you.
+- **Weather is now part of the loot multiplier.** The weather contribution was never counted: it is an instance property on the current weather, not a static field. It is read through the weather mod's current-weather API and honours that mod's own "use scrap multipliers" setting. The multiplier row is always shown while enabled, so x1 is visible too.
+- **Same monster inside and outside** now fades independently — both rails previously shared one distance.
+- **Quota marks** are a single centred line of five that recolours on each pass instead of growing new rows, and the analytics banner closes when the lever is pulled so the panel returns to its normal size.
+- **Door radar** triggers reliably: the "at a door" range was 6 m and almost never matched; it is now 14 m measured from the door itself.
+- Re-entering a save resets the overlay; the apparatus icon sits on the interior line; apparatus art re-keyed; new eye indicator.
+
 ## 1.5.0
 - **Quota marks & endless runs.** Every completed set of 3 quotas adds a small mark under the quota block (15 per row, colour changes after the first row, counts up to 100), and the tab labels roll onward: `Q1 Q2 Q3` → `Q4 Q5 Q6` → … Run analytics now appear at the end of **every** set of three and are **cumulative for the whole run**.
 - **Team-wide death counter** (`TeamDeaths`, on by default) — counts every player's death, even ones you didn't witness. Optional `DeathsOnlyOnLeave` updates the counter only when the ship leaves a moon.
