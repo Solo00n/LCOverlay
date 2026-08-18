@@ -40,18 +40,37 @@ namespace LCBridgeOverlay
         }
 
         // ---------- 2.6 реклама магазина ----------
+        // Ссылка на корутину показа рекламы у игры НЕ обнуляется после её окончания,
+        // поэтому «идёт реклама» залипало навсегда и оверлей больше не возвращался.
+        // Держим собственный предохранитель по времени.
+        private const float AdMaxSeconds = 14f;
+        private static float _adStarted = -1f;
+
         /// <summary>Идёт ли сейчас реклама (оповещение о скидках).</summary>
         public static bool StoreAdActive()
         {
             try
             {
                 var hud = HUDManager.Instance;
-                if (hud == null) return false;
-                // корутина показа рекламы живёт ровно на время показа
-                if (GetObj(hud, "displayAdCoroutine") != null) return true;
-                if (IsAnimatorShowing(hud.advertAnimator, "display", "displayAd", "showAd")) return true;
+                if (hud == null) { _adStarted = -1f; return false; }
+
+                // аниматор — надёжный признак: он выключается, когда реклама ушла
+                bool anim = IsAnimatorShowing(hud.advertAnimator, "display", "displayAd", "showAd");
+                bool objOn = hud.advertAnimator != null &&
+                             hud.advertAnimator.gameObject.activeInHierarchy;
+                bool active = anim || objOn;
+
+                if (active)
+                {
+                    if (_adStarted < 0f) _adStarted = Time.unscaledTime;
+                    // страховка: реклама физически не длится дольше ~10 секунд
+                    if (Time.unscaledTime - _adStarted > AdMaxSeconds) return false;
+                    return true;
+                }
+
+                _adStarted = -1f;
             }
-            catch { }
+            catch { _adStarted = -1f; }
             return false;
         }
 
@@ -94,7 +113,58 @@ namespace LCBridgeOverlay
                 float dayRealSeconds = total / speed;
 
                 int sec = Mathf.RoundToInt(leftNorm * dayRealSeconds);
-                return Mathf.Clamp(sec, 0, 24 * 3600);
+                sec = Mathf.Clamp(sec, 0, 24 * 3600);
+
+                // Расплавление реактора (FacilityMeltdown): после вытаскивания аппарата
+                // корабль улетает по СВОЕМУ таймеру, раньше конца дня. Берём то событие,
+                // которое наступит первым, чтобы отсчёт шёл к реальному отлёту.
+                int md = MeltdownSecondsLeft();
+                if (md >= 0 && md < sec) sec = md;
+
+                return sec;
+            }
+            catch { return -1; }
+        }
+
+        // ---------- отсчёт расплавления (мод FacilityMeltdown) ----------
+        private static bool _mdSearched;
+        private static Type _mdHandlerType;
+        private static PropertyInfo _mdTimeLeft;
+        private static PropertyInfo _mdStartedApi;
+
+        /// <summary>Секунд до взрыва/отлёта по расплавлению; -1 если не идёт/мод не стоит.</summary>
+        public static int MeltdownSecondsLeft()
+        {
+            try
+            {
+                if (!_mdSearched)
+                {
+                    _mdSearched = true;
+                    _mdHandlerType = GameState.FindTypeFuzzy("FacilityMeltdown", new[] { "MeltdownHandler" });
+                    if (_mdHandlerType != null)
+                        _mdTimeLeft = _mdHandlerType.GetProperty("TimeLeftUntilMeltdown",
+                            BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                    var api = GameState.FindTypeFuzzy("FacilityMeltdown", new[] { "MeltdownAPI" });
+                    if (api != null)
+                        _mdStartedApi = api.GetProperty("MeltdownStarted",
+                            BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
+                    Plugin.Log?.LogInfo($"[meltdown] handler={(_mdHandlerType != null ? "OK" : "нет")}, " +
+                                        $"TimeLeftUntilMeltdown={(_mdTimeLeft != null ? "OK" : "нет")}");
+                }
+                if (_mdHandlerType == null || _mdTimeLeft == null) return -1;
+
+                // идёт ли расплавление вообще
+                if (_mdStartedApi != null)
+                {
+                    var st = _mdStartedApi.GetValue(null);
+                    if (st is bool sb && !sb) return -1;
+                }
+
+                var h = UnityEngine.Object.FindObjectOfType(_mdHandlerType);
+                if (h == null) return -1;
+                var v = _mdTimeLeft.GetValue(h);
+                if (!(v is float f) || f < 0f) return -1;
+                return Mathf.Clamp(Mathf.RoundToInt(f), 0, 24 * 3600);
             }
             catch { return -1; }
         }

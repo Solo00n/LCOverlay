@@ -52,7 +52,6 @@ namespace LCBridgeOverlay
         private Image _lampImg;                       // 2.14: иконка аппарата у интерьера
         private GameObject _lampSlot;                 // её место в строке интерьера
         private TextMeshProUGUI _multText;            // 2.11: суммарный множитель лута
-        private TextMeshProUGUI _endOfDayText;        // 2.12: отсчёт до конца дня
         private GameObject _endOfDayGo;               // его контейнер (по центру экрана)
         private readonly Image[] _qtabBgs = new Image[3];
         private readonly TextMeshProUGUI[] _qtabTexts = new TextMeshProUGUI[3];
@@ -498,9 +497,8 @@ namespace LCBridgeOverlay
         private static float EaseOutCubic(float t) => 1f - Mathf.Pow(1f - t, 3f);
 
         // ---- 2.12: состояние отсчёта конца дня ----
-        private int _eodTarget = -1;     // значение из последнего пакета
-        private float _eodStamp;         // когда это значение пришло
-        private int _eodLastShown = -1;  // какая цифра сейчас на экране
+        private float _eodEndTime = -1f;  // момент (unscaledTime), когда отсчёт дойдёт до нуля
+        private int _eodLastShown = -1;   // последняя запущенная цифра
 
         /// <summary>
         /// Отсчёт конца дня по центру экрана. Цифры «налетают» на зрителя: растут из
@@ -513,42 +511,65 @@ namespace LCBridgeOverlay
         {
             if (_endOfDayGo == null) return;
             var p = DataParser.Current;
+            float now = Time.unscaledTime;
 
-            if (!ConfigSettings.ShowEndOfDayCountdown.Value || p == null || !p.onMoon || p.endOfDaySec < 0)
+            bool enabled = ConfigSettings.ShowEndOfDayCountdown.Value &&
+                           p != null && p.onMoon && p.endOfDaySec >= 0;
+
+            if (enabled)
             {
-                if (_endOfDayGo.activeSelf) _endOfDayGo.SetActive(false);
-                _eodTarget = -1; _eodLastShown = -1;
-                return;
+                // Момент нуля фиксируем ОДИН раз и дальше считаем локально. Пакет приходит
+                // раз в секунду, и если пересчитывать по нему каждый раз, дрожание округления
+                // проглатывает цифры (пропадали 5, 7 и т.п.). Пере-синхронизируемся только
+                // при заметном расхождении — например, когда включился таймер расплавления.
+                float packetEnd = now + p.endOfDaySec;
+                if (_eodEndTime < 0f || Mathf.Abs(packetEnd - _eodEndTime) > 2.5f)
+                {
+                    _eodEndTime = packetEnd;
+                    _eodLastShown = -1;
+                }
+            }
+            else
+            {
+                _eodEndTime = -1f;
+                _eodLastShown = -1;
             }
 
-            // новое значение из пакета — перезапускаем локальный отсчёт от него
-            if (p.endOfDaySec != _eodTarget)
-            {
-                _eodTarget = p.endOfDaySec;
-                _eodStamp = Time.unscaledTime;
-            }
+            float remaining = _eodEndTime >= 0f ? _eodEndTime - now : -1f;
+            int shown = remaining >= 0f ? Mathf.CeilToInt(remaining) : -1;
 
-            float remaining = _eodTarget - (Time.unscaledTime - _eodStamp);
-            int shown = Mathf.CeilToInt(remaining);
-
-            bool show = shown >= 1 && shown <= 10;
-            if (_endOfDayGo.activeSelf != show) _endOfDayGo.SetActive(show);
-            if (!show) { _eodLastShown = -1; return; }
-
-            if (shown != _eodLastShown)
+            // новая секунда — выпускаем очередную летящую цифру (со звуком)
+            if (shown >= 1 && shown <= 10 && shown != _eodLastShown)
             {
                 _eodLastShown = shown;
-                _endOfDayText.text = shown.ToString();
+                if (!_endOfDayGo.activeSelf) _endOfDayGo.SetActive(true);
+                SpawnEodDigit(shown);
             }
 
-            // фаза внутри текущей секунды: 0 — только появилась, 1 — вот-вот сменится
-            float phase = Mathf.Clamp01(1f - (remaining - Mathf.Floor(remaining)));
-            // «летит на зрителя»: растёт и одновременно тает
-            float scale = Mathf.Lerp(0.55f, 2.1f, phase);
-            float alpha = Mathf.Clamp01(1f - Mathf.Pow(phase, 1.6f));
+            // анимация уже выпущенных цифр: растут и тают, живут дольше секунды,
+            // поэтому соседние накладываются и ничего не «съедается»
+            bool anyAlive = false;
+            float dt = Time.unscaledDeltaTime;
+            foreach (var d in _eodPool)
+            {
+                if (d.Life < 0f) continue;
+                d.Life += dt / EodFlyTime;
+                if (d.Life >= 1f)
+                {
+                    d.Life = -1f;
+                    d.Go.SetActive(false);
+                    continue;
+                }
+                anyAlive = true;
+                float k = d.Life;
+                float scale = Mathf.Lerp(0.5f, 2.4f, k);           // летит на зрителя
+                float alpha = Mathf.Clamp01(1f - Mathf.Pow(k, 1.5f)); // и тает по мере приближения
+                d.Rt.localScale = new Vector3(scale, scale, 1f);
+                var c = d.Text.color; c.a = alpha; d.Text.color = c;
+            }
 
-            _endOfDayGo.transform.localScale = new Vector3(scale, scale, 1f);
-            var c = _endOfDayText.color; c.a = alpha; _endOfDayText.color = c;
+            if (!anyAlive && _endOfDayGo.activeSelf && (shown < 1 || shown > 10))
+                _endOfDayGo.SetActive(false);
         }
 
         // Прячем оверлей ТОЛЬКО во время ВЗЛЁТА с луны (moon→orbit) — когда игра
@@ -1401,6 +1422,10 @@ namespace LCBridgeOverlay
         /// <summary>
         /// 2.12: отсчёт конца дня — ОТДЕЛЬНО от панели, по центру экрана (просто цифры).
         /// Живёт прямо на канвасе, поэтому не наследует наклон/перспективу/скрытие панели.
+        ///
+        /// Каждая секунда — своя «летящая» цифра из пула: она рождается маленькой,
+        /// разрастается и тает НЕСКОЛЬКО секунд. Экземпляры накладываются друг на друга,
+        /// поэтому цифры не «съедают» соседние и ни одна не пропадает.
         /// </summary>
         private void BuildEndOfDay()
         {
@@ -1408,16 +1433,72 @@ namespace LCBridgeOverlay
             var rt = (RectTransform)go.transform;
             rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
             rt.pivot = new Vector2(0.5f, 0.5f);
-            rt.sizeDelta = new Vector2(400f, 140f);
+            rt.sizeDelta = new Vector2(600f, 300f);
             rt.anchoredPosition = new Vector2(0f, 120f);   // чуть выше центра, не на прицеле
 
-            _endOfDayText = MakeText(go.transform, "", 92f, S.Danger,
-                                     TextAlignmentOptions.Center, bold: true, big: true);
-            StretchInto(_endOfDayText.rectTransform);
-            _endOfDayText.enableWordWrapping = false;
-            _endOfDayText.overflowMode = TextOverflowModes.Overflow;
+            for (int i = 0; i < EodPoolSize; i++)
+            {
+                var d = NewUI("Digit" + i, go.transform);
+                var drt = (RectTransform)d.transform;
+                drt.anchorMin = drt.anchorMax = new Vector2(0.5f, 0.5f);
+                drt.pivot = new Vector2(0.5f, 0.5f);
+                drt.sizeDelta = new Vector2(400f, 200f);
+                drt.anchoredPosition = Vector2.zero;
+
+                var t = MakeText(d.transform, "", 92f, S.Danger,
+                                 TextAlignmentOptions.Center, bold: true, big: true);
+                StretchInto(t.rectTransform);
+                t.enableWordWrapping = false;
+                t.overflowMode = TextOverflowModes.Overflow;
+                d.SetActive(false);
+                _eodPool.Add(new EodDigit { Go = d, Rt = drt, Text = t, Life = -1f });
+            }
             go.SetActive(false);
             _endOfDayGo = go;
+        }
+
+        // одна «летящая» цифра отсчёта
+        private class EodDigit
+        {
+            public GameObject Go;
+            public RectTransform Rt;
+            public TextMeshProUGUI Text;
+            public float Life;   // 0..1 по ходу полёта, <0 — свободна
+        }
+        private const int EodPoolSize = 4;
+        private const float EodFlyTime = 3.0f;   // сколько РЕАЛЬНЫХ секунд живёт одна цифра
+        private readonly List<EodDigit> _eodPool = new List<EodDigit>();
+
+        /// <summary>Запустить новую летящую цифру.</summary>
+        private void SpawnEodDigit(int value)
+        {
+            EodDigit slot = null;
+            foreach (var d in _eodPool) { if (d.Life < 0f) { slot = d; break; } }
+            if (slot == null)
+            {
+                // всё занято — забираем самую «старую»
+                float best = -1f;
+                foreach (var d in _eodPool) if (d.Life > best) { best = d.Life; slot = d; }
+            }
+            if (slot == null) return;
+            slot.Text.text = value.ToString();
+            slot.Life = 0f;
+            slot.Go.SetActive(true);
+            slot.Go.transform.SetAsLastSibling();
+            PlayCountdownTick();
+        }
+
+        /// <summary>Тик отсчёта — короткий звук из игрового интерфейса.</summary>
+        private static void PlayCountdownTick()
+        {
+            try
+            {
+                var hud = HUDManager.Instance;
+                if (hud == null || hud.UIAudio == null) return;
+                var clip = hud.profitQuotaDaysLeftCalmSFX ?? hud.globalNotificationSFX;
+                if (clip != null) hud.UIAudio.PlayOneShot(clip, 0.8f);
+            }
+            catch { }
         }
 
         private void BuildDayDeaths(Transform parent)

@@ -30,8 +30,10 @@ namespace LCBridgeOverlay
                     (sor.gameStats != null && sor.gameStats.daysSpent <= 0) ||
                     (TimeOfDay.Instance != null && TimeOfDay.Instance.timesFulfilledQuota <= 0
                         && TimeOfDay.Instance.daysUntilDeadline >= 3);
+                // НОВЫЙ сейв — полный сброс (а не заморозка итогов): иначе таймер
+                // оверлея оставался со значениями прошлой игры.
                 if (freshSave)
-                    RunSnapshot.CaptureRunEnd();
+                    RunSnapshot.ResetForNewSave();
             }
             catch { }
         }

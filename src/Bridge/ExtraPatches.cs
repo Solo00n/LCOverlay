@@ -136,5 +136,18 @@ namespace LCBridgeOverlay
             GameState.ResetDeaths();
             Plugin.Log?.LogInfo("[run] рычаг — статистика забега сброшена, начинаем новый.");
         }
+
+        /// <summary>
+        /// Создан/загружен ПУСТОЙ сейв — это не «продолжение просмотра итогов», а
+        /// полностью новая игра: чистим всё, включая замороженную аналитику.
+        /// Важно: ResetDeaths поднимает resetToken, по которому оверлей обнуляет таймер.
+        /// </summary>
+        public static void ResetForNewSave()
+        {
+            ShowLastRun = false;
+            LastRunJson = null;
+            GameState.ResetDeaths();   // + RunStats.ResetRun() + bump resetToken
+            Plugin.Log?.LogInfo("[run] новый сейв — статистика и таймер обнулены.");
+        }
     }
 }
