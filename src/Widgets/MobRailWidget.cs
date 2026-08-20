@@ -41,6 +41,7 @@ namespace LCBridgeOverlay
             public float Alpha = 1f;          // текущая (сглаженная) прозрачность
             public Color BaseColor = Color.white; // обычный цвет иконки
             public float HurtFlash;           // 1 → 0, вспышка при получении урона
+            public float FlipY = 1f;          // -1 = иконка вверх ногами (девиант)
         }
 
         private const float HurtFlashTime = 0.45f;
@@ -92,7 +93,7 @@ namespace LCBridgeOverlay
                 if (s.Rt == null) continue;
                 if (s.Appear < 1f) s.Appear = Mathf.MoveTowards(s.Appear, 1f, dt / 0.3f);
                 float sc = s.Scale * EaseOutBack(s.Appear);         // появление с «отскоком»
-                s.Rt.localScale = new Vector3(sc, sc, 1f);
+                s.Rt.localScale = new Vector3(sc, sc * s.FlipY, 1f);
                 s.Rt.localRotation = Quaternion.Euler(0f, 0f, Mathf.Sin((t + s.Phase) * s.Speed) * s.Amp);
 
                 // цвет иконки = прозрачность по дистанции + красная вспышка урона
@@ -264,9 +265,10 @@ namespace LCBridgeOverlay
             // состояния из моста (см. MonsterState): зол / развернулся / вырос /
             // атакует / на потолке / застыл / отсканирован
             public bool Aggro, Angry, Adult, Attack, Ceiling, Frozen, Scanned, Firing, Hurt;
+            public bool Deviant;   // инверснутая версия (мод DeviantEnemies)
             public float Dist = -1f;   // ближайшая дистанция до игрока, м (-1 = нет)
             public string GroupKey, IconKey;
-            public int Rank => (Slayer || Kamikaze ? 2 : 0) + (Turret ? 1 : 0);
+            public int Rank => (Slayer || Kamikaze ? 2 : 0) + (Turret ? 1 : 0) + (Deviant ? 4 : 0);
         }
 
         private class Group
@@ -385,9 +387,10 @@ namespace LCBridgeOverlay
             bool scanned = low.Contains("+scanned");
             bool firing  = low.Contains("+firing");   // турель на монстре ведёт огонь
             bool hurt    = low.Contains("+hurt");     // только что получил урон
+            bool deviant = low.Contains("+deviant"); // инверснутая версия монстра
 
             string baseName = Regex.Replace(nm,
-                @"\+turret|\+slayer|\+aggro|\+angry|\+adult|\+attack|\+ceiling|\+frozen|\+scanned|\+firing|\+hurt",
+                @"\+turret|\+slayer|\+aggro|\+angry|\+adult|\+attack|\+ceiling|\+frozen|\+scanned|\+firing|\+hurt|\+deviant",
                 "", RegexOptions.IgnoreCase).Trim();
             baseName = Canon(baseName);
             string groupKey = Norm(baseName);
@@ -416,6 +419,7 @@ namespace LCBridgeOverlay
                 Aggro = aggro, Angry = angry, Adult = adult,
                 Attack = attack, Ceiling = ceiling, Frozen = frozen, Scanned = scanned, Firing = firing,
                 Hurt = hurt,
+                Deviant = deviant,
                 Dist = dist,
                 GroupKey = groupKey,
                 IconKey = icon,
@@ -544,7 +548,7 @@ namespace LCBridgeOverlay
                     float vAmp = v.Frozen ? 0f : amp;
                     // ключ подсветки — со стороной рейки (улица/комплекс раздельно)
                     var irt = MakeIcon(rail, v.IconKey, v.Slayer || v.Kamikaze, g.Key.GetHashCode(),
-                                       scale, vAmp, SideKey(growLeft, g.Key), v.Hurt);
+                                       scale, vAmp, SideKey(growLeft, g.Key), v.Hurt, v.Deviant);
                     // первая иконка колоды центром на кромке (x=0), остальные — наружу
                     irt.anchoredPosition = new Vector2(growLeft ? -x : x, y);
                     // у монстра стреляет турель — трассеры полетят из его иконки
@@ -635,7 +639,7 @@ namespace LCBridgeOverlay
             }
         }
 
-        private RectTransform MakeIcon(RectTransform rail, string iconKey, bool angry, int seed, float scale, float amp, string groupKey = null, bool hurt = false)
+        private RectTransform MakeIcon(RectTransform rail, string iconKey, bool angry, int seed, float scale, float amp, string groupKey = null, bool hurt = false, bool deviant = false)
         {
             var go = OverlayManager.NewUI("Mob_" + iconKey, rail);
             var rt = (RectTransform)go.transform;
@@ -663,6 +667,8 @@ namespace LCBridgeOverlay
                 Appear = 0f,
                 BaseColor = Color.white,
                 HurtFlash = hurt ? 1f : 0f,
+                // девиант — переворачиваем иконку вверх ногами
+                FlipY = (deviant && ConfigSettings.DeviantFlipIcon.Value) ? -1f : 1f,
             };
             _sway.Add(item);
             _byGroup[groupKey ?? ""] = item;   // чтобы вспышку можно было запустить без пересборки

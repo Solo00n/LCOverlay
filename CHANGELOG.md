@@ -1,5 +1,11 @@
 # Changelog — LCBridgeOverlay
 
+## 1.5.2
+- **DeviantEnemies integration**: inverted creatures are drawn with their icon flipped upside down, and they count as a separate variant, so a deviant and a normal one of the same species no longer collapse into a single entry. Toggle with `DeviantFlipIcon`.
+- **Fixes:** a new save resets the run timer again (the reset signal had been lost when the eject analytics were added); the overlay now reliably returns after a store ad, since the game never clears its ad reference and the check stayed stuck.
+- **Countdown** also follows FacilityMeltdown: with the apparatus pulled the ship leaves on the meltdown timer, so the countdown targets whichever departure comes first and still only shows for the last ten seconds.
+- **Countdown polish:** the zero moment is latched once and counted locally, so no digit is skipped; each second now spawns its own digit that grows and fades over three seconds, letting them overlap instead of cutting each other off, with a short interface sound on every tick.
+
 ## 1.5.1
 - **Damage flash now works.** `HitEnemy` is virtual and 21 enemies override it, so patching the base method alone missed almost every monster. All overrides are patched, and the flash is triggered directly instead of travelling through the one-second bridge tick.
 - **End-of-day countdown fixed and restyled.** It used to read `0` permanently (a normalised threshold was subtracted from day units), so it also sat on screen all day. It is now a centre-screen number over the last ten seconds, counted locally so no digit is skipped, and each second grows and fades as it flies toward you.

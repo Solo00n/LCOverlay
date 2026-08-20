@@ -10,7 +10,7 @@
 
 ![Game](https://img.shields.io/badge/Lethal%20Company-v81-cc0000?style=flat-square)
 ![BepInEx](https://img.shields.io/badge/BepInEx-5.4.21%2B-cc0000?style=flat-square)
-![Version](https://img.shields.io/badge/version-1.5.1-cc0000?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.5.2-cc0000?style=flat-square)
 ![License](https://img.shields.io/badge/license-custom-cc0000?style=flat-square)
 
 **Language / Язык:** [English](#english) · [Русский](#russian)
@@ -106,6 +106,7 @@ All settings live in <code>BepInEx/config/gdlp.lcbridgeoverlay.cfg</code>. Widge
 <tr><td style="border: 1px solid #cc0000; padding: 8px;">ProximityFade</td><td style="border: 1px solid #cc0000; padding: 8px;">true</td><td style="border: 1px solid #cc0000; padding: 8px;">Closer monsters and traps get a more solid icon.</td></tr>
 <tr><td style="border: 1px solid #cc0000; padding: 8px;">NearestVariantOnly</td><td style="border: 1px solid #cc0000; padding: 8px;">true</td><td style="border: 1px solid #cc0000; padding: 8px;">Of several versions of one monster, show the closest.</td></tr>
 <tr><td style="border: 1px solid #cc0000; padding: 8px;">DamageFlash</td><td style="border: 1px solid #cc0000; padding: 8px;">true</td><td style="border: 1px solid #cc0000; padding: 8px;">Flash the icon red when the monster is hit.</td></tr>
+<tr><td style="border: 1px solid #cc0000; padding: 8px;">DeviantFlipIcon</td><td style="border: 1px solid #cc0000; padding: 8px;">true</td><td style="border: 1px solid #cc0000; padding: 8px;">Draw inverted creatures with the icon upside down.</td></tr>
 <tr><td style="border: 1px solid #cc0000; padding: 8px;">TeamDeaths</td><td style="border: 1px solid #cc0000; padding: 8px;">true</td><td style="border: 1px solid #cc0000; padding: 8px;">Count the whole crew, not only deaths you saw.</td></tr>
 <tr><td style="border: 1px solid #cc0000; padding: 8px;">DeathsOnlyOnLeave</td><td style="border: 1px solid #cc0000; padding: 8px;">false</td><td style="border: 1px solid #cc0000; padding: 8px;">Update the death counter only when leaving a moon.</td></tr>
 <tr><td style="border: 1px solid #cc0000; padding: 8px;">DoorRadar / DoorRadarRadius</td><td style="border: 1px solid #cc0000; padding: 8px;">true / 22</td><td style="border: 1px solid #cc0000; padding: 8px;">Reveal monsters beyond an entrance, and the radius in metres.</td></tr>
@@ -134,6 +135,7 @@ Every integration is optional. When a mod is absent the related information is s
 - <strong style="color: #cc0000;">MonstersGordion</strong> — monsters listed on the Company moon.
 - <strong style="color: #cc0000;">ToilHead</strong> — turret-equipped heads get their own icons and fire tracers.
 - <strong style="color: #cc0000;">Camera Overhaul</strong> and other camera-motion mods — the panel sways along with the camera.
+- <strong style="color: #cc0000;">DeviantEnemies</strong> — inverted creatures are drawn with their icon flipped upside down.
 - Russian event names are supported when a Russian translation of the event mod is installed.
 
 ### <span style="color: #cc0000;">BUILD</span>
@@ -242,6 +244,7 @@ The result appears in <code>bin/Release/LCBridgeOverlay.dll</code>. NuGet pulls 
 <tr><td style="border: 1px solid #cc0000; padding: 8px;">ProximityFade</td><td style="border: 1px solid #cc0000; padding: 8px;">true</td><td style="border: 1px solid #cc0000; padding: 8px;">Чем ближе монстр или ловушка, тем плотнее иконка.</td></tr>
 <tr><td style="border: 1px solid #cc0000; padding: 8px;">NearestVariantOnly</td><td style="border: 1px solid #cc0000; padding: 8px;">true</td><td style="border: 1px solid #cc0000; padding: 8px;">Из нескольких версий монстра показывать ближайшую.</td></tr>
 <tr><td style="border: 1px solid #cc0000; padding: 8px;">DamageFlash</td><td style="border: 1px solid #cc0000; padding: 8px;">true</td><td style="border: 1px solid #cc0000; padding: 8px;">Вспышка иконки при попадании по монстру.</td></tr>
+<tr><td style="border: 1px solid #cc0000; padding: 8px;">DeviantFlipIcon</td><td style="border: 1px solid #cc0000; padding: 8px;">true</td><td style="border: 1px solid #cc0000; padding: 8px;">Инверснутые существа рисуются иконкой вверх ногами.</td></tr>
 <tr><td style="border: 1px solid #cc0000; padding: 8px;">TeamDeaths</td><td style="border: 1px solid #cc0000; padding: 8px;">true</td><td style="border: 1px solid #cc0000; padding: 8px;">Считать смерти всей команды, а не только увиденные.</td></tr>
 <tr><td style="border: 1px solid #cc0000; padding: 8px;">DeathsOnlyOnLeave</td><td style="border: 1px solid #cc0000; padding: 8px;">false</td><td style="border: 1px solid #cc0000; padding: 8px;">Обновлять счётчик смертей только при отлёте с луны.</td></tr>
 <tr><td style="border: 1px solid #cc0000; padding: 8px;">DoorRadar / DoorRadarRadius</td><td style="border: 1px solid #cc0000; padding: 8px;">true / 22</td><td style="border: 1px solid #cc0000; padding: 8px;">Показывать монстров за дверью и радиус радара в метрах.</td></tr>
@@ -270,6 +273,7 @@ The result appears in <code>bin/Release/LCBridgeOverlay.dll</code>. NuGet pulls 
 - <strong style="color: #cc0000;">MonstersGordion</strong> — монстры на луне компании.
 - <strong style="color: #cc0000;">ToilHead</strong> — головы с турелью получают свои иконки и стреляют трассерами.
 - <strong style="color: #cc0000;">Camera Overhaul</strong> и другие моды на движение камеры — панель качается вместе с камерой.
+- <strong style="color: #cc0000;">DeviantEnemies</strong> — инверснутые существа рисуются перевёрнутой вверх ногами иконкой.
 - Русские названия ивентов поддерживаются, если установлен русификатор мода на ивенты.
 
 ### <span style="color: #cc0000;">СБОРКА</span>

@@ -40,6 +40,8 @@ namespace LCBridgeOverlay
             _scanned.Clear();
             _scanIdCache.Clear();
             _hurt.Clear();
+            _deviantCache.Clear();
+            _loggedDeviant.Clear();
             _terminal = null;
         }
 
@@ -196,6 +198,9 @@ namespace LCBridgeOverlay
                     // оверлей рисует от этой иконки трассеры
                     if (IsTurretFiring(ai)) tok += "+Firing";
 
+                    // девиант (мод DeviantEnemies) — иконка перевернётся вверх ногами
+                    if (IsDeviant(ai)) tok += "+Deviant";
+
                     // недавно получил урон — иконка вспыхнет красным (2.13)
                     if (ConfigSettings.DamageFlash.Value &&
                         _hurt.TryGetValue(ai.GetInstanceID(), out float ht) &&
@@ -216,6 +221,39 @@ namespace LCBridgeOverlay
             }
             catch (Exception e) { Plugin.Log?.LogDebug("MonsterState.Tick: " + e.Message); }
         }
+
+        // ---------- девиант (мод DeviantEnemies) ----------
+        // Мод вешает на объект врага свой компонент-маркер. Ищем его ПО ИМЕНИ ТИПА,
+        // без ссылки на сборку мода: нет мода — просто никогда не находим.
+        // Девиантность у экземпляра не меняется, поэтому кэшируем результат.
+        private static readonly Dictionary<int, bool> _deviantCache = new Dictionary<int, bool>();
+
+        private static bool IsDeviant(EnemyAI ai)
+        {
+            try
+            {
+                int id = ai.GetInstanceID();
+                if (_deviantCache.TryGetValue(id, out bool known)) return known;
+
+                bool found = false;
+                var comps = ai.GetComponents<Component>();
+                if (comps != null)
+                {
+                    foreach (var c in comps)
+                    {
+                        if (c == null) continue;
+                        if (string.Equals(c.GetType().Name, "DeviantMarker", StringComparison.Ordinal))
+                        { found = true; break; }
+                    }
+                }
+                _deviantCache[id] = found;
+                if (found && _loggedDeviant.Add(id))
+                    Plugin.Log?.LogInfo($"[deviant] {ai.GetType().Name} помечен как девиант — иконка перевёрнута.");
+                return found;
+            }
+            catch { return false; }
+        }
+        private static readonly HashSet<int> _loggedDeviant = new HashSet<int>();
 
         // ---------- турель на монстре стреляет? ----------
         // Компонент турели ищем по ИМЕНИ типа (ToilHead может ставить свой),

@@ -14,11 +14,12 @@ namespace LCBridgeOverlay
     [BepInDependency("Timofey.MonstersGordion", BepInDependency.DependencyFlags.SoftDependency)]
     [BepInDependency("imabatby.lethallevelloader", BepInDependency.DependencyFlags.SoftDependency)]
     [BepInDependency("me.swipez.melonloader.morecompany", BepInDependency.DependencyFlags.SoftDependency)]
+    [BepInDependency("Timofey.DeviantEnemies", BepInDependency.DependencyFlags.SoftDependency)]
     public class Plugin : BaseUnityPlugin
     {
         public const string GUID = "gdlp.lcbridgeoverlay";
         public const string NAME = "LCBridgeOverlay";
-        public const string VERSION = "1.5.1";
+        public const string VERSION = "1.5.2";
 
         public static Plugin Instance { get; private set; }
         public static ManualLogSource Log { get; private set; }

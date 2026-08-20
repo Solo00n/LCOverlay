@@ -82,6 +82,7 @@ All settings live in the config file `gdlp.lcbridgeoverlay.cfg`. Widget and beha
 | ProximityFade | true | Closer monsters and traps get a more solid icon. |
 | NearestVariantOnly | true | Of several versions of one monster, show the closest. |
 | DamageFlash | true | Flash the icon red when the monster is hit. |
+| DeviantFlipIcon | true | Draw inverted creatures with the icon upside down. |
 | TeamDeaths | true | Count the whole crew, not only deaths you saw. |
 | DeathsOnlyOnLeave | false | Update the death counter only when leaving a moon. |
 | DoorRadar / DoorRadarRadius | true / 22 | Reveal monsters beyond an entrance, and the radius in metres. |
@@ -108,6 +109,7 @@ Every integration is optional. When a mod is absent the related information is s
 - MonstersGordion: monsters listed on the Company moon.
 - ToilHead: turret-equipped heads get their own icons and fire tracers.
 - Camera Overhaul and other camera-motion mods: the panel sways along with the camera.
+- DeviantEnemies: inverted creatures are drawn with their icon flipped upside down.
 - Russian event names are supported when a Russian translation of the event mod is installed.
 
 ### Credits
@@ -192,6 +194,7 @@ Every integration is optional. When a mod is absent the related information is s
 | ProximityFade | true | Чем ближе монстр или ловушка, тем плотнее иконка. |
 | NearestVariantOnly | true | Из нескольких версий монстра показывать ближайшую. |
 | DamageFlash | true | Вспышка иконки при попадании по монстру. |
+| DeviantFlipIcon | true | Инверснутые существа рисуются иконкой вверх ногами. |
 | TeamDeaths | true | Считать смерти всей команды, а не только увиденные. |
 | DeathsOnlyOnLeave | false | Обновлять счётчик смертей только при отлёте с луны. |
 | DoorRadar / DoorRadarRadius | true / 22 | Показывать монстров за дверью и радиус радара в метрах. |
@@ -218,6 +221,7 @@ Every integration is optional. When a mod is absent the related information is s
 - MonstersGordion: монстры на луне компании.
 - ToilHead: головы с турелью получают свои иконки и стреляют трассерами.
 - Camera Overhaul и другие моды на движение камеры: панель качается вместе с камерой.
+- DeviantEnemies: инверснутые существа рисуются перевёрнутой вверх ногами иконкой.
 - Русские названия ивентов поддерживаются, если установлен русификатор мода на ивенты.
 
 ### Авторы
