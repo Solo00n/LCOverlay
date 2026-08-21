@@ -54,7 +54,9 @@ namespace LCBridgeOverlay
         public static ConfigEntry<bool> HideOnStoreAd;        // прятать оверлей на рекламе магазина
         public static ConfigEntry<bool> DoorRadar;            // монстры за дверью
         public static ConfigEntry<float> DoorRadarRadius;     // радиус «виртуального радара» за дверью
-        public static ConfigEntry<bool> NearestVariantOnly;   // из версий монстра — только ближайшая
+        public static ConfigEntry<bool> NearestVariantOnly;   // из версий монстра — всегда ОДНА иконка
+        public static ConfigEntry<float> VariantNearDistance; // в пределах этого — показываем версию, что рядом
+        public static ConfigEntry<float> VariantCycleSeconds; // иначе версии плавно сменяют друг друга
         public static ConfigEntry<bool> DamageFlash;          // вспышка иконки при уроне
         public static ConfigEntry<bool> ShowEndOfDayCountdown;// таймер конца дня
         public static ConfigEntry<bool> ShowLootMultiplier;   // суммарный множитель стоимости лута
@@ -179,7 +181,12 @@ namespace LCBridgeOverlay
             DoorRadarRadius = cfg.Bind("Behavior", "DoorRadarRadius", 22f,
                 "Радиус «виртуального радара» за дверью, метров (5–60).");
             NearestVariantOnly = cfg.Bind("Behavior", "NearestVariantOnly", true,
-                "Если у монстра есть несколько версий (например, обычный и с турелью) — показывать только ближайшую к игроку.");
+                "Если у монстра несколько версий (например, обычный и с турелью) — показывать ВСЕГДА ОДНУ иконку: " +
+                "ту версию, что рядом, а если рядом никого — версии плавно сменяют друг друга по кругу.");
+            VariantNearDistance = cfg.Bind("Behavior", "VariantNearDistance", 14f,
+                "До скольких метров версия считается «рядом»: её иконка закрепляется и не сменяется. 0 — никогда не закреплять.");
+            VariantCycleSeconds = cfg.Bind("Behavior", "VariantCycleSeconds", 2f,
+                "Сколько секунд показывается каждая версия, когда рядом никого (плавная смена по кругу). 0 — не листать, показывать ближайшую.");
             DamageFlash = cfg.Bind("Behavior", "DamageFlash", true,
                 "Иконка монстра кратко вспыхивает красным, когда монстр получает урон.");
             ShowEndOfDayCountdown = cfg.Bind("Behavior", "ShowEndOfDayCountdown", true,

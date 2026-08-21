@@ -42,7 +42,27 @@ namespace LCBridgeOverlay
             public Color BaseColor = Color.white; // обычный цвет иконки
             public float HurtFlash;           // 1 → 0, вспышка при получении урона
             public float FlipY = 1f;          // -1 = иконка вверх ногами (девиант)
+
+            // Версии одного монстра (обычный / с турелью / slayer / девиант).
+            // Иконка ВСЕГДА одна: показывает либо ту версию, что рядом, либо
+            // по очереди все — с плавным затуханием между ними.
+            public List<VariantView> Variants;
+            public int CurVariant;
+            public float CycleT;              // время показа текущей версии
+            public float SwapFade = 1f;       // 1 — видна, 0 — погасла на пересменке
+            public bool Swapping;             // идёт затухание перед сменой
         }
+
+        /// <summary>Одна версия монстра для показа в общей иконке.</summary>
+        private class VariantView
+        {
+            public string IconKey;
+            public bool Angry;                // slayer/камикадзе → иконка с кровью
+            public bool Deviant;              // → перевёрнутая иконка
+            public string DistKey;            // ключ дистанции ИМЕННО этой версии
+        }
+
+        private const float SwapFadeTime = 0.35f;   // длительность «гаснет/загорается»
 
         private const float HurtFlashTime = 0.45f;
         private static readonly Color HurtColor = new Color(1f, 0.22f, 0.18f, 1f);
@@ -53,6 +73,8 @@ namespace LCBridgeOverlay
         private readonly Dictionary<string, float> _distByGroup = new Dictionary<string, float>();
         // иконка по ключу группы — чтобы запустить вспышку урона без пересборки рейки
         private readonly Dictionary<string, SwayItem> _byGroup = new Dictionary<string, SwayItem>();
+        // дистанция по КОНКРЕТНОЙ версии монстра (нужно, чтобы выбрать «ту, что рядом»)
+        private readonly Dictionary<string, float> _distByVariant = new Dictionary<string, float>();
 
         /// <summary>Иконки турелей на нижней рейке — эмиттеры для эффекта стрельбы.</summary>
         public readonly List<RectTransform> TurretIcons = new List<RectTransform>();
@@ -96,6 +118,9 @@ namespace LCBridgeOverlay
                 s.Rt.localScale = new Vector3(sc, sc * s.FlipY, 1f);
                 s.Rt.localRotation = Quaternion.Euler(0f, 0f, Mathf.Sin((t + s.Phase) * s.Speed) * s.Amp);
 
+                // какая версия монстра сейчас в этой единственной иконке
+                UpdateVariant(s, dt);
+
                 // цвет иконки = прозрачность по дистанции + красная вспышка урона
                 if (s.Img != null)
                 {
@@ -106,7 +131,7 @@ namespace LCBridgeOverlay
                     if (s.HurtFlash > 0f) s.HurtFlash = Mathf.MoveTowards(s.HurtFlash, 0f, dt / HurtFlashTime);
 
                     var c = Color.Lerp(s.BaseColor, HurtColor, s.HurtFlash);
-                    c.a = s.Alpha * s.Appear;
+                    c.a = s.Alpha * s.Appear * s.SwapFade;   // SwapFade — пересменка версий
                     s.Img.color = c;
                 }
             }
@@ -120,6 +145,99 @@ namespace LCBridgeOverlay
             const float near = 6f, far = 34f, minA = 0.28f;
             float k = Mathf.InverseLerp(far, near, d);   // near→1, far→0
             return Mathf.Lerp(minA, 1f, k);
+        }
+
+        /// <summary>
+        /// Выбор версии монстра для ЕДИНСТВЕННОЙ иконки группы.
+        ///
+        /// 1. Если какая-то версия рядом (ближе VariantNearDistance) — показываем именно её
+        ///    и не листаем: важно видеть, какая версия реально подошла.
+        /// 2. Иначе версии плавно сменяют друг друга по кругу: текущая гаснет,
+        ///    следующая загорается (VariantCycleSeconds).
+        /// </summary>
+        private void UpdateVariant(SwayItem s, float dt)
+        {
+            var list = s.Variants;
+            if (list == null || list.Count < 2 || s.Img == null) return;
+
+            // --- 1) есть ли версия «рядом» ---
+            float nearMax = Mathf.Max(0f, ConfigSettings.VariantNearDistance.Value);
+            int nearIdx = -1;
+            if (nearMax > 0f)
+            {
+                float best = nearMax;
+                for (int i = 0; i < list.Count; i++)
+                {
+                    if (!_distByVariant.TryGetValue(list[i].DistKey, out float d)) continue;
+                    if (d <= best) { best = d; nearIdx = i; }
+                }
+            }
+
+            if (nearIdx >= 0)
+            {
+                // закрепляем версию, что рядом (без листания)
+                s.CycleT = 0f;
+                if (nearIdx != s.CurVariant)
+                {
+                    // гасим и переключаемся, чтобы смена не была рывком
+                    if (!s.Swapping) { s.Swapping = true; }
+                    s.SwapFade = Mathf.MoveTowards(s.SwapFade, 0f, dt / SwapFadeTime);
+                    if (s.SwapFade <= 0.01f) { ApplyVariant(s, nearIdx); s.Swapping = false; }
+                }
+                else
+                {
+                    s.Swapping = false;
+                    s.SwapFade = Mathf.MoveTowards(s.SwapFade, 1f, dt / SwapFadeTime);
+                }
+                return;
+            }
+
+            // --- 2) никого рядом: листаем версии по кругу ---
+            float period = ConfigSettings.VariantCycleSeconds.Value;
+            if (period <= 0f)
+            {
+                // листание выключено — держим самую близкую из известных
+                int closest = 0; float bd = float.MaxValue;
+                for (int i = 0; i < list.Count; i++)
+                {
+                    float d = _distByVariant.TryGetValue(list[i].DistKey, out float dd) ? dd : float.MaxValue;
+                    if (d < bd) { bd = d; closest = i; }
+                }
+                if (closest != s.CurVariant) ApplyVariant(s, closest);
+                s.SwapFade = Mathf.MoveTowards(s.SwapFade, 1f, dt / SwapFadeTime);
+                return;
+            }
+
+            if (s.Swapping)
+            {
+                s.SwapFade = Mathf.MoveTowards(s.SwapFade, 0f, dt / SwapFadeTime);
+                if (s.SwapFade <= 0.01f)
+                {
+                    ApplyVariant(s, (s.CurVariant + 1) % list.Count);   // следующая загорается
+                    s.Swapping = false;
+                    s.CycleT = 0f;
+                }
+                return;
+            }
+
+            s.SwapFade = Mathf.MoveTowards(s.SwapFade, 1f, dt / SwapFadeTime);
+            s.CycleT += dt;
+            if (s.CycleT >= period) s.Swapping = true;   // пора гаснуть
+        }
+
+        /// <summary>Поставить в иконку выбранную версию (спрайт + переворот девианта).</summary>
+        private void ApplyVariant(SwayItem s, int index)
+        {
+            var list = s.Variants;
+            if (list == null || index < 0 || index >= list.Count || s.Img == null) return;
+            var v = list[index];
+            s.CurVariant = index;
+
+            var spr = v.Angry ? SpriteBank.GetBloody(v.IconKey) : null;
+            var final = spr != null ? spr : SpriteBank.Get(v.IconKey);
+            if (final != null) s.Img.sprite = final;
+
+            s.FlipY = (v.Deviant && ConfigSettings.DeviantFlipIcon.Value) ? -1f : 1f;
         }
 
         // ease-out-back: масштаб 0 → ~1.1 → 1 (эффект «выскочил»)
@@ -139,6 +257,7 @@ namespace LCBridgeOverlay
             // ВАЖНО: ключи раздельные для улицы и комплекса — иначе одинаковый монстр
             // снаружи и внутри делил бы одну дистанцию и подсвечивался одинаково.
             _distByGroup.Clear();
+            _distByVariant.Clear();
             UpdateDistances(outside, true);
             UpdateDistances(inside, false);
             // 2.13: вспышки урона — тоже без пересборки рейки
@@ -159,6 +278,10 @@ namespace LCBridgeOverlay
         /// внутри — это ДВЕ разные иконки, и подсвечиваться они должны независимо.</summary>
         private static string SideKey(bool outsideRail, string groupKey) =>
             (outsideRail ? "o|" : "i|") + (groupKey ?? "");
+
+        /// <summary>Ключ дистанции конкретной ВЕРСИИ монстра (внутри группы).</summary>
+        private static string VariantKey(bool outsideRail, Desc d) =>
+            SideKey(outsideRail, d.GroupKey) + "#" + (d.IconKey ?? "") + "#" + d.Rank;
 
         /// <summary>
         /// Зажечь иконку монстра красным ПРЯМО СЕЙЧАС (зовётся из патча HitEnemy).
@@ -204,6 +327,10 @@ namespace LCBridgeOverlay
                 string k = SideKey(outsideRail, d.GroupKey);
                 if (!_distByGroup.TryGetValue(k, out float md) || d.Dist < md)
                     _distByGroup[k] = d.Dist;
+
+                string vk = VariantKey(outsideRail, d);
+                if (!_distByVariant.TryGetValue(vk, out float vd) || d.Dist < vd)
+                    _distByVariant[vk] = d.Dist;
             }
         }
 
@@ -503,26 +630,10 @@ namespace LCBridgeOverlay
             // 2.10: если у монстра несколько версий (обычный / с турелью / slayer) —
             // показываем только БЛИЖАЙШУЮ к игроку. Смысла подсвечивать дальнего
             // обычного коилхеда, когда рядом стоит версия с турелью, нет.
-            if (ConfigSettings.NearestVariantOnly.Value)
-            {
-                foreach (var g in groups)
-                {
-                    if (g.Variants.Count < 2) continue;
-                    Desc best = null;
-                    foreach (var v in g.Variants)
-                    {
-                        if (best == null) { best = v; continue; }
-                        // без дистанции вариант считаем «дальним»
-                        float bd = best.Dist < 0f ? float.MaxValue : best.Dist;
-                        float vd = v.Dist < 0f ? float.MaxValue : v.Dist;
-                        if (vd < bd) best = v;
-                    }
-                    if (best == null) continue;
-                    g.Variants.Clear();
-                    g.Variants.Add(best);
-                    g.Total = best.Cnt;   // счётчик — по показанной версии
-                }
-            }
+            // ВСЕГДА ОДНА ИКОНКА на монстра: версии не выбрасываем — они поедут в
+            // одну иконку, которая либо покажет версию «рядом», либо будет плавно
+            // листать их по кругу (см. UpdateVariant).
+            bool oneIcon = ConfigSettings.NearestVariantOnly.Value;
 
             groups.Sort((a, b) => b.Total.CompareTo(a.Total)); // многочисленные — выше
 
@@ -541,6 +652,38 @@ namespace LCBridgeOverlay
                 }
 
                 g.Variants.Sort((a, b) => a.Rank.CompareTo(b.Rank)); // обычный → турель → slayer
+
+                if (oneIcon && g.Variants.Count > 0)
+                {
+                    // одна иконка на монстра: собираем список версий и отдаём его иконке
+                    var views = new List<VariantView>(g.Variants.Count);
+                    bool anyFiring = false, anyHurt = false;
+                    foreach (var v in g.Variants)
+                    {
+                        views.Add(new VariantView
+                        {
+                            IconKey = v.IconKey,
+                            Angry = v.Slayer || v.Kamikaze,
+                            Deviant = v.Deviant,
+                            DistKey = VariantKey(growLeft, v),
+                        });
+                        if (v.Firing) anyFiring = true;
+                        if (v.Hurt) anyHurt = true;
+                    }
+
+                    var first = g.Variants[0];
+                    float oneAmp = first.Frozen ? 0f : amp;
+                    var oneRt = MakeIcon(rail, first.IconKey, first.Slayer || first.Kamikaze,
+                                         g.Key.GetHashCode(), scale, oneAmp,
+                                         SideKey(growLeft, g.Key), anyHurt, first.Deviant, views);
+                    oneRt.anchoredPosition = new Vector2(growLeft ? 0f : 0f, y);
+                    if (anyFiring) firingList.Add(oneRt);
+
+                    if (!exp && g.Total > 1) AddCountBadge(rail, g.Total, growLeft, Overlap, y);
+                    y -= RowStep;
+                    continue;
+                }
+
                 float x = 0f;
                 foreach (var v in g.Variants)
                 {
@@ -555,23 +698,7 @@ namespace LCBridgeOverlay
                     if (v.Firing) firingList.Add(irt);
                     x += Overlap;
                 }
-                if (!exp && g.Total > 1)
-                {
-                    // счётчик — в нижнем ВНЕШНЕМ углу крайней иконки, внахлёст с ней
-                    var cntT = _mgr.MakeText(rail, g.Total.ToString(), 26f,
-                        CountColor, TextAlignmentOptions.Center, bold: true, big: true);
-                    cntT.enableWordWrapping = false;
-                    cntT.overflowMode = TextOverflowModes.Overflow;
-                    var crt = cntT.rectTransform;
-                    crt.anchorMin = crt.anchorMax = new Vector2(0.5f, 0.5f);
-                    crt.pivot = new Vector2(0.5f, 0.5f);
-                    crt.sizeDelta = new Vector2(34f, 30f);
-                    float outerCenterX = growLeft ? -(x - Overlap) : (x - Overlap);
-                    float cornerX = outerCenterX + (growLeft ? (-Icon / 2f + 10f) : (Icon / 2f - 10f));
-                    float cornerY = y - Icon / 2f + 10f;
-                    crt.anchoredPosition = new Vector2(cornerX, cornerY);
-                    _mgr.AddPerspective(cntT, false);
-                }
+                if (!exp && g.Total > 1) AddCountBadge(rail, g.Total, growLeft, x, y);
                 y -= RowStep;
             }
 
@@ -639,7 +766,25 @@ namespace LCBridgeOverlay
             }
         }
 
-        private RectTransform MakeIcon(RectTransform rail, string iconKey, bool angry, int seed, float scale, float amp, string groupKey = null, bool hurt = false, bool deviant = false)
+        /// <summary>Счётчик — в нижнем ВНЕШНЕМ углу крайней иконки, внахлёст с ней.</summary>
+        private void AddCountBadge(RectTransform rail, int total, bool growLeft, float x, float y)
+        {
+            var cntT = _mgr.MakeText(rail, total.ToString(), 26f,
+                CountColor, TextAlignmentOptions.Center, bold: true, big: true);
+            cntT.enableWordWrapping = false;
+            cntT.overflowMode = TextOverflowModes.Overflow;
+            var crt = cntT.rectTransform;
+            crt.anchorMin = crt.anchorMax = new Vector2(0.5f, 0.5f);
+            crt.pivot = new Vector2(0.5f, 0.5f);
+            crt.sizeDelta = new Vector2(34f, 30f);
+            float outerCenterX = growLeft ? -(x - Overlap) : (x - Overlap);
+            float cornerX = outerCenterX + (growLeft ? (-Icon / 2f + 10f) : (Icon / 2f - 10f));
+            float cornerY = y - Icon / 2f + 10f;
+            crt.anchoredPosition = new Vector2(cornerX, cornerY);
+            _mgr.AddPerspective(cntT, false);
+        }
+
+        private RectTransform MakeIcon(RectTransform rail, string iconKey, bool angry, int seed, float scale, float amp, string groupKey = null, bool hurt = false, bool deviant = false, List<VariantView> variants = null)
         {
             var go = OverlayManager.NewUI("Mob_" + iconKey, rail);
             var rt = (RectTransform)go.transform;
@@ -669,6 +814,7 @@ namespace LCBridgeOverlay
                 HurtFlash = hurt ? 1f : 0f,
                 // девиант — переворачиваем иконку вверх ногами
                 FlipY = (deviant && ConfigSettings.DeviantFlipIcon.Value) ? -1f : 1f,
+                Variants = (variants != null && variants.Count > 1) ? variants : null,
             };
             _sway.Add(item);
             _byGroup[groupKey ?? ""] = item;   // чтобы вспышку можно было запустить без пересборки

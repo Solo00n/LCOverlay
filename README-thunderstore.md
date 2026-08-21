@@ -80,7 +80,9 @@ All settings live in the config file `gdlp.lcbridgeoverlay.cfg`. Widget and beha
 | CameraSway / CameraSwayStrength | true / 1.0 | Panel sways with the camera. Zero disables it. |
 | FadeWhenIdle | true | Dim the panel when the camera is still. |
 | ProximityFade | true | Closer monsters and traps get a more solid icon. |
-| NearestVariantOnly | true | Of several versions of one monster, show the closest. |
+| NearestVariantOnly | true | Always one icon per monster, even with several versions. |
+| VariantNearDistance | 14 | Within this range the icon locks to the version that is actually near. |
+| VariantCycleSeconds | 2 | With none near, versions fade into one another on this interval. |
 | DamageFlash | true | Flash the icon red when the monster is hit. |
 | DeviantFlipIcon | true | Draw inverted creatures with the icon upside down. |
 | TeamDeaths | true | Count the whole crew, not only deaths you saw. |
@@ -192,7 +194,9 @@ Every integration is optional. When a mod is absent the related information is s
 | CameraSway / CameraSwayStrength | true / 1.0 | Покачивание панели за камерой. Ноль отключает. |
 | FadeWhenIdle | true | Приглушать панель, когда камера неподвижна. |
 | ProximityFade | true | Чем ближе монстр или ловушка, тем плотнее иконка. |
-| NearestVariantOnly | true | Из нескольких версий монстра показывать ближайшую. |
+| NearestVariantOnly | true | Всегда одна иконка на монстра, даже если версий несколько. |
+| VariantNearDistance | 14 | В пределах этой дистанции иконка закрепляется за версией, что рядом. |
+| VariantCycleSeconds | 2 | Если рядом никого — версии плавно сменяют друг друга с этим интервалом. |
 | DamageFlash | true | Вспышка иконки при попадании по монстру. |
 | DeviantFlipIcon | true | Инверснутые существа рисуются иконкой вверх ногами. |
 | TeamDeaths | true | Считать смерти всей команды, а не только увиденные. |
