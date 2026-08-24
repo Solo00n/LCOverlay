@@ -51,6 +51,10 @@ namespace LCBridgeOverlay
             public float CycleT;              // время показа текущей версии
             public float SwapFade = 1f;       // 1 — видна, 0 — погасла на пересменке
             public bool Swapping;             // идёт затухание перед сменой
+            public Vector2 HomePos;           // штатное место иконки (для тряски джестера)
+            public bool Shaking;              // сейчас трясётся
+            public bool HomeSet;              // HomePos уже запомнена
+            public float WindSmooth;          // сглаженный уровень завода (пакет идёт раз в секунду)
         }
 
         /// <summary>Одна версия монстра для показа в общей иконке.</summary>
@@ -75,6 +79,8 @@ namespace LCBridgeOverlay
         private readonly Dictionary<string, SwayItem> _byGroup = new Dictionary<string, SwayItem>();
         // дистанция по КОНКРЕТНОЙ версии монстра (нужно, чтобы выбрать «ту, что рядом»)
         private readonly Dictionary<string, float> _distByVariant = new Dictionary<string, float>();
+        // джестер: 0..1 — насколько он «завёлся» (тряска нарастает к хлопку)
+        private readonly Dictionary<string, float> _windByGroup = new Dictionary<string, float>();
 
         /// <summary>Иконки турелей на нижней рейке — эмиттеры для эффекта стрельбы.</summary>
         public readonly List<RectTransform> TurretIcons = new List<RectTransform>();
@@ -113,10 +119,41 @@ namespace LCBridgeOverlay
             {
                 var s = _sway[i];
                 if (s.Rt == null) continue;
+                // штатное место запоминаем при первом кадре: RebuildRail ставит
+                // позицию уже ПОСЛЕ создания иконки
+                if (!s.HomeSet) { s.HomePos = s.Rt.anchoredPosition; s.HomeSet = true; }
+
                 if (s.Appear < 1f) s.Appear = Mathf.MoveTowards(s.Appear, 1f, dt / 0.3f);
                 float sc = s.Scale * EaseOutBack(s.Appear);         // появление с «отскоком»
+
+                // Джестер заводится: тряска нарастает тем сильнее, чем ближе хлопок.
+                // Как только он вылезет, придёт иконка 2-й фазы и всё вернётся к
+                // обычному покачиванию.
+                // уровень приходит раз в секунду ступеньками — сглаживаем, чтобы
+                // тряска нарастала плавно, а не рывками
+                s.WindSmooth = Mathf.MoveTowards(s.WindSmooth, WindFor(s.GroupKey), dt / 1.2f);
+                float wind = s.WindSmooth;
+                float amp = s.Amp, speed = s.Speed;
+                float shakeX = 0f, shakeY = 0f;
+                if (wind > 0f)
+                {
+                    float k = wind * wind;                       // к концу разгоняется резче
+                    amp = Mathf.Lerp(s.Amp, s.Amp + 14f, k);     // размах качания
+                    speed = Mathf.Lerp(s.Speed, s.Speed + 22f, k); // частота дрожи
+                    // мелкая дрожь по позиции — «вот-вот выскочит»
+                    float j = Mathf.Lerp(0f, 3.5f, k);
+                    shakeX = (Mathf.PerlinNoise(t * 26f + s.Phase, 0f) - 0.5f) * 2f * j;
+                    shakeY = (Mathf.PerlinNoise(0f, t * 26f + s.Phase) - 0.5f) * 2f * j;
+                    sc *= 1f + 0.06f * k * Mathf.Abs(Mathf.Sin(t * 18f));  // лёгкое «дыхание»
+                }
+
                 s.Rt.localScale = new Vector3(sc, sc * s.FlipY, 1f);
-                s.Rt.localRotation = Quaternion.Euler(0f, 0f, Mathf.Sin((t + s.Phase) * s.Speed) * s.Amp);
+                s.Rt.localRotation = Quaternion.Euler(0f, 0f, Mathf.Sin((t + s.Phase) * speed) * amp);
+                if (wind > 0f)
+                    s.Rt.anchoredPosition = s.HomePos + new Vector2(shakeX, shakeY);
+                else if (s.Shaking)
+                    s.Rt.anchoredPosition = s.HomePos;            // вернуть на место после хлопка
+                s.Shaking = wind > 0f;
 
                 // какая версия монстра сейчас в этой единственной иконке
                 UpdateVariant(s, dt);
@@ -240,6 +277,13 @@ namespace LCBridgeOverlay
             s.FlipY = (v.Deviant && ConfigSettings.DeviantFlipIcon.Value) ? -1f : 1f;
         }
 
+        /// <summary>0..1 — насколько джестер этой группы «завёлся» (0 = не заводится).</summary>
+        private float WindFor(string groupKey)
+        {
+            if (!ConfigSettings.JesterWindUpShake.Value || string.IsNullOrEmpty(groupKey)) return 0f;
+            return _windByGroup.TryGetValue(groupKey, out float w) ? w : 0f;
+        }
+
         // ease-out-back: масштаб 0 → ~1.1 → 1 (эффект «выскочил»)
         private static float EaseOutBack(float x)
         {
@@ -258,6 +302,7 @@ namespace LCBridgeOverlay
             // снаружи и внутри делил бы одну дистанцию и подсвечивался одинаково.
             _distByGroup.Clear();
             _distByVariant.Clear();
+            _windByGroup.Clear();
             UpdateDistances(outside, true);
             UpdateDistances(inside, false);
             // 2.13: вспышки урона — тоже без пересборки рейки
@@ -323,6 +368,11 @@ namespace LCBridgeOverlay
             foreach (var raw in arr)
             {
                 var d = Parse(raw);
+
+                // уровень завода джестера — независимо от наличия дистанции
+                if (d.WindLevel >= 0 && !string.IsNullOrEmpty(d.GroupKey))
+                    _windByGroup[SideKey(outsideRail, d.GroupKey)] = Mathf.Clamp01(d.WindLevel / 9f);
+
                 if (d.Dist < 0f || string.IsNullOrEmpty(d.GroupKey)) continue;
                 string k = SideKey(outsideRail, d.GroupKey);
                 if (!_distByGroup.TryGetValue(k, out float md) || d.Dist < md)
@@ -337,9 +387,14 @@ namespace LCBridgeOverlay
         // Из СИГНАТУРЫ рейки убираем всё, что меняется часто: дистанцию и метку урона.
         // Иначе рейка пересобиралась бы при каждом попадании по монстру и иконки бы
         // «дёргались» (пере-появлялись). Вспышку урона запускаем отдельно, без пересборки.
-        private static string StripVolatile(string s) =>
-            string.IsNullOrEmpty(s) ? s
-            : Regex.Replace(Regex.Replace(s, @"\s*@\d+\s*$", ""), @"\+hurt", "", RegexOptions.IgnoreCase);
+        private static string StripVolatile(string s)
+        {
+            if (string.IsNullOrEmpty(s)) return s;
+            s = Regex.Replace(s, @"\s*@\d+\s*$", "");
+            s = Regex.Replace(s, @"\+hurt", "", RegexOptions.IgnoreCase);
+            s = Regex.Replace(s, @"\+w\d", "", RegexOptions.IgnoreCase);   // уровень завода джестера
+            return s;
+        }
 
         public void SetTraps(string[] traps)
         {
@@ -393,6 +448,7 @@ namespace LCBridgeOverlay
             // атакует / на потолке / застыл / отсканирован
             public bool Aggro, Angry, Adult, Attack, Ceiling, Frozen, Scanned, Firing, Hurt;
             public bool Deviant;   // инверснутая версия (мод DeviantEnemies)
+            public int WindLevel = -1; // 0..9 — джестер заводится; -1 = нет
             public float Dist = -1f;   // ближайшая дистанция до игрока, м (-1 = нет)
             public string GroupKey, IconKey;
             public int Rank => (Slayer || Kamikaze ? 2 : 0) + (Turret ? 1 : 0) + (Deviant ? 4 : 0);
@@ -515,9 +571,12 @@ namespace LCBridgeOverlay
             bool firing  = low.Contains("+firing");   // турель на монстре ведёт огонь
             bool hurt    = low.Contains("+hurt");     // только что получил урон
             bool deviant = low.Contains("+deviant"); // инверснутая версия монстра
+            int windLevel = -1;                      // джестер заводится: 0..9
+            var wm = Regex.Match(low, @"\+w(\d)");
+            if (wm.Success) int.TryParse(wm.Groups[1].Value, out windLevel);
 
             string baseName = Regex.Replace(nm,
-                @"\+turret|\+slayer|\+aggro|\+angry|\+adult|\+attack|\+ceiling|\+frozen|\+scanned|\+firing|\+hurt|\+deviant",
+                @"\+turret|\+slayer|\+aggro|\+angry|\+adult|\+attack|\+ceiling|\+frozen|\+scanned|\+firing|\+hurt|\+deviant|\+w\d",
                 "", RegexOptions.IgnoreCase).Trim();
             baseName = Canon(baseName);
             string groupKey = Norm(baseName);
@@ -547,6 +606,7 @@ namespace LCBridgeOverlay
                 Attack = attack, Ceiling = ceiling, Frozen = frozen, Scanned = scanned, Firing = firing,
                 Hurt = hurt,
                 Deviant = deviant,
+                WindLevel = windLevel,
                 Dist = dist,
                 GroupKey = groupKey,
                 IconKey = icon,

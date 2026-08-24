@@ -41,6 +41,7 @@ namespace LCBridgeOverlay
             _scanIdCache.Clear();
             _hurt.Clear();
             _deviant.Clear();
+            _windMax.Clear();
             _terminal = null;
         }
 
@@ -152,8 +153,26 @@ namespace LCBridgeOverlay
                     }
                     else if (type.IndexOf("Jester", StringComparison.OrdinalIgnoreCase) >= 0)
                     {
-                        // 0 — ходит закрытый, 1 — заводится, 2 — вылез и гонится
-                        if (state >= 2) tok += "+Angry";
+                        // 0 — ходит закрытый, 1 — заводится (крутит ручку), 2 — вылез и гонится
+                        int jid = ai.GetInstanceID();
+                        if (state >= 2)
+                        {
+                            tok += "+Angry";
+                            _windMax.Remove(jid);
+                        }
+                        else if (state == 1)
+                        {
+                            // popUpTimer тикает ВНИЗ до хлопка. Стартовое значение
+                            // рандомное, поэтому запоминаем максимум, который увидели,
+                            // и считаем от него долю завода 0..1.
+                            float cur = GetFloat(ai, "popUpTimer");
+                            if (!_windMax.TryGetValue(jid, out float max) || cur > max)
+                            { max = cur; _windMax[jid] = max; }
+                            float prog = max > 0.01f ? Mathf.Clamp01(1f - cur / max) : 0f;
+                            // уровень 0..9 — чем ближе к хлопку, тем сильнее тряска
+                            tok += "+w" + Mathf.Clamp(Mathf.RoundToInt(prog * 9f), 0, 9);
+                        }
+                        else _windMax.Remove(jid);
                     }
                     else if (type.IndexOf("CaveDweller", StringComparison.OrdinalIgnoreCase) >= 0 ||
                              type.IndexOf("Maneater", StringComparison.OrdinalIgnoreCase) >= 0)
@@ -230,6 +249,9 @@ namespace LCBridgeOverlay
         // приходит по сети), поэтому запомненное «не девиант» намертво отключало бы
         // переворот иконки. Девиантом враг, наоборот, перестать быть не может.
         private static readonly HashSet<int> _deviant = new HashSet<int>();
+
+        // джестер: стартовое значение popUpTimer, чтобы посчитать долю завода
+        private static readonly Dictionary<int, float> _windMax = new Dictionary<int, float>();
 
         private static bool IsDeviant(EnemyAI ai)
         {
@@ -331,6 +353,12 @@ namespace LCBridgeOverlay
             }
             catch { }
             return null;
+        }
+
+        private static float GetFloat(object o, params string[] names)
+        {
+            var v = GetObj(o, names);
+            return v is float f ? f : 0f;
         }
 
         private static bool GetBool(object o, params string[] names)

@@ -62,6 +62,7 @@ namespace LCBridgeOverlay
         public static ConfigEntry<bool> ShowLootMultiplier;   // суммарный множитель стоимости лута
         public static ConfigEntry<bool> ShowApparatusIcon;    // иконка лампы (аппарата) у интерьера
         public static ConfigEntry<bool> DeviantFlipIcon;      // девиантов рисовать вверх ногами
+        public static ConfigEntry<bool> JesterWindUpShake;    // джестер трясётся, пока заводится
 
         // --- [WebSocket] ---
         // Порт встроенного моста (мод сам собирает данные и раздаёт их по WebSocket
@@ -197,6 +198,8 @@ namespace LCBridgeOverlay
                 "Иконка лампы (аппарата) рядом с интерьером, пока аппарат не вынесли из комплекса.");
             DeviantFlipIcon = cfg.Bind("Behavior", "DeviantFlipIcon", true,
                 "Инверснутые монстры (мод DeviantEnemies) показываются перевёрнутой вверх ногами иконкой.");
+            JesterWindUpShake = cfg.Bind("Behavior", "JesterWindUpShake", true,
+                "Пока джестер заводится, его иконка трясётся всё сильнее — и в момент хлопка сменяется на иконку 2-й фазы.");
 
             // [WebSocket]
             Port = cfg.Bind("WebSocket", "Port", 8181,

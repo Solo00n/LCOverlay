@@ -85,6 +85,7 @@ All settings live in the config file `gdlp.lcbridgeoverlay.cfg`. Widget and beha
 | VariantCycleSeconds | 2 | With none near, versions fade into one another on this interval. |
 | DamageFlash | true | Flash the icon red when the monster is hit. |
 | DeviantFlipIcon | true | Draw inverted creatures with the icon upside down. |
+| JesterWindUpShake | true | The jester icon shakes harder as it winds up, then switches to phase two. |
 | TeamDeaths | true | Count the whole crew, not only deaths you saw. |
 | DeathsOnlyOnLeave | false | Update the death counter only when leaving a moon. |
 | DoorRadar / DoorRadarRadius | true / 22 | Reveal monsters beyond an entrance, and the radius in metres. |
@@ -199,6 +200,7 @@ Every integration is optional. When a mod is absent the related information is s
 | VariantCycleSeconds | 2 | Если рядом никого — версии плавно сменяют друг друга с этим интервалом. |
 | DamageFlash | true | Вспышка иконки при попадании по монстру. |
 | DeviantFlipIcon | true | Инверснутые существа рисуются иконкой вверх ногами. |
+| JesterWindUpShake | true | Пока джестер заводится, иконка трясётся всё сильнее, затем меняется на 2-ю фазу. |
 | TeamDeaths | true | Считать смерти всей команды, а не только увиденные. |
 | DeathsOnlyOnLeave | false | Обновлять счётчик смертей только при отлёте с луны. |
 | DoorRadar / DoorRadarRadius | true / 22 | Показывать монстров за дверью и радиус радара в метрах. |
