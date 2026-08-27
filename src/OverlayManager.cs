@@ -288,7 +288,9 @@ namespace LCBridgeOverlay
                 if (!p.onMoon) _timerRunning = false; // орбита/корабль/меню — стоп
             }
 
-            _events = BcmerEvents.GetEvents();
+            // читаем ивенты напрямую из мода, минуя мост, — значит и ворота
+            // хоста надо спросить здесь же, иначе они утекут в бегущую строку
+            _events = Gate.Events ? BcmerEvents.GetEvents() : new List<BcmerEvents.EventInfo>();
             if (_events.Count == 0 && !string.IsNullOrEmpty(p.brutalEvent))
             {
                 foreach (var raw in p.brutalEvent.Split(','))
@@ -513,7 +515,7 @@ namespace LCBridgeOverlay
             var p = DataParser.Current;
             float now = Time.unscaledTime;
 
-            bool enabled = ConfigSettings.ShowEndOfDayCountdown.Value &&
+            bool enabled = Gate.Countdown &&
                            p != null && p.onMoon && p.endOfDaySec >= 0;
 
             if (enabled)
@@ -721,13 +723,13 @@ namespace LCBridgeOverlay
                 ? $"{Esc(moon.ToUpperInvariant())} <color=#{OverlayStyle.Hex(S.TextDim)}>//</color> {weather}"
                 : Esc(moon.ToUpperInvariant());
 
-            bool hasInterior = onMoon && !string.IsNullOrEmpty(p.interiorType);
+            bool hasInterior = onMoon && Gate.Interior && !string.IsNullOrEmpty(p.interiorType);
             _interiorText.gameObject.SetActive(hasInterior);
             if (hasInterior)
                 _interiorText.text = $"{Localization.T("interior")}: <b>{Esc(p.interiorType.ToUpperInvariant())}</b>";
 
-            _itemsText.gameObject.SetActive(onMoon);
-            if (onMoon)
+            _itemsText.gameObject.SetActive(onMoon && Gate.LevelLoot);
+            if (onMoon && Gate.LevelLoot)
                 _itemsText.text = $"{Localization.T("items")}: {Localization.T("in")} <b>{p.itemsInside}</b> / " +
                                   $"{Localization.T("out")} <b>{p.itemsOutside}</b> / " +
                                   $"{Localization.T("hives")} <b>{p.beehiveCount}</b>";
@@ -736,7 +738,7 @@ namespace LCBridgeOverlay
 
             // 2.14: лампа (аппарат) — пока он в комплексе
             if (_lampSlot != null)
-                _lampSlot.SetActive(ConfigSettings.ShowApparatusIcon.Value &&
+                _lampSlot.SetActive(Gate.Apparatus &&
                                     hasInterior && p.apparatusInside &&
                                     _lampImg != null && _lampImg.sprite != null);
 
@@ -745,7 +747,7 @@ namespace LCBridgeOverlay
             // будто функция не работает.
             if (_multText != null)
             {
-                bool showMult = ConfigSettings.ShowLootMultiplier.Value && onMoon;
+                bool showMult = Gate.LootMult && onMoon;
                 _multText.gameObject.SetActive(showMult);
                 if (showMult)
                 {
@@ -786,7 +788,7 @@ namespace LCBridgeOverlay
             _barFillImg.SetVerticesDirty(); // пересчёт перспективы под новую ширину заполнения
             // текст на полосе убран (без процентов/«есть»)
 
-            bool showPlanet = onMoon && p.levelScrap > 0;
+            bool showPlanet = onMoon && p.levelScrap > 0 && Gate.LevelScrap;
             _onPlanetGo.SetActive(showPlanet);
             if (showPlanet)
                 _onPlanetVal.text = "$" + p.levelScrap;
@@ -800,11 +802,11 @@ namespace LCBridgeOverlay
             _deathsText.text = deaths.ToString();
 
             // ---- монстры (иконки по бортам) + ловушки снизу ----
-            bool showMon = ConfigSettings.ShowMonsters.Value;
+            bool showMon = Gate.Monsters;
             _mobRail.SetMobs(showMon ? p?.monstersOutside : null, showMon ? p?.monstersInside : null);
-            var traps = ConfigSettings.ShowTraps.Value ? p?.traps : null;
+            var traps = Gate.Traps ? p?.traps : null;
             _mobRail.SetTraps(traps);
-            _trapFire.Firing = ConfigSettings.ShowTraps.Value && traps != null && traps.Length > 0 &&
+            _trapFire.Firing = Gate.Traps && traps != null && traps.Length > 0 &&
                                onMoon && HasTurretTrap(traps) && TurretEventActive();
 
             // ---- мини-плашка ивента (выпадает на луне) ----
@@ -816,7 +818,7 @@ namespace LCBridgeOverlay
 
         private void RefreshEventPlate(bool onMoon)
         {
-            bool cfgOn = ConfigSettings.ShowBrutalEvent.Value;
+            bool cfgOn = Gate.Events;
             bool show = cfgOn && onMoon && (_events.Count > 0 || BcmerEvents.BcmePresent());
             _eventPlate.SetVisible(show);
             if (!show) return;
@@ -862,6 +864,9 @@ namespace LCBridgeOverlay
                   .Append(_events[0].Name.ToUpperInvariant());
             if (!connected)
                 sb.Append(" // ").Append(Localization.T("offline"));
+            // объясняем, почему панели пустые, — иначе выглядит как поломка мода
+            else if (Gate.Restricted)
+                sb.Append(" // ").Append(Localization.T("hostless"));
             sb.Append(" // ").Append(Localization.T("tObjective")).Append(" //");
             _ticker.SetContent(sb.ToString());
         }

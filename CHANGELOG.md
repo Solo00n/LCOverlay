@@ -1,5 +1,12 @@
 # Changelog — LCBridgeOverlay
 
+## 1.6.0
+- **The host now decides what the lobby sees.** Lethal Company does not allow client-side mods that hand one player a significant advantage, and this overlay was doing exactly that: anyone could install it alone and read the level's monsters, traps and loot. Every panel that reveals something the vanilla game keeps from you is now granted by the host, for the whole lobby at once, over a small networked handshake. Join a host who does not have the mod and those panels stay dark; the ticker says so, rather than leaving you to wonder whether the mod broke. Singleplayer is unaffected, since you are always your own host there.
+- Host-granted panels: monsters, traps, the door radar and its radius, the apparatus indicator, events, the end-of-day countdown, the loot multiplier, level loot totals and the item breakdown, and the interior type. A local toggle can still switch any of them off for yourself, but it can no longer switch on what the host has not allowed, and the host can force "scanned monsters only" on everyone.
+- The gate is applied where the data is collected, not where it is drawn, so nothing leaks out through the stream bridge either.
+- Panels the game already shows you — quota, deadline, moon, weather, crew, deaths, the run timer and every cosmetic setting — stay entirely local and are unchanged.
+- Networking uses Netcode's named messages: no extra dependency, no custom NetworkObject, and a vanilla host simply never answers.
+
 ## 1.5.4
 - **The stream bridge is now off by default.** It used to start on every launch, so the mod opened a local port on every machine that installed it, whether or not anyone ever used OBS. It is now opt-in via `[WebSocket] Enabled`: while it is off, no socket is created at all. When it is on, it listens on `127.0.0.1` only, sends data one way, ignores anything sent back, and makes no outgoing connections. The in-game overlay never needed the bridge — it reads the data directly, in-process.
 - Package description and README rewritten to state the networking behaviour plainly and to stop implying that other mods are required.

@@ -17,6 +17,7 @@ namespace LCBridgeOverlay
         private static void Postfix()
         {
             OverlayManager.Instance?.NotifyDisconnectedFromGame();
+            OverlayNet.Reset();
         }
     }
 
@@ -32,6 +33,7 @@ namespace LCBridgeOverlay
         {
             try
             {
+                OverlayNet.Register();
                 MonsterState.Reset();
                 BcmeClientEvents.Clear();
                 OverlayManager.Instance?.NotifyEnteredSave();

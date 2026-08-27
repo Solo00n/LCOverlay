@@ -668,7 +668,7 @@ namespace LCBridgeOverlay
                 if (Hidden(raw)) continue;
                 var d = Parse(raw);
                 // ТЗ 3.1: с RequireScanToShow монстр появляется только после сканирования
-                if (ConfigSettings.RequireScanToShow.Value && !d.Scanned) continue;
+                if (Gate.RequireScan && !d.Scanned) continue;
                 if (d.IconKey == null || SpriteBank.Get(d.IconKey) == null)
                 {
                     // диагностика: какой монстр остался без иконки (имя из игры) —

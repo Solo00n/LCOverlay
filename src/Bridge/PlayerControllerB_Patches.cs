@@ -10,6 +10,15 @@ namespace LCBridgeOverlay
     [HarmonyPatch(typeof(PlayerControllerB))]
     public static class PlayerControllerB_Patches
     {
+        // Локальный игрок подключился к своему объекту — самый надёжный момент,
+        // чтобы спросить хоста, стоит ли у него мод.
+        [HarmonyPatch("ConnectClientToPlayerObject")]
+        [HarmonyPostfix]
+        public static void OnLocalPlayerReady()
+        {
+            try { OverlayNet.OnLocalPlayerReady(); } catch { }
+        }
+
         [HarmonyPatch("KillPlayer")]
         [HarmonyPostfix]
         public static void OnKillPlayer(PlayerControllerB __instance, CauseOfDeath causeOfDeath)

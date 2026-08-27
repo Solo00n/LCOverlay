@@ -57,10 +57,16 @@ It can also feed a browser or OBS overlay with the same data, for streamers who 
 ### <span style="color: #cc0000;">MULTIPLAYER</span>
 
 <blockquote style="border-left: 4px solid #cc0000; padding-left: 15px;">
-The overlay is purely <strong style="color: #cc0000;">client-side</strong> and read-only. It never spawns, moves or changes anything in the world, so it does not need host authority and cannot desync a lobby.
+The overlay is read-only: it never spawns, moves or changes anything in the world, so it cannot desync a lobby. But <strong style="color: #cc0000;">the host decides what the lobby sees</strong> — the Lethal Company community does not allow client-side mods that hand one player a significant advantage, so every panel that reveals something the vanilla game keeps from you is granted by the host, for everyone at once.
 </blockquote>
 
-- Every player installs it for themselves. It is not required on the host, and a host running it does not force it on anyone.
+Host-granted: monsters, traps, the door radar and its radius, the apparatus, level loot and the item breakdown, the interior type, events, the end-of-day countdown and the loot multiplier.
+
+- <strong style="color: #cc0000;">The host needs the mod too.</strong> Join a host without it and those panels stay dark; the ticker says why, so it does not look like a broken install. Singleplayer is unaffected, since you are always your own host.
+- Your own settings can switch any granted panel off for yourself, but cannot switch on what the host has not allowed. The host can also require "scanned monsters only" for the whole lobby.
+- The gate is applied where the data is gathered, not where it is drawn, so nothing reaches the stream bridge either.
+- Panels the game already shows you — quota, deadline, moon, weather, crew, deaths, the run timer — and every cosmetic setting stay local and always work.
+- The handshake uses Netcode's named messages: no extra dependency, no custom NetworkObject, and a vanilla host simply never answers.
 - The death counter reports the whole crew, taken from the shared run statistics, so deaths you never witnessed are still counted.
 - Event information is read from data the host synchronises to every client, which is why the event plate appears for non-host players too, including those who joined late.
 - The ghost girl is shown only in the HUD of the player she is haunting.
@@ -199,10 +205,16 @@ The result appears in <code>bin/Release/LCBridgeOverlay.dll</code>. NuGet pulls 
 ### <span style="color: #cc0000;">МУЛЬТИПЛЕЕР</span>
 
 <blockquote style="border-left: 4px solid #cc0000; padding-left: 15px;">
-Оверлей полностью <strong style="color: #cc0000;">клиентский</strong> и работает только на чтение. Он ничего не спавнит, не двигает и не меняет в мире, поэтому не требует прав хоста и не может рассинхронизировать лобби.
+Оверлей работает только на чтение: он ничего не спавнит, не двигает и не меняет в мире, поэтому не может рассинхронизировать лобби. Но <strong style="color: #cc0000;">что видит лобби, решает хост</strong> — в сообществе Lethal Company запрещены клиентские моды, дающие одному игроку заметное преимущество, поэтому каждая панель, показывающая скрытое от ванильной игры, разрешается хостом сразу для всех.
 </blockquote>
 
-- Каждый игрок ставит его себе сам. Хосту он не нужен, и хост никому его не навязывает.
+Разрешает хост: монстры, ловушки, радар за дверью и его радиус, аппарат, лут локации и разбивка предметов, тип интерьера, ивенты, таймер конца дня и множитель лута.
+
+- <strong style="color: #cc0000;">Мод нужен и хосту тоже.</strong> Зайдёшь к хосту без мода — эти панели останутся погашенными, а бегущая строка объяснит почему, чтобы это не выглядело поломкой. Одиночной игры это не касается: там ты сам себе хост.
+- Свои настройки могут выключить любую разрешённую панель лично тебе, но не могут включить то, чего хост не разрешил. Хост также может потребовать «только просканированные монстры» для всего лобби.
+- Ворота стоят там, где данные собираются, а не где рисуются, — поэтому наружу, в мост для стрима, тоже ничего не уходит.
+- То, что игра и так показывает — квота, дедлайн, луна, погода, экипаж, смерти, таймер забега — и все косметические настройки остаются локальными и работают всегда.
+- Обмен идёт именованными сообщениями Netcode: никаких лишних зависимостей и своих NetworkObject, а ванильный хост просто не отвечает.
 - Счётчик смертей показывает всю команду по общей статистике забега, поэтому смерти, которых ты не видел, тоже учтены.
 - Информация об ивентах читается из данных, которые хост синхронизирует всем, поэтому плашка появляется и у не-хоста, включая тех, кто подключился позже.
 - Девочка-призрак видна только тому игроку, которого она преследует.

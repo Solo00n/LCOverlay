@@ -292,10 +292,10 @@ namespace LCBridgeOverlay
                 // Монстры рядом с этой точкой попадают в оверлей, даже если мы их не видим.
                 Vector3 probePos = Vector3.zero; bool haveProbe = false; bool probeInside = false;
                 float probeR = 0f;
-                if (haveMe && ConfigSettings.DoorRadar.Value)
+                if (haveMe && Gate.DoorRadar)
                 {
                     haveProbe = GameExtras.DoorProbe(me, out probePos, out probeInside);
-                    probeR = Mathf.Clamp(ConfigSettings.DoorRadarRadius.Value, 5f, 60f);
+                    probeR = Mathf.Clamp(Gate.DoorRadius, 5f, 60f);
                 }
 
                 foreach (var ai in GetAllLiveEnemies())

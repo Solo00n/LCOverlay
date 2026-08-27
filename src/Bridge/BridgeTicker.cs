@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
 using UnityEngine;
@@ -37,6 +38,7 @@ namespace LCBridgeOverlay
             RunStats.Tick();
             // состояния монстров (зол / трансформирован / на потолке / застыл).
             // Внутри свой интервал ~0.5с, чтобы не дёргать рефлексию каждый кадр.
+            OverlayNet.Tick();
             MonsterState.Tick(GameState.GetAllLiveEnemies());
 
             string json = BuildJson();
@@ -61,22 +63,29 @@ namespace LCBridgeOverlay
             string wt = GameState.GetWeatherTweaksWeather();
             string weather = !string.IsNullOrEmpty(wt) ? wt : GameState.GetVanillaWeather();
 
-            string bevent = GameState.GetBrutalEvent();
-            var (outside, inside) = GameState.GetMonsters();
-            var traps = GameState.GetTraps();
+            // Всё, что даёт подсказку, собираем ТОЛЬКО с разрешения хоста. Гасим здесь,
+            // у источника, а не при отрисовке: иначе данные всё равно утекли бы наружу
+            // через WebSocket-мост в браузерный оверлей.
+            string bevent = Gate.Events ? GameState.GetBrutalEvent() : null;
+            var (outside, inside) = Gate.Monsters
+                ? GameState.GetMonsters()
+                : (new List<string>(), new List<string>());
+            var traps = Gate.Traps ? GameState.GetTraps() : new List<string>();
             bool onMoon = GameState.GetOnMoon();
             bool loading = GameState.GetLoading();
             bool inGame = GameState.GetInGame();
             int resetToken = GameState.GetResetToken();
-            int levelScrap = GameState.GetLevelScrap();
+            int levelScrap = Gate.LevelScrap ? GameState.GetLevelScrap() : 0;
             // v1.2+: данные для внутриигрового оверлея (LCBridgeOverlay)
             var (quotaValue, quotaFulfilled) = GameState.GetQuotaProgress();
             int shipLoot = GameState.GetShipScrapSafe();
             int quotaIndex = GameState.GetQuotaIndexSafe();
             int dayCount = GameState.GetDayCount();
             int daysLeft = GameState.GetDaysLeft();
-            string interior = GameState.GetInterior();
-            var (beeHives, itemsInside, itemsOutside) = GameState.GetLootBreakdown();
+            string interior = Gate.Interior ? GameState.GetInterior() : null;
+            var (beeHives, itemsInside, itemsOutside) = Gate.LevelLoot
+                ? GameState.GetLootBreakdown()
+                : (0, 0, 0);
             bool oldBird = GameState.GetOldBird();
             bool onShip = GameState.GetOnShip();
             string topKiller = GameState.GetTopKiller();
@@ -85,9 +94,9 @@ namespace LCBridgeOverlay
             // v1.5: новые аддитивные поля
             bool popup = GameExtras.PopupActive();
             bool storeAd = GameExtras.StoreAdActive();
-            int endOfDaySec = GameExtras.SecondsToEndOfDay();
-            bool apparatus = GameExtras.ApparatusInside();
-            float lootMult = GameExtras.LootMultiplier();
+            int endOfDaySec = Gate.Countdown ? GameExtras.SecondsToEndOfDay() : -1;
+            bool apparatus = Gate.Apparatus && GameExtras.ApparatusInside();
+            float lootMult = Gate.LootMult ? GameExtras.LootMultiplier() : 1f;
             int soldLoot = RunStats.SoldTotal;
 
             // диагностика: логируем счётчики при изменении, чтобы видеть что мост реально находит
