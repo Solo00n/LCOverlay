@@ -52,7 +52,7 @@ This overlay is currently tuned for a specific modpack. In vanilla, or a very di
 
 The mod reads the game state about once per second inside its own process and draws the panel with Unity uGUI. Nothing is scraped from the screen and nothing in the game world is modified.
 
-It also hosts a small local WebSocket bridge on port <code>8181</code>, so a browser or OBS overlay can display the same data on stream. If you previously used the separate LCBridge mod, remove it: that collector is built in now, and running both would fight over the same port.
+It can also feed a browser or OBS overlay with the same data, for streamers who want it on screen. <b>That bridge is off by default: until you switch it on in the config, the mod opens no ports at all.</b> When you do enable it, it listens on <code>127.0.0.1</code> only, so nothing outside your own computer can reach it; it sends data one way and ignores anything sent back; and it never makes an outgoing connection of any kind. The mod collects no telemetry and contacts no server. If you previously used the separate LCBridge mod, remove it: that collector is built in now.
 
 ### <span style="color: #cc0000;">MULTIPLAYER</span>
 
@@ -123,7 +123,8 @@ All settings live in <code>BepInEx/config/gdlp.lcbridgeoverlay.cfg</code>. Widge
 <tr><td style="border: 1px solid #cc0000; padding: 8px;">ScaleMonstersByCount</td><td style="border: 1px solid #cc0000; padding: 8px;">false</td><td style="border: 1px solid #cc0000; padding: 8px;">Experimental: drop the counts and scale icons by quantity.</td></tr>
 <tr><td style="border: 1px solid #cc0000; padding: 8px;">Scanlines</td><td style="border: 1px solid #cc0000; padding: 8px;">true</td><td style="border: 1px solid #cc0000; padding: 8px;">Subtle CRT scanlines.</td></tr>
 <tr><td style="border: 1px solid #cc0000; padding: 8px;">Widgets: Show*</td><td style="border: 1px solid #cc0000; padding: 8px;">true</td><td style="border: 1px solid #cc0000; padding: 8px;">Individual toggles for every block of the panel.</td></tr>
-<tr><td style="border: 1px solid #cc0000; padding: 8px;">Port</td><td style="border: 1px solid #cc0000; padding: 8px;">8181</td><td style="border: 1px solid #cc0000; padding: 8px;">Port of the built-in bridge for a browser or OBS overlay.</td></tr>
+<tr><td style="border: 1px solid #cc0000; padding: 8px;">Enabled</td><td style="border: 1px solid #cc0000; padding: 8px;">false</td><td style="border: 1px solid #cc0000; padding: 8px;">Feed a browser or OBS overlay over a local WebSocket. Off by default: while off, no port is opened.</td></tr>
+<tr><td style="border: 1px solid #cc0000; padding: 8px;">Port</td><td style="border: 1px solid #cc0000; padding: 8px;">8181</td><td style="border: 1px solid #cc0000; padding: 8px;">Port of that bridge, on <code>127.0.0.1</code> only.</td></tr>
 </tbody>
 </table>
 
@@ -193,7 +194,7 @@ The result appears in <code>bin/Release/LCBridgeOverlay.dll</code>. NuGet pulls 
 
 Мод читает состояние игры примерно раз в секунду внутри своего процесса и рисует панель на Unity uGUI. Ничего не считывается с экрана и ничего в мире игры не меняется.
 
-Дополнительно поднимается локальный WebSocket-мост на порту <code>8181</code>, чтобы браузерный или OBS-оверлей показывал те же данные на стриме. Если раньше стоял отдельный мод LCBridge, удали его: сборщик теперь встроен, а вдвоём они займут один порт.
+Те же данные можно отдать браузерному или OBS-оверлею — для тех, кто стримит. <b>Мост выключен по умолчанию: пока не включишь его в конфиге, мод не открывает ни одного порта.</b> Если включишь, он слушает только <code>127.0.0.1</code>, то есть достучаться до него снаружи твоего компьютера нельзя; данные идут в одну сторону, а всё присланное обратно игнорируется; исходящих соединений мод не делает вообще никаких. Никакой телеметрии он не собирает и ни на какой сервер не ходит. Если раньше стоял отдельный мод LCBridge, удали его: сборщик теперь встроен.
 
 ### <span style="color: #cc0000;">МУЛЬТИПЛЕЕР</span>
 
@@ -264,7 +265,8 @@ The result appears in <code>bin/Release/LCBridgeOverlay.dll</code>. NuGet pulls 
 <tr><td style="border: 1px solid #cc0000; padding: 8px;">ScaleMonstersByCount</td><td style="border: 1px solid #cc0000; padding: 8px;">false</td><td style="border: 1px solid #cc0000; padding: 8px;">Эксперимент: убрать цифры и менять размер иконок по количеству.</td></tr>
 <tr><td style="border: 1px solid #cc0000; padding: 8px;">Scanlines</td><td style="border: 1px solid #cc0000; padding: 8px;">true</td><td style="border: 1px solid #cc0000; padding: 8px;">Едва заметные CRT-полосы.</td></tr>
 <tr><td style="border: 1px solid #cc0000; padding: 8px;">Widgets: Show*</td><td style="border: 1px solid #cc0000; padding: 8px;">true</td><td style="border: 1px solid #cc0000; padding: 8px;">Отдельные тумблеры для каждого блока панели.</td></tr>
-<tr><td style="border: 1px solid #cc0000; padding: 8px;">Port</td><td style="border: 1px solid #cc0000; padding: 8px;">8181</td><td style="border: 1px solid #cc0000; padding: 8px;">Порт встроенного моста для браузерного или OBS-оверлея.</td></tr>
+<tr><td style="border: 1px solid #cc0000; padding: 8px;">Enabled</td><td style="border: 1px solid #cc0000; padding: 8px;">false</td><td style="border: 1px solid #cc0000; padding: 8px;">Отдавать данные браузерному или OBS-оверлею по локальному WebSocket. По умолчанию выключено: пока выключено, порт не открывается.</td></tr>
+<tr><td style="border: 1px solid #cc0000; padding: 8px;">Port</td><td style="border: 1px solid #cc0000; padding: 8px;">8181</td><td style="border: 1px solid #cc0000; padding: 8px;">Порт этого моста, только на <code>127.0.0.1</code>.</td></tr>
 </tbody>
 </table>
 

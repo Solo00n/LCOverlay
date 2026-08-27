@@ -19,7 +19,7 @@ namespace LCBridgeOverlay
     {
         public const string GUID = "gdlp.lcbridgeoverlay";
         public const string NAME = "LCBridgeOverlay";
-        public const string VERSION = "1.5.3";
+        public const string VERSION = "1.5.4";
 
         public static Plugin Instance { get; private set; }
         public static ManualLogSource Log { get; private set; }
@@ -63,16 +63,24 @@ namespace LCBridgeOverlay
             TryPatchBcmeTips();
 
             // --- РІСЃС‚СЂРѕРµРЅРЅС‹Р№ РјРѕСЃС‚: WebSocket-СЃРµСЂРІРµСЂ + С‚РёРєРµСЂ СЃР±РѕСЂР° СЃРѕСЃС‚РѕСЏРЅРёСЏ ---
-            int port = ConfigSettings.Port.Value;
-            try
+            // Мост наружу поднимаем ТОЛЬКО если игрок сам его включил: без этого
+            // мод не открывает ни одного порта. Внутриигровому оверлею мост не нужен.
+            if (ConfigSettings.WebSocketEnabled.Value)
             {
-                BridgeServer.Start(port);
-                Log.LogInfo($"Р’СЃС‚СЂРѕРµРЅРЅС‹Р№ РјРѕСЃС‚ Р·Р°РїСѓС‰РµРЅ РЅР° ws://localhost:{port} (РґР»СЏ HTML-РѕРІРµСЂР»РµСЏ/OBS).");
+                int port = ConfigSettings.Port.Value;
+                try
+                {
+                    BridgeServer.Start(port);
+                    Log.LogInfo($"WebSocket-мост включён в конфиге: слушаю ws://127.0.0.1:{port} (только этот компьютер).");
+                }
+                catch (Exception e)
+                {
+                    Log.LogError($"Не удалось поднять мост на порту {port} (возможно, порт занят): {e.Message}");
+                }
             }
-            catch (Exception e)
+            else
             {
-                // Р§Р°СЃС‚Р°СЏ РїСЂРёС‡РёРЅР° вЂ” СЂСЏРґРѕРј РµС‰С‘ СЃС‚РѕРёС‚ СЃС‚Р°СЂС‹Р№ РјРѕРґ LCBridge Рё РґРµСЂР¶РёС‚ РїРѕСЂС‚.
-                Log.LogError($"РќРµ СѓРґР°Р»РѕСЃСЊ РїРѕРґРЅСЏС‚СЊ РјРѕСЃС‚ РЅР° РїРѕСЂС‚Сѓ {port} (РІРѕР·РјРѕР¶РЅРѕ, РїРѕСЂС‚ Р·Р°РЅСЏС‚ вЂ” СѓРґР°Р»Рё СЃС‚Р°СЂС‹Р№ РјРѕРґ LCBridge): {e.Message}");
+                Log.LogInfo("WebSocket-мост выключен (по умолчанию) — порты не открываются. Включается в конфиге: [WebSocket] Enabled.");
             }
             EnsureTicker();
             Application.quitting += OnApplicationQuitting;

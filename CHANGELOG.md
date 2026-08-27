@@ -1,5 +1,9 @@
 # Changelog — LCBridgeOverlay
 
+## 1.5.4
+- **The stream bridge is now off by default.** It used to start on every launch, so the mod opened a local port on every machine that installed it, whether or not anyone ever used OBS. It is now opt-in via `[WebSocket] Enabled`: while it is off, no socket is created at all. When it is on, it listens on `127.0.0.1` only, sends data one way, ignores anything sent back, and makes no outgoing connections. The in-game overlay never needed the bridge — it reads the data directly, in-process.
+- Package description and README rewritten to state the networking behaviour plainly and to stop implying that other mods are required.
+
 ## 1.5.3
 - **Event names now show for everyone, not just the host.** The event list Brutal Company fills in exists only on the host, so every other player saw an empty plaque. The names are now read from the event panel's own text, which is a synced value, and matched against the full event list that each client builds locally from its config — so the match is exact and independent of language. Two earlier attempts missed because the announcement hook only fires when a per-event "Show Tip?" option is on, which it isn't by default, and because panel lines were compared against internal identifiers rather than the displayed names.
 - **The same host-only read was fixed in the run analytics**, where the active event is attributed to each death, and in the **loot multiplier**, which now prefers a synced value over the host-only one.

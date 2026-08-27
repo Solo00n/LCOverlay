@@ -37,7 +37,7 @@ An in-helmet HUD panel that shows your quota, moon, interior, live monsters and 
 
 The mod reads the game state about once per second inside its own process and draws the panel with Unity uGUI. Nothing is scraped from the screen and nothing in the game world is modified.
 
-It also hosts a small local WebSocket bridge on port 8181, so a browser or OBS overlay can display the same data on stream. If you previously used the separate LCBridge mod, remove it: that collector is built in now, and running both would fight over the same port.
+It can also feed a browser or OBS overlay with the same data, for streamers who want it on screen. **That bridge is off by default: until you switch it on in the config, the mod opens no ports at all.** When you do enable it, it listens on `127.0.0.1` only, so nothing outside your own computer can reach it; it sends data one way and ignores anything sent back; and it never makes an outgoing connection of any kind. The mod collects no telemetry and contacts no server. If you previously used the separate LCBridge mod, remove it: that collector is built in now.
 
 ### Multiplayer
 
@@ -99,7 +99,8 @@ All settings live in the config file `gdlp.lcbridgeoverlay.cfg`. Widget and beha
 | ScaleMonstersByCount | false | Experimental: drop the counts and scale icons by quantity. |
 | Scanlines | true | Subtle CRT scanlines. |
 | Widgets: Show* | true | Individual toggles for every block of the panel. |
-| Port | 8181 | Port of the built-in bridge for a browser or OBS overlay. |
+| Enabled | false | Feed a browser or OBS overlay over a local WebSocket. Off by default: while off, no port is opened. |
+| Port | 8181 | Port of that bridge, on `127.0.0.1` only. |
 
 ### Integrations and compatibility
 
@@ -152,7 +153,7 @@ Every integration is optional. When a mod is absent the related information is s
 
 Мод читает состояние игры примерно раз в секунду внутри своего процесса и рисует панель на Unity uGUI. Ничего не считывается с экрана и ничего в мире игры не меняется.
 
-Дополнительно поднимается локальный WebSocket-мост на порту 8181, чтобы браузерный или OBS-оверлей показывал те же данные на стриме. Если раньше стоял отдельный мод LCBridge, удали его: сборщик теперь встроен, а вдвоём они займут один порт.
+Те же данные можно отдать браузерному или OBS-оверлею — для тех, кто стримит. **Мост выключен по умолчанию: пока не включишь его в конфиге, мод не открывает ни одного порта.** Если включишь, он слушает только `127.0.0.1`, то есть достучаться до него снаружи твоего компьютера нельзя; данные идут в одну сторону, а всё присланное обратно игнорируется; исходящих соединений мод не делает вообще никаких. Никакой телеметрии он не собирает и ни на какой сервер не ходит. Если раньше стоял отдельный мод LCBridge, удали его: сборщик теперь встроен.
 
 ### Мультиплеер
 
@@ -214,7 +215,8 @@ Every integration is optional. When a mod is absent the related information is s
 | ScaleMonstersByCount | false | Эксперимент: убрать цифры и менять размер иконок по количеству. |
 | Scanlines | true | Едва заметные CRT-полосы. |
 | Widgets: Show* | true | Отдельные тумблеры для каждого блока панели. |
-| Port | 8181 | Порт встроенного моста для браузерного или OBS-оверлея. |
+| Enabled | false | Отдавать данные браузерному или OBS-оверлею по локальному WebSocket. По умолчанию выключено: пока выключено, порт не открывается. |
+| Port | 8181 | Порт этого моста, только на `127.0.0.1`. |
 
 ### Совместимость и интеграции
 

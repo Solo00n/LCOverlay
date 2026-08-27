@@ -44,7 +44,8 @@ namespace LCBridgeOverlay
             if (json != _lastPayload)
             {
                 _lastPayload = json;
-                BridgeServer.Broadcast(json);       // → HTML-оверлей (OBS), по WebSocket
+                // наружу — только если игрок сам включил мост (иначе сокет и не открыт)
+                if (BridgeServer.IsRunning) BridgeServer.Broadcast(json);
                 DataParser.PushLocal(json);         // → внутриигровой оверлей, напрямую
             }
         }

@@ -26,6 +26,9 @@ namespace LCBridgeOverlay
         // (в меню/на орбите payload может не меняться долго)
         private static volatile string _lastPayload;
 
+        /// <summary>Поднят ли мост. Пока false — ни одного сокета не открыто.</summary>
+        public static bool IsRunning => _running;
+
         public static void Start(int port)
         {
             if (_running) return;
