@@ -1,5 +1,9 @@
 # Changelog — LCBridgeOverlay
 
+## 1.5.3
+- **Event names now show for everyone, not just the host.** The event list Brutal Company fills in exists only on the host, so every other player saw an empty plaque. The names are now read from the event panel's own text, which is a synced value, and matched against the full event list that each client builds locally from its config — so the match is exact and independent of language. Two earlier attempts missed because the announcement hook only fires when a per-event "Show Tip?" option is on, which it isn't by default, and because panel lines were compared against internal identifiers rather than the displayed names.
+- **The same host-only read was fixed in the run analytics**, where the active event is attributed to each death, and in the **loot multiplier**, which now prefers a synced value over the host-only one.
+
 ## 1.5.2
 - **DeviantEnemies integration**: inverted creatures are drawn with their icon flipped upside down, and they count as a separate variant, so a deviant and a normal one of the same species no longer collapse into a single entry. Toggle with `DeviantFlipIcon`.
 - **Fixes:** a new save resets the run timer again (the reset signal had been lost when the eject analytics were added); the overlay now reliably returns after a store ad, since the game never clears its ad reference and the check stayed stuck.
