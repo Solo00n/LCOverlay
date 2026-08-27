@@ -193,6 +193,11 @@ namespace LCBridgeOverlay
         // ---------- 2.11 суммарный множитель стоимости лута ----------
         private static bool _multSearched;
         private static FieldInfo _bcmeMulField;
+        // синхронизируемый источник множителя у BCME (если он есть) — нужен КЛИЕНТАМ:
+        // статическое Manager.scrapValueMultiplier пишется при применении ивента,
+        // а ивенты применяет только хост, поэтому у клиента там остаётся 1.
+        private static FieldInfo _bcmeMulNetField;      // NetworkVariable<float> в BCME.Net
+        private static PropertyInfo _bcmeMulNetInstance, _bcmeMulNetValue;
         private static MethodInfo _wrGetCurrent;      // WeatherManager.GetCurrentWeather(level)
         private static PropertyInfo _wrScrapEnabled;  // Settings.ScrapMultipliers
         private static PropertyInfo _weatherScrapProp;// Weather.ScrapValueMultiplier
@@ -262,20 +267,37 @@ namespace LCBridgeOverlay
                         _wrScrapEnabled = settings.GetProperty("ScrapMultipliers",
                             BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
 
+                    // Ищем в BCME.Net сетевую переменную с множителем: имя содержит
+                    // "scrap"/"value"/"mult", а тип — NetworkVariable<...>. Если найдём,
+                    // читаем её вместо статического поля (она доезжает до клиентов).
+                    try
+                    {
+                        var netType = GameState.FindTypeByFullName("BrutalCompanyMinus.Net")
+                                   ?? GameState.FindTypeFuzzy("BrutalCompany", new[] { "Net" });
+                        if (netType != null)
+                        {
+                            _bcmeMulNetInstance = netType.GetProperty("Instance",
+                                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
+                            foreach (var f in netType.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance))
+                            {
+                                string n = f.Name.ToLowerInvariant();
+                                if (!n.Contains("mult")) continue;
+                                if (!(n.Contains("scrap") || n.Contains("value") || n.Contains("loot"))) continue;
+                                if (!f.FieldType.Name.StartsWith("NetworkVariable")) continue;
+                                _bcmeMulNetField = f;
+                                Plugin.Log?.LogInfo($"[loot-mult] сетевой множитель BCME: Net.{f.Name}");
+                                break;
+                            }
+                        }
+                    }
+                    catch { }
+
                     Plugin.Log?.LogInfo($"[loot-mult] BCME-поле={(_bcmeMulField != null ? _bcmeMulField.DeclaringType?.Name + "." + _bcmeMulField.Name : "не найдено")}, " +
                                         $"WeatherRegistry.GetCurrentWeather={(_wrGetCurrent != null ? "OK" : "не найден")}");
                 }
 
-                if (_bcmeMulField != null)
-                {
-                    try
-                    {
-                        var v = _bcmeMulField.GetValue(null);
-                        float f = v is float ff ? ff : -1f;
-                        if (f > 0f) total += (f - 1f);
-                    }
-                    catch { }
-                }
+                float bcme = BcmeMultiplier();
+                if (bcme > 0f) total += (bcme - 1f);
 
                 // множитель ТЕКУЩЕЙ погоды (WeatherRegistry/WeatherTweaks)
                 float wf = WeatherScrapMultiplier();
@@ -283,6 +305,48 @@ namespace LCBridgeOverlay
             }
             catch { }
             return Mathf.Clamp(total, 0f, 100f);
+        }
+
+        /// <summary>
+        /// Множитель стоимости лута от BCME. Сначала пробуем сетевую переменную
+        /// (её видят все игроки), и только потом — статическое поле, которое
+        /// заполняется лишь у хоста.
+        /// </summary>
+        private static float BcmeMultiplier()
+        {
+            // а) синхронизируемое значение — верно и у клиентов
+            try
+            {
+                if (_bcmeMulNetField != null && _bcmeMulNetInstance != null)
+                {
+                    var inst = _bcmeMulNetInstance.GetValue(null);
+                    if (inst != null)
+                    {
+                        var netVar = _bcmeMulNetField.GetValue(inst);
+                        if (netVar != null)
+                        {
+                            if (_bcmeMulNetValue == null)
+                                _bcmeMulNetValue = netVar.GetType().GetProperty("Value",
+                                    BindingFlags.Public | BindingFlags.Instance);
+                            var val = _bcmeMulNetValue != null ? _bcmeMulNetValue.GetValue(netVar) : null;
+                            if (val is float nf && nf > 0f) return nf;
+                        }
+                    }
+                }
+            }
+            catch { }
+
+            // б) статическое поле (у хоста всегда актуально)
+            try
+            {
+                if (_bcmeMulField != null)
+                {
+                    var v = _bcmeMulField.GetValue(null);
+                    if (v is float sf && sf > 0f) return sf;
+                }
+            }
+            catch { }
+            return -1f;
         }
 
         /// <summary>Ищет СТАТИЧЕСКОЕ float-поле в указанных классах сборки мода.</summary>

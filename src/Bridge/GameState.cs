@@ -531,17 +531,29 @@ namespace LCBridgeOverlay
                         Plugin.Log?.LogInfo("[reflection] BCMER EventManager не найден (мод выключен?)");
                     }
                 }
-                if (_curEventsField == null) return null;
-
-                var list = _curEventsField.GetValue(null) as System.Collections.IEnumerable;
-                if (list == null) return null;
-
                 var names = new List<string>();
-                foreach (var ev in list)
+
+                if (_curEventsField != null)
                 {
-                    if (ev == null) continue;
-                    string nm = GetEventName(ev);
-                    if (!string.IsNullOrEmpty(nm)) names.Add(nm);
+                    var list = _curEventsField.GetValue(null) as System.Collections.IEnumerable;
+                    if (list != null)
+                    {
+                        foreach (var ev in list)
+                        {
+                            if (ev == null) continue;
+                            string nm = GetEventName(ev);
+                            if (!string.IsNullOrEmpty(nm)) names.Add(nm);
+                        }
+                    }
+                }
+
+                // ТА ЖЕ ловушка, что была у плашки ивентов: currentEvents заполняется
+                // только у ХОСТА, и у клиентов это поле пустое. Берём клиентский
+                // источник (панель BCME, которая синхронизируется всем).
+                if (names.Count == 0)
+                {
+                    foreach (var e in BcmeClientEvents.Get())
+                        if (!string.IsNullOrEmpty(e.Name)) names.Add(e.Name);
                 }
 
                 if (names.Count == 0) return null;
