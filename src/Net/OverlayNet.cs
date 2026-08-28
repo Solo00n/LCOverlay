@@ -29,8 +29,10 @@ namespace LCBridgeOverlay
     {
         private const string HelloMsg = "LCBridgeOverlay_hello";
         private const string PolicyMsg = "LCBridgeOverlay_policy";
+        private const string StateMsg  = "LCBridgeOverlay_state";   // таймер/ивенты от хоста
         private const byte Wire = 1;        // версия протокола
-        private const float WaitSeconds = 8f;  // сколько ждём ответ хоста
+        private const float WaitSeconds = 8f;   // сколько ждём ответ хоста
+        private const float RetrySeconds = 10f; // и как часто пробуем снова
 
         public enum Link
         {
@@ -119,6 +121,27 @@ namespace LCBridgeOverlay
         private static float _lastSentRadius;
         private static bool _everSent;
 
+        // ---- то, что приехало от хоста (у клиента) ----
+        private static float _hostTimerSec;
+        private static bool _hostTimerRunning;
+        private static float _hostTimerAt;      // когда пакет получен, для плавного хода
+        private static int _hostResetToken;
+        private static string _hostEvents;
+        private static float _hostStateAt = -999f;
+        private static NetworkManager _registeredOn;
+
+        /// <summary>Мы клиент и хост с модом отвечает.</summary>
+        public static bool HasHostState =>
+            State == Link.Granted && NM != null && !NM.IsServer &&
+            Time.unscaledTime - _hostStateAt < 15f;
+
+        /// <summary>Таймер хоста, доведённый до текущего момента.</summary>
+        public static float HostTimerSec =>
+            _hostTimerSec + (_hostTimerRunning ? Time.unscaledTime - _hostTimerAt : 0f);
+        public static bool HostTimerRunning => _hostTimerRunning;
+        public static int HostResetToken => _hostResetToken;
+        public static string HostEvents => _hostEvents;
+
         private static NetworkManager NM => NetworkManager.Singleton;
 
         // ================= жизненный цикл =================
@@ -129,10 +152,16 @@ namespace LCBridgeOverlay
             try
             {
                 var nm = NM;
-                if (nm == null || nm.CustomMessagingManager == null || _registered) return;
+                if (nm == null || nm.CustomMessagingManager == null) return;
+                // NetworkManager пересоздаётся при перезаходе в сейв: если просто
+                // помнить «уже регистрировались», обработчики повиснут на старом
+                // объекте и у клиента всё замолкнет.
+                if (_registered && ReferenceEquals(_registeredOn, nm)) return;
+                _registeredOn = nm;
 
                 nm.CustomMessagingManager.RegisterNamedMessageHandler(HelloMsg, OnHello);
                 nm.CustomMessagingManager.RegisterNamedMessageHandler(PolicyMsg, OnPolicy);
+                nm.CustomMessagingManager.RegisterNamedMessageHandler(StateMsg, OnState);
                 _registered = true;
             }
             catch (Exception e) { Plugin.Log?.LogWarning($"[net] регистрация не удалась: {e.Message}"); }
@@ -182,14 +211,32 @@ namespace LCBridgeOverlay
                     if (!_everSent || bits != _lastSentBits ||
                         !Mathf.Approximately(_policy.DoorRadius, _lastSentRadius))
                         BroadcastPolicy();
+                    BroadcastState();   // таймер, токен сброса и ивенты — всем
                     return;
                 }
 
+                // ---- мы клиент ----
                 if (State == Link.Waiting && Time.unscaledTime - _askedAt > WaitSeconds)
                 {
                     State = Link.Denied;
                     Plugin.Log?.LogInfo("[net] хост не ответил — мода у него нет. " +
                                         "Панели с подсказками выключены: клиентское преимущество в этом сообществе запрещено.");
+                }
+
+                // Периодически спрашиваем заново. Это чинит перезаход хоста в сейв:
+                // без повтора клиент навсегда оставался с Denied и пустым оверлеем.
+                if (State != Link.Granted && Time.unscaledTime - _askedAt > RetrySeconds)
+                {
+                    _askedAt = Time.unscaledTime;
+                    SendHello();
+                }
+                // связь с хостом пропала (он перезашёл) — вернёмся к ожиданию
+                else if (State == Link.Granted && Time.unscaledTime - _hostStateAt > 15f)
+                {
+                    Plugin.Log?.LogInfo("[net] хост замолчал — спрашиваем заново.");
+                    State = Link.Waiting;
+                    _askedAt = Time.unscaledTime;
+                    SendHello();
                 }
             }
             catch { }
@@ -201,7 +248,12 @@ namespace LCBridgeOverlay
             State = Link.Offline;
             _policy = HostPolicy.Blocked();
             _registered = false;
+            _registeredOn = null;
             _everSent = false;
+            _hostStateAt = -999f;
+            _hostEvents = null;
+            _hostTimerSec = 0f;
+            _hostTimerRunning = false;
         }
 
         // ================= обмен =================
@@ -284,6 +336,78 @@ namespace LCBridgeOverlay
                 }
             }
             catch (Exception e) { Plugin.Log?.LogWarning($"[net] политика не ушла клиенту {clientId}: {e.Message}"); }
+        }
+
+        // ================= состояние забега (таймер / ивенты) =================
+
+        /// <summary>
+        /// Хост раз в тик рассылает то, что должно совпадать у ВСЕХ: ход таймера,
+        /// токен сброса и имена активных ивентов. Раньше таймер шёл у каждого свой
+        /// (считался локально от своей посадки), а имена ивентов клиент пытался
+        /// вычитать из панели BCME — там их нет.
+        /// </summary>
+        private static void BroadcastState()
+        {
+            try
+            {
+                var nm = NM;
+                if (nm == null || nm.CustomMessagingManager == null || !nm.IsServer) return;
+                if (nm.ConnectedClientsIds == null || nm.ConnectedClientsIds.Count <= 1) return;
+
+                float sec = 0f; bool running = false;
+                var om = OverlayManager.Instance;
+                if (om != null) { sec = om.TimerSeconds; running = om.TimerRunning; }
+
+                string ev = GameState.GetBrutalEvent() ?? "";
+                if (ev.Length > 900) ev = ev.Substring(0, 900);
+
+                byte flags = (byte)(running ? 1 : 0);
+                int token = GameState.GetResetToken();
+
+                using (var w = new FastBufferWriter(1024, Allocator.Temp, 4096))
+                {
+                    w.WriteValueSafe(Wire);
+                    w.WriteValueSafe(flags);
+                    w.WriteValueSafe(sec);
+                    w.WriteValueSafe(token);
+                    w.WriteValueSafe(ev);
+                    foreach (var id in nm.ConnectedClientsIds)
+                    {
+                        if (id == NetworkManager.ServerClientId) continue;
+                        nm.CustomMessagingManager.SendNamedMessage(StateMsg, id, w, NetworkDelivery.ReliableSequenced);
+                    }
+                }
+            }
+            catch (Exception e) { Plugin.Log?.LogWarning($"[net] состояние не ушло: {e.Message}"); }
+        }
+
+        /// <summary>Пришло состояние от хоста (только клиент).</summary>
+        private static void OnState(ulong sender, FastBufferReader reader)
+        {
+            try
+            {
+                var nm = NM;
+                if (nm == null || nm.IsServer) return;
+                if (sender != NetworkManager.ServerClientId) return;
+
+                reader.ReadValueSafe(out byte wire);
+                if (wire != Wire) return;
+                reader.ReadValueSafe(out byte flags);
+                reader.ReadValueSafe(out float sec);
+                reader.ReadValueSafe(out int token);
+                reader.ReadValueSafe(out string ev);
+
+                _hostTimerRunning = (flags & 1) != 0;
+                _hostTimerSec = sec;
+                _hostTimerAt = Time.unscaledTime;
+                _hostResetToken = token;
+                _hostEvents = string.IsNullOrEmpty(ev) ? null : ev;
+                _hostStateAt = Time.unscaledTime;
+
+                // хост есть и он с модом — значит панели разрешены
+                if (State != Link.Granted) State = Link.Granted;
+            }
+            catch (Exception e) { Plugin.Log?.LogWarning($"[net] OnState: {e.Message}"); }
         }
 
         private static void BroadcastPolicy()

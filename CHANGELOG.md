@@ -1,5 +1,12 @@
 # Changelog — LCBridgeOverlay
 
+## 1.6.2
+- **None of the mod's patches were being applied.** One patch named a parameter that does not exist in the game's method, which made Harmony abort the whole `PatchAll` — so every other patch in the mod, including all of the networking added in 1.6.0, silently never ran. Both players' logs showed it. Patches are now applied one class at a time, so a single bad signature can no longer take the rest down with it, and each failure is named in the log.
+- **The run timer is the same for everyone.** It used to count locally from each player's own landing, so it drifted between players. The host now broadcasts it, along with the reset signal, so it starts, runs and resets identically for the whole lobby.
+- **The timer resets when a run ends.** Ejection or bankruptcy zeroes it immediately instead of waiting for the next lever pull; a fresh save still clears everything.
+- **Event names now reach other players.** They are sent by the host directly. The previous approach read the event mod's on-screen panel, which turns out to hold a table of chances rather than the active events, so there was never anything there to find.
+- **Rejoining no longer leaves other players with a dead overlay.** The message handlers were bound to the network manager from the previous session and were never rebound, so a client that reconnected heard nothing. They are now rebound when the session changes, and a client that hears nothing from the host retries instead of giving up permanently.
+
 ## 1.6.1
 - **The Giant Sapsucker was drawn as a Forest Keeper.** The game does not store the pretty bestiary names: the sapsucker's internal name is `GiantKiwi` and the Forest Keeper's is `ForestGiant`, so the rule matching `giant` swallowed the bird before anything could recognise it. It now matches `kiwi` first and gets its own icon.
 

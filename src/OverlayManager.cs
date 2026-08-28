@@ -95,6 +95,9 @@ namespace LCBridgeOverlay
         // --- таймер ---
         private float _timerSec;
         private bool _timerRunning;
+        /// <summary>Для сетевой синхронизации: хост раздаёт свой таймер всем.</summary>
+        public float TimerSeconds => _timerSec;
+        public bool TimerRunning => _timerRunning;
         private bool? _prevWantRun;   // фронт для авто-таймера (onMoon && !loading)
         private int? _prevResetToken;
         private int? _lastQuotaIndex;
@@ -152,7 +155,14 @@ namespace LCBridgeOverlay
 
             HandleInput();
 
-            if (_timerRunning) _timerSec += Time.unscaledDeltaTime;
+            // У клиента таймер НЕ идёт сам: берём ход от хоста, иначе у каждого
+            // игрока он начинался со своей посадки и расходился.
+            if (OverlayNet.HasHostState)
+            {
+                _timerSec = OverlayNet.HostTimerSec;
+                _timerRunning = OverlayNet.HostTimerRunning;
+            }
+            else if (_timerRunning) _timerSec += Time.unscaledDeltaTime;
 
             if (!_fontsResolved)
             {
@@ -282,10 +292,10 @@ namespace LCBridgeOverlay
                 bool wantRun = p.onMoon && !p.loading;
                 if (wantRun != _prevWantRun)
                 {
-                    _timerRunning = wantRun;
+                    if (!OverlayNet.HasHostState) _timerRunning = wantRun;
                     _prevWantRun = wantRun;
                 }
-                if (!p.onMoon) _timerRunning = false; // орбита/корабль/меню — стоп
+                if (!p.onMoon && !OverlayNet.HasHostState) _timerRunning = false; // орбита/корабль/меню — стоп
             }
 
             // читаем ивенты напрямую из мода, минуя мост, — значит и ворота

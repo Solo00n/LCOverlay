@@ -14,15 +14,18 @@ namespace LCBridgeOverlay
     [HarmonyPatch(typeof(DepositItemsDesk), "SellAndDisplayItemProfits")]
     internal static class Patch_DepositItemsDesk_Sell
     {
+        // ИМЕНА ПАРАМЕТРОВ ДОЛЖНЫ СОВПАДАТЬ С ИГРОЙ: сигнатура здесь
+        // (int profit, int newGroupCredits). Раньше второй параметр звался total,
+        // Harmony не находил его и валил PatchAll целиком — вместе со ВСЕМИ
+        // остальными патчами мода.
         [HarmonyPrefix]
-        public static void Prefix(int profit, int total)
+        public static void Prefix(int profit)
         {
             try
             {
                 // profit — сколько денег принесла партия (уже с учётом ставки компании)
                 if (profit > 0) RunStats.AddSold(profit);
-                else if (total > 0) RunStats.AddSold(total);
-                Plugin.Log?.LogInfo($"[sold] продано на {(profit > 0 ? profit : total)} (всего за забег: {RunStats.SoldTotal})");
+                Plugin.Log?.LogInfo($"[sold] продано на {profit} (всего за забег: {RunStats.SoldTotal})");
             }
             catch { }
         }
@@ -121,7 +124,10 @@ namespace LCBridgeOverlay
             {
                 LastRunJson = RunStats.ToJson();
                 ShowLastRun = true;
-                Plugin.Log?.LogInfo("[run] забег завершён — аналитика сохранена до следующего вылета.");
+                // забег кончился (eject/банкротство) — таймер обнуляем СРАЗУ, не дожидаясь
+                // рычага; аналитика уже снята выше, так что показывать её это не мешает
+                GameState.BumpResetToken();
+                Plugin.Log?.LogInfo("[run] забег завершён — аналитика сохранена, таймер сброшен.");
             }
             catch { }
         }

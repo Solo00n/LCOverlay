@@ -74,7 +74,10 @@ namespace LCBridgeOverlay
             bool onMoon = GameState.GetOnMoon();
             bool loading = GameState.GetLoading();
             bool inGame = GameState.GetInGame();
-            int resetToken = GameState.GetResetToken();
+            // токен сброса тоже общий: иначе таймер обнулялся у всех вразнобой
+            int resetToken = OverlayNet.HasHostState
+                ? OverlayNet.HostResetToken
+                : GameState.GetResetToken();
             int levelScrap = Gate.LevelScrap ? GameState.GetLevelScrap() : 0;
             // v1.2+: данные для внутриигрового оверлея (LCBridgeOverlay)
             var (quotaValue, quotaFulfilled) = GameState.GetQuotaProgress();

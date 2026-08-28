@@ -22,6 +22,9 @@ namespace LCBridgeOverlay
         private static int _resetToken = 0;
         public static int GetResetToken() => _resetToken;
 
+        /// <summary>Обнулить таймер оверлея, не трогая статистику забега.</summary>
+        public static void BumpResetToken() => _resetToken++;
+
         public static void RegisterDeath(PlayerControllerB p, string killer = null)
         {
             // считаем смерть КАЖДОГО игрока, но защищаемся от повторных вызовов KillPlayer
@@ -547,9 +550,20 @@ namespace LCBridgeOverlay
                     }
                 }
 
-                // ТА ЖЕ ловушка, что была у плашки ивентов: currentEvents заполняется
-                // только у ХОСТА, и у клиентов это поле пустое. Берём клиентский
-                // источник (панель BCME, которая синхронизируется всем).
+                // currentEvents заполняется только у ХОСТА. Самый надёжный источник
+                // для клиента — имена, которые хост шлёт нам сам (панель BCME их не
+                // содержит: там таблица шансов, а не список ивентов).
+                if (names.Count == 0 && OverlayNet.HasHostState &&
+                    !string.IsNullOrEmpty(OverlayNet.HostEvents))
+                {
+                    foreach (var part in OverlayNet.HostEvents.Split(','))
+                    {
+                        string t = part.Trim();
+                        if (t.Length > 0) names.Add(t);
+                    }
+                }
+
+                // запасной путь: разбор панели BCME
                 if (names.Count == 0)
                 {
                     foreach (var e in BcmeClientEvents.Get())

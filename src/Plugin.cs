@@ -19,7 +19,7 @@ namespace LCBridgeOverlay
     {
         public const string GUID = "gdlp.lcbridgeoverlay";
         public const string NAME = "LCBridgeOverlay";
-        public const string VERSION = "1.6.1";
+        public const string VERSION = "1.6.2";
 
         public static Plugin Instance { get; private set; }
         public static ManualLogSource Log { get; private set; }
@@ -50,7 +50,25 @@ namespace LCBridgeOverlay
             try
             {
                 _harmony = new Harmony(GUID);
-                _harmony.PatchAll(System.Reflection.Assembly.GetExecutingAssembly());
+                // ПОШТУЧНО, а не PatchAll: одна несовпавшая сигнатура роняла
+                // весь PatchAll, и мод оставался вообще без патчей — именно так
+                // пропала вся сетевая часть, ивенты и вспышки урона.
+                int ok = 0, bad = 0;
+                foreach (var t in System.Reflection.Assembly.GetExecutingAssembly().GetTypes())
+                {
+                    try
+                    {
+                        if (t.GetCustomAttributes(typeof(HarmonyPatch), true).Length == 0) continue;
+                        _harmony.CreateClassProcessor(t).Patch();
+                        ok++;
+                    }
+                    catch (Exception pe)
+                    {
+                        bad++;
+                        Log.LogError($"патч {t.Name} не применён: {pe.Message}");
+                    }
+                }
+                Log.LogInfo($"Harmony: применено классов {ok}, с ошибкой {bad}.");
                 Log.LogInfo("Harmony-РїР°С‚С‡Рё РїСЂРёРјРµРЅРµРЅС‹.");
             }
             catch (Exception e)
