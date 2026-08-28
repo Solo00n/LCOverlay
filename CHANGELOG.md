@@ -1,5 +1,8 @@
 # Changelog — LCBridgeOverlay
 
+## 1.6.1
+- **The Giant Sapsucker was drawn as a Forest Keeper.** The game does not store the pretty bestiary names: the sapsucker's internal name is `GiantKiwi` and the Forest Keeper's is `ForestGiant`, so the rule matching `giant` swallowed the bird before anything could recognise it. It now matches `kiwi` first and gets its own icon.
+
 ## 1.6.0
 - **The host now decides what the lobby sees.** Lethal Company does not allow client-side mods that hand one player a significant advantage, and this overlay was doing exactly that: anyone could install it alone and read the level's monsters, traps and loot. Every panel that reveals something the vanilla game keeps from you is now granted by the host, for the whole lobby at once, over a small networked handshake. Join a host who does not have the mod and those panels stay dark; the ticker says so, rather than leaving you to wonder whether the mod broke. Singleplayer is unaffected, since you are always your own host there.
 - Host-granted panels: monsters, traps, the door radar and its radius, the apparatus indicator, events, the end-of-day countdown, the loot multiplier, level loot totals and the item breakdown, and the interior type. A local toggle can still switch any of them off for yourself, but it can no longer switch on what the host has not allowed, and the host can force "scanned monsters only" on everyone.

@@ -512,7 +512,11 @@ namespace LCBridgeOverlay
             if (n.Contains("hornet") || n.Contains("butlerbees")) return "maskhornets";
             if (n.Contains("butler")) return "butler";
             if (n.Contains("mouthdog") || n.Contains("eyeless")) return "eyelessdog";
-            if (n.Contains("sapsucker")) return "sapsucker";
+            // ВАЖЕН ПОРЯДОК: у гигантского сапсакера enemyName = "GiantKiwi",
+            // и без явной проверки на kiwi его подбирает правило giant ниже,
+            // из-за чего птица показывалась иконкой лесника (у того enemyName
+            // = "ForestGiant" — красивых бестиарных имён в enemyName нет вообще).
+            if (n.Contains("sapsucker") || n.Contains("kiwi")) return "sapsucker";
             if (n.Contains("forest") || n.Contains("giant")) return "forestkeeper";
             if (n.Contains("leviathan")) return "leviathan";
             if (n.Contains("baboon")) return "baboonhawk";
