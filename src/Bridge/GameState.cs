@@ -74,6 +74,9 @@ namespace LCBridgeOverlay
         {
             _deaths = 0;
             _deadThisRound.Clear();
+            _baselineSet = false;   // отметку командных смертей возьмём заново
+            _deathsShown = 0;
+            _deathsPending = 0;
             _resetToken++; // сигнал новой игры → оверлей сбросит таймер
             // обнуляем всю статистику забега
             _killerCounts.Clear();
@@ -87,6 +90,13 @@ namespace LCBridgeOverlay
         // смерти, которых локальный игрок не видел. Иначе — старый локальный подсчёт.
         // При DeathsOnlyOnLeave показываем «замороженное» значение, обновляя его
         // только при отлёте с луны.
+        // gameStats.deaths — это счётчик смертей ЗА ВЕСЬ СЕЙВ (он грузится из файла
+        // сохранения и живёт между запусками). Показывать его как есть нельзя: он
+        // не обнулялся ни при новом забеге, ни при перезапуске игры. Запоминаем
+        // значение на старте забега и показываем разницу.
+        private static int _deathsBaseline;
+        private static bool _baselineSet;
+
         private static int _deathsShown;      // то, что реально отдаём наружу
         private static int _deathsPending;    // последнее известное значение
         private static bool _wasOnMoonDeaths;
@@ -100,7 +110,14 @@ namespace LCBridgeOverlay
                 {
                     var sor = StartOfRound.Instance;
                     if (sor != null && sor.gameStats != null)
-                        live = Mathf.Max(sor.gameStats.deaths, 0);
+                    {
+                        int total = Mathf.Max(sor.gameStats.deaths, 0);
+                        if (!_baselineSet) { _deathsBaseline = total; _baselineSet = true; }
+                        // если счётчик сейва вдруг уехал вниз (загрузили другой сейв) —
+                        // переставляем отметку, иначе получили бы отрицательное
+                        if (total < _deathsBaseline) _deathsBaseline = total;
+                        live = total - _deathsBaseline;
+                    }
                 }
                 _deathsPending = live;
 
@@ -362,6 +379,26 @@ namespace LCBridgeOverlay
         private static Type _grabTurret, _grabMine;
         private static bool _grabSearched;
 
+        /// <summary>
+        /// Ловушка стоит на корабле — значит она СВОЯ, поставленная игроками
+        /// (мод DefendFacility продаёт мини-турели, их таскают на корабль).
+        /// Считать её угрозой в оверлее незачем.
+        /// </summary>
+        private static bool OnShip(Vector3 p)
+        {
+            try
+            {
+                var sor = StartOfRound.Instance;
+                if (sor == null) return false;
+                // чуть приподнимаем точку: турель стоит на полу, ровно по границе бокса
+                var probe = p + Vector3.up * 0.25f;
+                if (sor.shipBounds != null && sor.shipBounds.bounds.Contains(probe)) return true;
+                if (sor.shipInnerRoomBounds != null && sor.shipInnerRoomBounds.bounds.Contains(probe)) return true;
+            }
+            catch { }
+            return false;
+        }
+
         public static List<string> GetTraps()
         {
             var result = new List<string>();
@@ -379,7 +416,13 @@ namespace LCBridgeOverlay
                     try
                     {
                         var arr = UnityEngine.Object.FindObjectsOfType<T>();
-                        if (arr != null) foreach (var o in arr) if (o != null) Add(label, o.transform.position);
+                        if (arr == null) return;
+                        foreach (var o in arr)
+                        {
+                            if (o == null) continue;
+                            if (OnShip(o.transform.position)) continue;   // своя, на корабле
+                            Add(label, o.transform.position);
+                        }
                     }
                     catch { }
                 }
@@ -397,6 +440,8 @@ namespace LCBridgeOverlay
                         {
                             var g = o as GrabbableObject;
                             if (g == null || g.isHeld || g.isHeldByEnemy) continue; // в руках — не ловушка
+                            if (g.isInShipRoom) continue;                           // принесли на корабль
+                            if (OnShip(g.transform.position)) continue;
                             Add(label, g.transform.position);
                         }
                     }

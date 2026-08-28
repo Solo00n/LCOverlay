@@ -30,7 +30,7 @@ namespace LCBridgeOverlay
         private const string HelloMsg = "LCBridgeOverlay_hello";
         private const string PolicyMsg = "LCBridgeOverlay_policy";
         private const string StateMsg  = "LCBridgeOverlay_state";   // таймер/ивенты от хоста
-        private const byte Wire = 1;        // версия протокола
+        private const byte Wire = 2;        // версия протокола (2: в состоянии появились смерти)
         private const float WaitSeconds = 8f;   // сколько ждём ответ хоста
         private const float RetrySeconds = 10f; // и как часто пробуем снова
 
@@ -127,6 +127,7 @@ namespace LCBridgeOverlay
         private static float _hostTimerAt;      // когда пакет получен, для плавного хода
         private static int _hostResetToken;
         private static string _hostEvents;
+        private static int _hostDeaths;
         private static float _hostStateAt = -999f;
         private static NetworkManager _registeredOn;
 
@@ -141,6 +142,7 @@ namespace LCBridgeOverlay
         public static bool HostTimerRunning => _hostTimerRunning;
         public static int HostResetToken => _hostResetToken;
         public static string HostEvents => _hostEvents;
+        public static int HostDeaths => _hostDeaths;
 
         private static NetworkManager NM => NetworkManager.Singleton;
 
@@ -358,6 +360,7 @@ namespace LCBridgeOverlay
                 var om = OverlayManager.Instance;
                 if (om != null) { sec = om.TimerSeconds; running = om.TimerRunning; }
 
+                int deaths = GameState.GetDeaths();
                 string ev = GameState.GetBrutalEvent() ?? "";
                 if (ev.Length > 900) ev = ev.Substring(0, 900);
 
@@ -370,6 +373,7 @@ namespace LCBridgeOverlay
                     w.WriteValueSafe(flags);
                     w.WriteValueSafe(sec);
                     w.WriteValueSafe(token);
+                    w.WriteValueSafe(deaths);
                     w.WriteValueSafe(ev);
                     foreach (var id in nm.ConnectedClientsIds)
                     {
@@ -395,12 +399,14 @@ namespace LCBridgeOverlay
                 reader.ReadValueSafe(out byte flags);
                 reader.ReadValueSafe(out float sec);
                 reader.ReadValueSafe(out int token);
+                reader.ReadValueSafe(out int deaths);
                 reader.ReadValueSafe(out string ev);
 
                 _hostTimerRunning = (flags & 1) != 0;
                 _hostTimerSec = sec;
                 _hostTimerAt = Time.unscaledTime;
                 _hostResetToken = token;
+                _hostDeaths = deaths;
                 _hostEvents = string.IsNullOrEmpty(ev) ? null : ev;
                 _hostStateAt = Time.unscaledTime;
 

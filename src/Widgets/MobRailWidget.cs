@@ -55,6 +55,7 @@ namespace LCBridgeOverlay
             public bool Shaking;              // сейчас трясётся
             public bool HomeSet;              // HomePos уже запомнена
             public float WindSmooth;          // сглаженный уровень завода (пакет идёт раз в секунду)
+            public float NearSmooth;          // сглаженная близость: 0 далеко … 1 вплотную
         }
 
         /// <summary>Одна версия монстра для показа в общей иконке.</summary>
@@ -132,28 +133,37 @@ namespace LCBridgeOverlay
                 // уровень приходит раз в секунду ступеньками — сглаживаем, чтобы
                 // тряска нарастала плавно, а не рывками
                 s.WindSmooth = Mathf.MoveTowards(s.WindSmooth, WindFor(s.GroupKey), dt / 1.2f);
+                // Близость монстра: дистанция приходит раз в секунду, поэтому её тоже
+                // сглаживаем — иначе тряска дёргалась бы ступеньками.
+                s.NearSmooth = Mathf.MoveTowards(s.NearSmooth, NearFor(s.GroupKey), dt / 0.8f);
+
                 float wind = s.WindSmooth;
+                float prox = s.NearSmooth;
                 float amp = s.Amp, speed = s.Speed;
                 float shakeX = 0f, shakeY = 0f;
-                if (wind > 0f)
+
+                // Оба источника нервозности живут по своим кривым, а берём сильнейший:
+                // джестер к хлопку разгоняется резче, чем просто подошедший вплотную монстр.
+                float kWind = wind * wind;          // квадрат — разгон к концу завода
+                float kProx = prox * prox * prox;   // куб — вдали почти не заметно, вплотную колотит
+                bool agitated = wind > 0.001f || prox > 0.001f;
+                if (agitated)
                 {
-                    float k = wind * wind;                       // к концу разгоняется резче
-                    amp = Mathf.Lerp(s.Amp, s.Amp + 14f, k);     // размах качания
-                    speed = Mathf.Lerp(s.Speed, s.Speed + 22f, k); // частота дрожи
-                    // мелкая дрожь по позиции — «вот-вот выскочит»
-                    float j = Mathf.Lerp(0f, 3.5f, k);
+                    amp = s.Amp + Mathf.Max(14f * kWind, 9f * kProx);
+                    speed = s.Speed + Mathf.Max(22f * kWind, 15f * kProx);
+                    float j = Mathf.Max(3.5f * kWind, 2.4f * kProx);
                     shakeX = (Mathf.PerlinNoise(t * 26f + s.Phase, 0f) - 0.5f) * 2f * j;
                     shakeY = (Mathf.PerlinNoise(0f, t * 26f + s.Phase) - 0.5f) * 2f * j;
-                    sc *= 1f + 0.06f * k * Mathf.Abs(Mathf.Sin(t * 18f));  // лёгкое «дыхание»
+                    sc *= 1f + 0.06f * Mathf.Max(kWind, kProx) * Mathf.Abs(Mathf.Sin(t * 18f));
                 }
 
                 s.Rt.localScale = new Vector3(sc, sc * s.FlipY, 1f);
                 s.Rt.localRotation = Quaternion.Euler(0f, 0f, Mathf.Sin((t + s.Phase) * speed) * amp);
-                if (wind > 0f)
+                if (agitated)
                     s.Rt.anchoredPosition = s.HomePos + new Vector2(shakeX, shakeY);
                 else if (s.Shaking)
-                    s.Rt.anchoredPosition = s.HomePos;            // вернуть на место после хлопка
-                s.Shaking = wind > 0f;
+                    s.Rt.anchoredPosition = s.HomePos;            // вернуть на место, когда успокоился
+                s.Shaking = agitated;
 
                 // какая версия монстра сейчас в этой единственной иконке
                 UpdateVariant(s, dt);
@@ -172,6 +182,15 @@ namespace LCBridgeOverlay
                     s.Img.color = c;
                 }
             }
+        }
+
+        // Насколько «нервно» трясти иконку: 0 — монстр далеко, 1 — вплотную.
+        private float NearFor(string groupKey)
+        {
+            if (!ConfigSettings.ProximityShake.Value || string.IsNullOrEmpty(groupKey)) return 0f;
+            if (!_distByGroup.TryGetValue(groupKey, out float d)) return 0f;
+            const float calm = 40f, panic = 4f;
+            return Mathf.InverseLerp(calm, panic, d);   // далеко→0, вплотную→1
         }
 
         // near=полностью, far=почти прозрачно. Без ProximityFade — всегда 1.

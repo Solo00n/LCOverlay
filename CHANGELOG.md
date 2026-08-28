@@ -1,5 +1,10 @@
 # Changelog — LCBridgeOverlay
 
+## 1.6.3
+- **The death counter is the host's, and it resets.** It was reading the save file's lifetime death total, which is loaded from disk and never cleared, so it survived restarts and counted deaths from previous runs. The count is now measured from the start of the current run and broadcast by the host, so everyone sees the same number and a new run starts at zero.
+- **Turrets on the ship are no longer counted as hazards.** Mini turrets bought from Defend Facility and carried aboard were showing up in the trap panel alongside the ones trying to kill you. Anything standing inside the ship is treated as yours and left out.
+- **Monster icons shake harder the closer the creature is.** Far away it is barely a drift; up close it turns into a nervous jitter. The curve is cubic, so the effect stays out of the way until something is genuinely near. Switch it off with `ProximityShake`.
+
 ## 1.6.2
 - **None of the mod's patches were being applied.** One patch named a parameter that does not exist in the game's method, which made Harmony abort the whole `PatchAll` — so every other patch in the mod, including all of the networking added in 1.6.0, silently never ran. Both players' logs showed it. Patches are now applied one class at a time, so a single bad signature can no longer take the rest down with it, and each failure is named in the log.
 - **The run timer is the same for everyone.** It used to count locally from each player's own landing, so it drifted between players. The host now broadcasts it, along with the reset signal, so it starts, runs and resets identically for the whole lobby.

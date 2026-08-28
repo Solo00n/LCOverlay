@@ -55,7 +55,10 @@ namespace LCBridgeOverlay
         private string BuildJson()
         {
             var (alive, total) = GameState.GetCrew();
-            int deaths = GameState.GetDeaths();
+            // смерти считает хост — иначе у каждого свой счёт
+            int deaths = OverlayNet.HasHostState
+                ? OverlayNet.HostDeaths
+                : GameState.GetDeaths();
             int hp = GameState.GetLocalHealth();
             string moon = GameState.GetMoonName();
 

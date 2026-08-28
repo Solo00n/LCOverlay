@@ -48,6 +48,7 @@ namespace LCBridgeOverlay
         public static ConfigEntry<bool> ScaleMonstersByCount; // эксперимент: без цифр, размер/тряска по кол-ву
         public static ConfigEntry<bool> RequireScanToShow;    // монстр виден только после сканирования
         public static ConfigEntry<bool> ProximityFade;        // чем ближе монстр, тем менее прозрачна иконка
+        public static ConfigEntry<bool> ProximityShake;       // чем ближе монстр, тем нервнее трясётся иконка
         public static ConfigEntry<bool> TeamDeaths;           // считать смерти всей команды
         public static ConfigEntry<bool> DeathsOnlyOnLeave;    // засчитывать смерти только при отлёте с луны
         public static ConfigEntry<bool> HideOnPopups;         // прятать оверлей на игровых окнах
@@ -202,6 +203,9 @@ namespace LCBridgeOverlay
                 "Инверснутые монстры (мод DeviantEnemies) показываются перевёрнутой вверх ногами иконкой.");
             JesterWindUpShake = cfg.Bind("Behavior", "JesterWindUpShake", true,
                 "Пока джестер заводится, его иконка трясётся всё сильнее — и в момент хлопка сменяется на иконку 2-й фазы.");
+
+            ProximityShake = cfg.Bind("Behavior", "ProximityShake", true,
+                "Чем ближе монстр, тем сильнее дрожит его иконка: издалека — еле заметное покачивание, вплотную — нервная тряска.");
 
             // [WebSocket]
             WebSocketEnabled = cfg.Bind("WebSocket", "Enabled", false,
