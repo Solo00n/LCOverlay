@@ -95,19 +95,64 @@ namespace LCBridgeOverlay
         private static bool _scanFieldSearched;
         private static int _scanDiag;
 
+        // GoodItemScan полностью заменяет ванильное сканирование
+        private static bool _gisSearched;
+        private static System.Reflection.FieldInfo _gisScannerField, _gisActiveNodes;
+        private static System.Reflection.PropertyInfo _gisNodeProp;
+
         /// <summary>
-        /// Прямой опрос сканера: HUDManager.scanNodes держит узлы, которые ПРЯМО СЕЙЧАС
-        /// показаны игроку.
+        /// Что игрок просветил сканером ПРЯМО СЕЙЧАС.
         ///
-        /// Два важных момента, на которых это ломалось раньше:
-        ///  1) патч на AssignNodeToUIElement не срабатывал ни разу — в сборке с другими
-        ///     модами до него не доходит управление, поэтому перехватывать путь бесполезно,
-        ///     надо читать результат;
-        ///  2) scanNodes — ПРИВАТНОЕ поле. Пакет игры публицирован только для компиляции,
-        ///     а в рантайме обращение к приватному полю чужой сборки падает, и падение
-        ///     глушил catch. Поэтому читаем строго через рефлексию.
+        /// История граблей, чтобы не наступить снова:
+        ///  1) патч на HUDManager.AssignNodeToUIElement не срабатывал — до него не
+        ///     доходит управление;
+        ///  2) чтение HUDManager.scanNodes падало: поле приватное, а публицирован
+        ///     только эталон для компиляции. Теперь через рефлексию;
+        ///  3) но и этого мало: мод GoodItemScan ВЫЧИЩАЕТ ванильные scanNodes и
+        ///     scanElements и ведёт свой список. Поэтому спрашиваем оба источника.
         /// </summary>
         private static void PollScanner()
+        {
+            var nodes = new List<ScanNodeProperties>();
+            CollectVanilla(nodes);
+            CollectGoodItemScan(nodes);
+            if (nodes.Count == 0) return;
+
+            if (_scanDiag < 3)
+            {
+                _scanDiag++;
+                Plugin.Log?.LogInfo($"[scan] сканер показывает узлов: {nodes.Count}");
+            }
+
+            foreach (var node in nodes)
+            {
+                if (node == null) continue;
+
+                var ai = node.GetComponentInParent<EnemyAI>();
+                if (ai != null)
+                {
+                    if (_scanned.Add(ai.GetInstanceID()))
+                    {
+                        ScanRegistry.MarkLocal(ai);
+                        Plugin.Log?.LogInfo($"[scan] отсканирован {ai.GetType().Name} (\"{node.headerText}\").");
+                    }
+                    continue;
+                }
+
+                // ловушки: в режиме скана они тоже открываются сканером
+                Component trap = node.GetComponentInParent<Turret>();
+                if (trap == null) trap = node.GetComponentInParent<Landmine>();
+                if (trap == null) trap = node.GetComponentInParent<SpikeRoofTrap>();
+                if (trap != null && !ScanRegistry.HasFor(trap))
+                {
+                    ScanRegistry.MarkLocal(trap);
+                    Plugin.Log?.LogInfo($"[scan] отсканирована ловушка {trap.GetType().Name}.");
+                }
+            }
+        }
+
+        /// <summary>Ванильный сканер: HUDManager.scanNodes (приватное поле).</summary>
+        private static void CollectVanilla(List<ScanNodeProperties> outp)
         {
             try
             {
@@ -120,54 +165,72 @@ namespace LCBridgeOverlay
                     _scanNodesField = typeof(HUDManager).GetField("scanNodes",
                         System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public |
                         System.Reflection.BindingFlags.Instance);
-                    Plugin.Log?.LogInfo($"[scan] поле scanNodes: {(_scanNodesField != null ? "найдено" : "НЕ НАЙДЕНО — скан работать не будет")}");
+                    Plugin.Log?.LogInfo($"[scan] ванильное поле scanNodes: {(_scanNodesField != null ? "найдено" : "НЕ НАЙДЕНО")}");
                 }
                 if (_scanNodesField == null) return;
 
                 var dict = _scanNodesField.GetValue(hud) as System.Collections.IDictionary;
                 if (dict == null || dict.Count == 0) return;
+                foreach (var v in dict.Values) if (v is ScanNodeProperties n) outp.Add(n);
+            }
+            catch (Exception e)
+            {
+                if (_scanDiag < 6) { _scanDiag++; Plugin.Log?.LogWarning($"[scan] ванильный сканер: {e.GetType().Name}: {e.Message}"); }
+            }
+        }
 
-                if (_scanDiag < 3)
+        /// <summary>
+        /// GoodItemScan: GoodItemScan.scanner.activeNodes — набор ScannedNode,
+        /// у каждого свойство ScanNodeProperties. Мягкая зависимость, только рефлексия.
+        /// </summary>
+        private static void CollectGoodItemScan(List<ScanNodeProperties> outp)
+        {
+            try
+            {
+                if (!_gisSearched)
                 {
-                    _scanDiag++;
-                    Plugin.Log?.LogInfo($"[scan] сканер показывает узлов: {dict.Count}");
+                    _gisSearched = true;
+                    const System.Reflection.BindingFlags SF =
+                        System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic |
+                        System.Reflection.BindingFlags.Static;
+                    const System.Reflection.BindingFlags IF =
+                        System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic |
+                        System.Reflection.BindingFlags.Instance;
+
+                    var plug = GameState.FindTypeByFullName("GoodItemScan.GoodItemScan")
+                            ?? GameState.FindTypeFuzzy("GoodItemScan", new[] { "GoodItemScan" });
+                    if (plug != null) _gisScannerField = plug.GetField("scanner", SF);
+
+                    var scannerType = GameState.FindTypeByFullName("GoodItemScan.Scanner")
+                                   ?? GameState.FindTypeFuzzy("GoodItemScan", new[] { "Scanner" });
+                    if (scannerType != null) _gisActiveNodes = scannerType.GetField("activeNodes", IF);
+
+                    var nodeType = GameState.FindTypeByFullName("GoodItemScan.ScannedNode")
+                                ?? GameState.FindTypeFuzzy("GoodItemScan", new[] { "ScannedNode" });
+                    if (nodeType != null) _gisNodeProp = nodeType.GetProperty("ScanNodeProperties", IF);
+
+                    if (_gisScannerField != null)
+                        Plugin.Log?.LogInfo($"[scan] GoodItemScan найден: scanner={(_gisScannerField != null ? "OK" : "нет")}, " +
+                                            $"activeNodes={(_gisActiveNodes != null ? "OK" : "нет")}, " +
+                                            $"ScanNodeProperties={(_gisNodeProp != null ? "OK" : "нет")}");
                 }
 
-                foreach (var v in dict.Values)
+                if (_gisScannerField == null || _gisActiveNodes == null || _gisNodeProp == null) return;
+
+                var scanner = _gisScannerField.GetValue(null);
+                if (scanner == null) return;
+                var set = _gisActiveNodes.GetValue(scanner) as System.Collections.IEnumerable;
+                if (set == null) return;
+
+                foreach (var sn in set)
                 {
-                    var node = v as ScanNodeProperties;
-                    if (node == null) continue;
-
-                    var ai = node.GetComponentInParent<EnemyAI>();
-                    if (ai != null)
-                    {
-                        if (_scanned.Add(ai.GetInstanceID()))
-                        {
-                            ScanRegistry.MarkLocal(ai);
-                            Plugin.Log?.LogInfo($"[scan] отсканирован {ai.GetType().Name} (\"{node.headerText}\").");
-                        }
-                        continue;
-                    }
-
-                    // ловушки: в режиме скана они тоже открываются сканером
-                    Component trap = node.GetComponentInParent<Turret>();
-                    if (trap == null) trap = node.GetComponentInParent<Landmine>();
-                    if (trap == null) trap = node.GetComponentInParent<SpikeRoofTrap>();
-                    if (trap != null && !ScanRegistry.HasFor(trap))
-                    {
-                        ScanRegistry.MarkLocal(trap);
-                        Plugin.Log?.LogInfo($"[scan] отсканирована ловушка {trap.GetType().Name}.");
-                    }
+                    if (sn == null) continue;
+                    if (_gisNodeProp.GetValue(sn) is ScanNodeProperties n) outp.Add(n);
                 }
             }
             catch (Exception e)
             {
-                // раньше здесь стоял немой catch, и поломка была невидима — больше нет
-                if (_scanDiag < 6)
-                {
-                    _scanDiag++;
-                    Plugin.Log?.LogWarning($"[scan] опрос сканера не удался: {e.GetType().Name}: {e.Message}");
-                }
+                if (_scanDiag < 6) { _scanDiag++; Plugin.Log?.LogWarning($"[scan] GoodItemScan: {e.GetType().Name}: {e.Message}"); }
             }
         }
 

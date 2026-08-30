@@ -1,6 +1,6 @@
 {
   "name": "LCBridgeOverlay",
-  "version_number": "1.8.3",
+  "version_number": "1.8.4",
   "website_url": "https://github.com/Solo00n/LCOverlay",
   "description": "In-game HUD overlay for Lethal Company: quota and deadline, moon and weather, monsters, traps and events. The host decides what the lobby sees, so it grants no solo advantage.",
   "dependencies": [

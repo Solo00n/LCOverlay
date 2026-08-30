@@ -1,5 +1,9 @@
 # Changelog — LCBridgeOverlay
 
+## 1.8.4
+- **Scanning works alongside Good Item Scan.** That mod replaces the game's scanner outright — it empties the vanilla node list and keeps its own — so watching the vanilla one could never have seen anything, which is why the previous two fixes changed nothing. Both sources are read now, so scanning registers whether or not it is installed.
+- **In scan mode the overlay reacts to finding a creature, not to it spawning.** The data packet lists every creature on the level, so the panel was waking for things the player had not yet seen. Only scanned ones count now. Traps are unaffected, since those are already filtered before they reach the packet.
+
 ## 1.8.3
 - **Scanning finally registers.** The scanner's node list is a private field on the game's HUD. The build compiles against a publicised copy of the game, so reading it directly looked fine, but at runtime that throws — and the exception was being swallowed, which is why two attempts in a row produced no effect and left no trace in the log. It is read through reflection now, the log says whether the field was found, and a failure is reported instead of hidden.
 - **The daily scan reset no longer fires twice.** The game raises its start-of-round event twice per landing, so the second one could wipe scans made moments earlier. It now clears once per day number, and re-entering a save clears properly again.

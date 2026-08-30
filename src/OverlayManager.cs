@@ -469,7 +469,7 @@ namespace LCBridgeOverlay
             if (!ConfigSettings.NotifyMode.Value || _notify == null) { _sigReady = false; return; }
             if (p == null) return;
 
-            string mon = NewsSig(p.monstersOutside) + "|" + NewsSig(p.monstersInside);
+            string mon = NewsSig(p.monstersOutside, true) + "|" + NewsSig(p.monstersInside, true);
             string trap = NewsSig(p.traps);
             string ev = p.brutalEvent ?? "";
             string moon = (p.moonName ?? "") + "/" + (p.weatherFull ?? "");
@@ -501,14 +501,24 @@ namespace LCBridgeOverlay
             if (p.alive != _sigAlive) { _sigAlive = p.alive; _notify.Ping(null); }
         }
 
-        /// <summary>Имена без дистанций и мимолётных состояний — только состав.</summary>
-        private static string NewsSig(string[] arr)
+        /// <summary>
+        /// Имена без дистанций и мимолётных состояний — только состав.
+        ///
+        /// В режиме скана считаем ТОЛЬКО просканированное: пакет содержит всех
+        /// монстров уровня, поэтому иначе оверлей вспыхивал бы на спавне существа,
+        /// которого игрок ещё даже не видел, — а должен на его обнаружении.
+        /// </summary>
+        private static string NewsSig(string[] arr, bool monsters = false)
         {
             if (arr == null || arr.Length == 0) return "";
+            // ловушки в пакет и так попадают уже отфильтрованными по скану (см. GetTraps)
+            // и токена +Scanned не несут — фильтровать их здесь нельзя
+            bool onlyScanned = monsters && Gate.RequireScan;
             var sb = new StringBuilder(64);
             foreach (var raw in arr)
             {
                 if (string.IsNullOrEmpty(raw)) continue;
+                if (onlyScanned && raw.IndexOf("+Scanned", StringComparison.OrdinalIgnoreCase) < 0) continue;
                 string t = System.Text.RegularExpressions.Regex.Replace(
                     raw, @"\s*@\d+|\+hurt|\+w\d|\+scanned", "",
                     System.Text.RegularExpressions.RegexOptions.IgnoreCase);
