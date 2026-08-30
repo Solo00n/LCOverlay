@@ -56,6 +56,8 @@ namespace LCBridgeOverlay
             public bool HomeSet;              // HomePos уже запомнена
             public float WindSmooth;          // сглаженный уровень завода (пакет идёт раз в секунду)
             public float NearSmooth;          // сглаженная близость: 0 далеко … 1 вплотную
+            public float PacketT = -1f;       // >=0 — пока показываем «папку» вместо иконки
+            public Sprite RealIcon;           // настоящая иконка, ждёт своей очереди
         }
 
         /// <summary>Одна версия монстра для показа в общей иконке.</summary>
@@ -157,9 +159,29 @@ namespace LCBridgeOverlay
                     sc *= 1f + 0.06f * Mathf.Max(kWind, kProx) * Mathf.Abs(Mathf.Sin(t * 18f));
                 }
 
+                // фаза «папки»: дрожит на месте будущей иконки, потом сменяется ею
+                if (s.PacketT >= 0f)
+                {
+                    s.PacketT += dt;
+                    const float hold = 0.7f, swap = 0.25f;
+                    if (s.PacketT >= hold + swap)
+                    {
+                        s.PacketT = -1f;
+                        if (s.RealIcon != null && s.Img != null) s.Img.sprite = s.RealIcon;
+                        s.RealIcon = null;
+                    }
+                    else if (s.PacketT >= hold && s.RealIcon != null && s.Img != null)
+                    {
+                        s.Img.sprite = s.RealIcon;   // подмена под вспышку растворения
+                        s.RealIcon = null;
+                    }
+                }
+
                 s.Rt.localScale = new Vector3(sc, sc * s.FlipY, 1f);
                 s.Rt.localRotation = Quaternion.Euler(0f, 0f, Mathf.Sin((t + s.Phase) * speed) * amp);
-                if (agitated)
+                if (s.PacketT >= 0f)
+                    s.Rt.anchoredPosition = s.HomePos + NotifyWidget.PixelJitter(s.Phase, 2f);
+                else if (agitated)
                     s.Rt.anchoredPosition = s.HomePos + new Vector2(shakeX, shakeY);
                 else if (s.Shaking)
                     s.Rt.anchoredPosition = s.HomePos;            // вернуть на место, когда успокоился
@@ -179,6 +201,12 @@ namespace LCBridgeOverlay
 
                     var c = Color.Lerp(s.BaseColor, HurtColor, s.HurtFlash);
                     c.a = s.Alpha * s.Appear * s.SwapFade;   // SwapFade — пересменка версий
+                    // пока это «папка» — она цвета оверлея и мигает как плохой сигнал
+                    if (s.PacketT >= 0f)
+                    {
+                        var acc = _mgr != null ? _mgr.Style.Frame : Color.white;
+                        c = new Color(acc.r, acc.g, acc.b, c.a * NotifyWidget.SignalDropout(s.Phase));
+                    }
                     s.Img.color = c;
                 }
             }
@@ -899,6 +927,15 @@ namespace LCBridgeOverlay
                 FlipY = (deviant && ConfigSettings.DeviantFlipIcon.Value) ? -1f : 1f,
                 Variants = (variants != null && variants.Count > 1) ? variants : null,
             };
+
+            // Режим уведомлений: монстра только что обнаружили — сначала на его месте
+            // мельтешит «папка», и лишь потом она сменяется настоящей иконкой.
+            if (ConfigSettings.NotifyMode.Value && NotifyWidget.Folder() != null)
+            {
+                item.RealIcon = img.sprite;
+                item.PacketT = 0f;
+                img.sprite = NotifyWidget.Folder();
+            }
             _sway.Add(item);
             _byGroup[groupKey ?? ""] = item;   // чтобы вспышку можно было запустить без пересборки
             return rt;

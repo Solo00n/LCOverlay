@@ -51,6 +51,7 @@ namespace LCBridgeOverlay
         private NotifyWidget _notify;  // режим уведомлений: панель спит и просыпается на новости
         private string _sigQuota, _sigMon, _sigTrap, _sigEvent, _sigMoon;
         private int _sigDeaths = int.MinValue, _sigDay = int.MinValue, _sigLoot = int.MinValue;
+        private int _sigScrap = int.MinValue, _sigAlive = int.MinValue;
         private bool _sigReady;
         private TextMeshProUGUI _moonText, _interiorText, _itemsText, _oldBirdText;
         private Image _lampImg;                       // 2.14: иконка аппарата у интерьера
@@ -480,17 +481,24 @@ namespace LCBridgeOverlay
                 _sigReady = true;
                 _sigMon = mon; _sigTrap = trap; _sigEvent = ev; _sigMoon = moon; _sigQuota = quota;
                 _sigDeaths = p.deaths; _sigDay = p.dayCount; _sigLoot = p.shipLoot;
+                _sigScrap = p.levelScrap; _sigAlive = p.alive;
                 return;
             }
 
-            if (mon != _sigMon) { _sigMon = mon; _notify.Ping(NotifyWidget.Channel.Monsters, null); }
-            if (trap != _sigTrap) { _sigTrap = trap; _notify.Ping(NotifyWidget.Channel.Traps, null); }
-            if (ev != _sigEvent) { _sigEvent = ev; _notify.Ping(NotifyWidget.Channel.Events, _eventText); }
-            if (moon != _sigMoon) { _sigMoon = moon; _notify.Ping(NotifyWidget.Channel.Moon, _moonText); }
-            if (quota != _sigQuota) { _sigQuota = quota; _notify.Ping(NotifyWidget.Channel.Quota, _lootQuotaText); }
-            if (p.deaths != _sigDeaths) { _sigDeaths = p.deaths; _notify.Ping(NotifyWidget.Channel.Deaths, _deathsText); }
-            if (p.dayCount != _sigDay) { _sigDay = p.dayCount; _notify.Ping(NotifyWidget.Channel.Day, _dayText); }
-            if (p.shipLoot != _sigLoot) { _sigLoot = p.shipLoot; _notify.Ping(NotifyWidget.Channel.Loot, _lootQuotaText); }
+            // обнаружение монстров/ловушек только будит панель: «папку» рисует рейка,
+            // прямо на месте новой иконки (см. MobRailWidget)
+            if (mon != _sigMon) { _sigMon = mon; _notify.WakeUp(); }
+            if (trap != _sigTrap) { _sigTrap = trap; _notify.WakeUp(); }
+
+            // изменившиеся цифры и надписи — будим и мерцаем именно ими
+            if (ev != _sigEvent) { _sigEvent = ev; _notify.Ping(_eventText); }
+            if (moon != _sigMoon) { _sigMoon = moon; _notify.Ping(_moonText); }
+            if (quota != _sigQuota) { _sigQuota = quota; _notify.Ping(_lootQuotaText); }
+            if (p.deaths != _sigDeaths) { _sigDeaths = p.deaths; _notify.Ping(_deathsText); }
+            if (p.dayCount != _sigDay) { _sigDay = p.dayCount; _notify.Ping(_dayText); }
+            if (p.shipLoot != _sigLoot) { _sigLoot = p.shipLoot; _notify.Ping(_lootQuotaText); }
+            if (p.levelScrap != _sigScrap) { _sigScrap = p.levelScrap; _notify.Ping(_onPlanetVal); }
+            if (p.alive != _sigAlive) { _sigAlive = p.alive; _notify.Ping(null); }
         }
 
         /// <summary>Имена без дистанций и мимолётных состояний — только состав.</summary>
@@ -562,6 +570,11 @@ namespace LCBridgeOverlay
             float pauseMul = Mathf.Lerp(1f, PauseDimAlpha, _pauseFade);
             // режим уведомлений: панель спит с нулевой прозрачностью и разгорается
             // только на новости (сама «новость» приходит из OnPayload)
+            // На корабле панель работает как обычно (обычная прозрачность из конфига,
+            // вплоть до IdleMinOpacity), а не уходит в ноль: режим уведомлений нужен
+            // на луне, а на корабле оверлей — это рабочий инструмент.
+            bool shipSafe = p != null && (p.onShip || !p.onMoon);
+            _notify?.SetAlwaysOn(shipSafe);
             float wake = (ConfigSettings.NotifyMode.Value && _notify != null) ? _notify.Wake : 1f;
             _group.alpha = e * _idleAlpha * pauseMul * wake; // + затухание при неподвижной камере
 
@@ -1364,7 +1377,7 @@ namespace LCBridgeOverlay
             _topEye = EclipseSun.BuildInlineEye(_headerGo.transform, 60f, 46f);
 
             _notify = _root.gameObject.AddComponent<NotifyWidget>();
-            _notify.Init(_root, S);
+            _notify.Init(S);
             var spacerR = NewUI("SpacerR", _headerGo.transform);
             Flexible(spacerR, 1f);
 

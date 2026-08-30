@@ -1,5 +1,12 @@
 # Changelog — LCBridgeOverlay
 
+## 1.8.1
+- **Scanning a creature reveals it again.** The scanner hook never fired in a loaded modpack — another mod intercepts the path to it, and not a single scan was recorded. The scanner's result is now read directly each tick instead of intercepting the route to it, so other mods on that path no longer matter. Traps are picked up the same way.
+- **Moon names went orange and stayed there.** The new number blinking took the current colour as its base every frame, but the panel only repaints about once a second, so the tint compounded until the text was permanently accented. The original colour is remembered once and restored when the blink ends.
+- **Packets only announce creatures now**, and they appear where the creature's icon will be, in the overlay's own colour, flickering there until the real icon replaces them. They no longer float above the panel for every number change.
+- **Changed numbers blink** on their own, without a packet — quota, loot, deaths, day, level scrap, crew, events and moon.
+- **On the ship the panel behaves normally** and settles at the opacity from the config rather than vanishing; notification mode only applies on a moon.
+
 ## 1.8.0
 - **New notification mode (`NotifyMode`).** Instead of sitting on screen all run, the panel sleeps invisible and wakes only when something actually changes. A packet in the overlay's own colour appears above it, flickering like an eight-bit image on a bad signal, then slides down into the top of the panel and dissolves as the new information arrives; whichever number changed blinks. The panel fades back out after `NotifyHoldSeconds` of quiet. Waking and sleeping are announced with the game's own radar booster power-up and power-down sounds.
 - **The eye follows the overlay's colour.** It was drawn in red and left untinted, which looked wrong against the blue-bracketed style. The artwork is converted to a white mask on load, so it now takes the current style's colour cleanly instead of muddying it — tinting the red original would have multiplied red by blue.

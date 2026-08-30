@@ -90,6 +90,51 @@ namespace LCBridgeOverlay
             catch { return false; }
         }
 
+        /// <summary>
+        /// Прямой опрос сканера: HUDManager.scanNodes держит узлы, которые ПРЯМО СЕЙЧАС
+        /// показаны игроку. Патч на AssignNodeToUIElement оказался ненадёжен — в сборке
+        /// с другими модами постфикс не срабатывал ни разу (в логе не было ни одной
+        /// отметки о скане). Здесь мы читаем результат, а не перехватываем путь к нему,
+        /// поэтому чужие патчи на дорогу к сканеру нам больше не мешают.
+        /// </summary>
+        private static void PollScanner()
+        {
+            try
+            {
+                var hud = HUDManager.Instance;
+                if (hud == null || hud.scanNodes == null || hud.scanNodes.Count == 0) return;
+
+                foreach (var kv in hud.scanNodes)
+                {
+                    var node = kv.Value;
+                    if (node == null) continue;
+
+                    var ai = node.GetComponentInParent<EnemyAI>();
+                    if (ai != null)
+                    {
+                        int id = ai.GetInstanceID();
+                        if (_scanned.Add(id))
+                        {
+                            ScanRegistry.MarkLocal(ai);
+                            Plugin.Log?.LogInfo($"[scan] отсканирован {ai.GetType().Name} (\"{node.headerText}\").");
+                        }
+                        continue;
+                    }
+
+                    // ловушки: в режиме скана они тоже должны открываться сканером
+                    Component trap = node.GetComponentInParent<Turret>();
+                    if (trap == null) trap = node.GetComponentInParent<Landmine>();
+                    if (trap == null) trap = node.GetComponentInParent<SpikeRoofTrap>();
+                    if (trap != null && !ScanRegistry.HasFor(trap))
+                    {
+                        ScanRegistry.MarkLocal(trap);
+                        Plugin.Log?.LogInfo($"[scan] отсканирована ловушка {trap.GetType().Name}.");
+                    }
+                }
+            }
+            catch { }
+        }
+
         /// <summary>Отметить врага отсканированным (зовётся из патча сканера).</summary>
         public static void MarkScanned(int instanceId) { _scanned.Add(instanceId); }
         public static bool IsScanned(int instanceId) { return _scanned.Contains(instanceId); }
@@ -129,6 +174,8 @@ namespace LCBridgeOverlay
             {
                 if (Time.unscaledTime < _next) return;
                 _next = Time.unscaledTime + Interval;
+
+                PollScanner();          // что игрок просветил сканером прямо сейчас
                 if (enemies == null) return;
 
                 _tokens.Clear();
