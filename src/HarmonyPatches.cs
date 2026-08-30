@@ -35,6 +35,8 @@ namespace LCBridgeOverlay
             {
                 OverlayNet.Register();
                 MonsterState.Reset();
+                ScanRegistry.Clear();
+                StartOfRound_Patches.ForgetScanClearDay();
                 BcmeClientEvents.Clear();
                 OverlayManager.Instance?.NotifyEnteredSave();
                 BridgeTicker.ForceImmediate();

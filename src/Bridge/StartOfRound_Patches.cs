@@ -5,6 +5,11 @@ namespace LCBridgeOverlay
     [HarmonyPatch(typeof(StartOfRound))]
     public static class StartOfRound_Patches
     {
+        private static int _lastScanClearDay = int.MinValue;
+
+        /// <summary>Перезаход в сейв: номер дня может повториться, забываем отметку.</summary>
+        public static void ForgetScanClearDay() => _lastScanClearDay = int.MinValue;
+
         // Конец забега (eject / банкротство / новый файл). 2.9: НЕ стираем статистику
         // сразу — иначе после eject игрок не успевает увидеть итоги. Замораживаем
         // аналитику прошлого забега и показываем её до тех пор, пока не дёрнут рычаг
@@ -49,10 +54,19 @@ namespace LCBridgeOverlay
             // придётся просвечивать заново, и знать заранее, что на луне, нельзя.
             try
             {
+                // StartGame прилетает ДВАЖДЫ за высадку (в логе две записи подряд), и
+                // второй раз мог бы стереть уже просканированное. Чистим строго один
+                // раз на день — по номеру дня.
                 if (Gate.ResetScansDaily)
                 {
-                    ScanRegistry.Clear();
-                    Plugin.Log?.LogInfo("[scan] новый день — сканы сброшены.");
+                    var sor = StartOfRound.Instance;
+                    int day = (sor != null && sor.gameStats != null) ? sor.gameStats.daysSpent : -1;
+                    if (day != _lastScanClearDay)
+                    {
+                        _lastScanClearDay = day;
+                        ScanRegistry.Clear();
+                        Plugin.Log?.LogInfo($"[scan] новый день ({day}) — сканы сброшены.");
+                    }
                 }
             }
             catch { }

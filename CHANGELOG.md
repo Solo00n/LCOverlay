@@ -1,5 +1,9 @@
 # Changelog — LCBridgeOverlay
 
+## 1.8.3
+- **Scanning finally registers.** The scanner's node list is a private field on the game's HUD. The build compiles against a publicised copy of the game, so reading it directly looked fine, but at runtime that throws — and the exception was being swallowed, which is why two attempts in a row produced no effect and left no trace in the log. It is read through reflection now, the log says whether the field was found, and a failure is reported instead of hidden.
+- **The daily scan reset no longer fires twice.** The game raises its start-of-round event twice per landing, so the second one could wipe scans made moments earlier. It now clears once per day number, and re-entering a save clears properly again.
+
 ## 1.8.2
 - **New `ShareScans`.** Scans reach the whole crew by default; turn it off and each player sees only what they scanned themselves. Nothing is sent and nothing is accepted while it is off, so it holds even if someone else leaves sharing on. The host decides it for the lobby, like the other reveal settings.
 - **The notification sound no longer sounds like a radar booster.** It is still built from the booster's own clips, but plays through the mod's own 2D source with the pitch shifted, the low end cut and a short echo, so it reads as an interface alert and cannot be mistaken for the item in play. It follows the game's volume.

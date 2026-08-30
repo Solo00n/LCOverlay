@@ -90,30 +90,58 @@ namespace LCBridgeOverlay
             catch { return false; }
         }
 
+        // ---- опрос сканера ----
+        private static System.Reflection.FieldInfo _scanNodesField;
+        private static bool _scanFieldSearched;
+        private static int _scanDiag;
+
         /// <summary>
         /// Прямой опрос сканера: HUDManager.scanNodes держит узлы, которые ПРЯМО СЕЙЧАС
-        /// показаны игроку. Патч на AssignNodeToUIElement оказался ненадёжен — в сборке
-        /// с другими модами постфикс не срабатывал ни разу (в логе не было ни одной
-        /// отметки о скане). Здесь мы читаем результат, а не перехватываем путь к нему,
-        /// поэтому чужие патчи на дорогу к сканеру нам больше не мешают.
+        /// показаны игроку.
+        ///
+        /// Два важных момента, на которых это ломалось раньше:
+        ///  1) патч на AssignNodeToUIElement не срабатывал ни разу — в сборке с другими
+        ///     модами до него не доходит управление, поэтому перехватывать путь бесполезно,
+        ///     надо читать результат;
+        ///  2) scanNodes — ПРИВАТНОЕ поле. Пакет игры публицирован только для компиляции,
+        ///     а в рантайме обращение к приватному полю чужой сборки падает, и падение
+        ///     глушил catch. Поэтому читаем строго через рефлексию.
         /// </summary>
         private static void PollScanner()
         {
             try
             {
                 var hud = HUDManager.Instance;
-                if (hud == null || hud.scanNodes == null || hud.scanNodes.Count == 0) return;
+                if (hud == null) return;
 
-                foreach (var kv in hud.scanNodes)
+                if (!_scanFieldSearched)
                 {
-                    var node = kv.Value;
+                    _scanFieldSearched = true;
+                    _scanNodesField = typeof(HUDManager).GetField("scanNodes",
+                        System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public |
+                        System.Reflection.BindingFlags.Instance);
+                    Plugin.Log?.LogInfo($"[scan] поле scanNodes: {(_scanNodesField != null ? "найдено" : "НЕ НАЙДЕНО — скан работать не будет")}");
+                }
+                if (_scanNodesField == null) return;
+
+                var dict = _scanNodesField.GetValue(hud) as System.Collections.IDictionary;
+                if (dict == null || dict.Count == 0) return;
+
+                if (_scanDiag < 3)
+                {
+                    _scanDiag++;
+                    Plugin.Log?.LogInfo($"[scan] сканер показывает узлов: {dict.Count}");
+                }
+
+                foreach (var v in dict.Values)
+                {
+                    var node = v as ScanNodeProperties;
                     if (node == null) continue;
 
                     var ai = node.GetComponentInParent<EnemyAI>();
                     if (ai != null)
                     {
-                        int id = ai.GetInstanceID();
-                        if (_scanned.Add(id))
+                        if (_scanned.Add(ai.GetInstanceID()))
                         {
                             ScanRegistry.MarkLocal(ai);
                             Plugin.Log?.LogInfo($"[scan] отсканирован {ai.GetType().Name} (\"{node.headerText}\").");
@@ -121,7 +149,7 @@ namespace LCBridgeOverlay
                         continue;
                     }
 
-                    // ловушки: в режиме скана они тоже должны открываться сканером
+                    // ловушки: в режиме скана они тоже открываются сканером
                     Component trap = node.GetComponentInParent<Turret>();
                     if (trap == null) trap = node.GetComponentInParent<Landmine>();
                     if (trap == null) trap = node.GetComponentInParent<SpikeRoofTrap>();
@@ -132,7 +160,15 @@ namespace LCBridgeOverlay
                     }
                 }
             }
-            catch { }
+            catch (Exception e)
+            {
+                // раньше здесь стоял немой catch, и поломка была невидима — больше нет
+                if (_scanDiag < 6)
+                {
+                    _scanDiag++;
+                    Plugin.Log?.LogWarning($"[scan] опрос сканера не удался: {e.GetType().Name}: {e.Message}");
+                }
+            }
         }
 
         /// <summary>Отметить врага отсканированным (зовётся из патча сканера).</summary>
