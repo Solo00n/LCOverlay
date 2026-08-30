@@ -204,11 +204,17 @@ namespace LCBridgeOverlay
             Mathf.PerlinNoise(Time.unscaledTime * 22f, seed) > 0.78f ? 0.35f : 1f;
     }
 
-    /// <summary>Звуки включения/выключения радар-бустера — берём прямо из игры.</summary>
+    /// <summary>
+    /// Звук оповещения. За основу взяты родные клипы включения/выключения
+    /// радар-бустера, но играем мы их через СВОЙ источник с обработкой: сдвиг тона,
+    /// срез низов и короткое эхо. Иначе в игре, где бустер реально используют, эти
+    /// сигналы путались бы с ним — а так это узнаваемо «интерфейсное» оповещение.
+    /// </summary>
     internal static class RadarSfx
     {
         private static bool _searched;
         private static AudioClip _on, _off;
+        private static AudioSource _src;
 
         private static void Ensure()
         {
@@ -245,19 +251,62 @@ namespace LCBridgeOverlay
             catch { }
         }
 
-        private static void Play(AudioClip c)
+        private static AudioSource Source()
+        {
+            if (_src != null) return _src;
+            try
+            {
+                var go = new GameObject("LCBridgeOverlay_NotifySfx");
+                Object.DontDestroyOnLoad(go);
+                _src = go.AddComponent<AudioSource>();
+                _src.playOnAwake = false;
+                _src.spatialBlend = 0f;          // строго 2D, как интерфейсный звук
+                _src.dopplerLevel = 0f;
+                _src.bypassReverbZones = true;
+
+                // пусть подчиняется общей громкости игры
+                var hud = HUDManager.Instance;
+                if (hud != null && hud.UIAudio != null)
+                    _src.outputAudioMixerGroup = hud.UIAudio.outputAudioMixerGroup;
+
+                // срезаем низы — сигнал становится тоньше и «приборнее»
+                var hp = go.AddComponent<AudioHighPassFilter>();
+                hp.cutoffFrequency = 850f;
+                hp.highpassResonanceQ = 1.2f;
+
+                // короткое эхо: звук читается как оповещение по связи, а не как предмет
+                var echo = go.AddComponent<AudioEchoFilter>();
+                echo.delay = 85f;
+                echo.decayRatio = 0.22f;
+                echo.dryMix = 1f;
+                echo.wetMix = 0.4f;
+
+                Plugin.Log?.LogInfo("[notify] отдельный источник звука создан (тон + срез низов + эхо).");
+            }
+            catch (System.Exception e)
+            {
+                Plugin.Log?.LogWarning($"[notify] источник звука не создан: {e.Message}");
+            }
+            return _src;
+        }
+
+        private static void Play(AudioClip c, float pitch)
         {
             try
             {
                 if (c == null) return;
-                var hud = HUDManager.Instance;
-                if (hud != null && hud.UIAudio != null) hud.UIAudio.PlayOneShot(c, 0.7f);
+                var src = Source();
+                if (src == null) return;
+                src.pitch = pitch;
+                src.PlayOneShot(c, 0.55f);
             }
             catch { }
         }
 
-        public static void PlayOn() { Ensure(); Play(_on); }
-        public static void PlayOff() { Ensure(); Play(_off); }
+        // вверх на включении, вниз на выключении — привычная пара «сигнал пришёл / ушёл»
+        public static void PlayOn() { Ensure(); Play(_on, 1.5f); }
+        public static void PlayOff() { Ensure(); Play(_off, 0.82f); }
+
         public static void Forget() { _searched = false; _on = null; _off = null; }
     }
 }

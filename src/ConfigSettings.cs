@@ -50,6 +50,7 @@ namespace LCBridgeOverlay
         public static ConfigEntry<bool> ProximityFade;        // чем ближе монстр, тем менее прозрачна иконка
         public static ConfigEntry<bool> ProximityShake;       // чем ближе монстр, тем нервнее трясётся иконка
         public static ConfigEntry<bool> ResetScansEachDay;    // забывать все сканы на новый день
+        public static ConfigEntry<bool> ShareScans;           // делиться сканами с другими игроками
         public static ConfigEntry<bool> NotifyMode;           // панель спит и просыпается на новости
         public static ConfigEntry<float> NotifyHoldSeconds;   // сколько держать её разбуженной
         public static ConfigEntry<bool> TeamDeaths;           // считать смерти всей команды
@@ -212,6 +213,9 @@ namespace LCBridgeOverlay
 
             ResetScansEachDay = cfg.Bind("Behavior", "ResetScansEachDay", false,
                 "Работает вместе с RequireScanToShow: каждый новый день все сканы забываются, включая уже открытый бестиарий. Тогда монстров и ловушки приходится сканировать заново каждую высадку, и заранее знать, что тебя ждёт, невозможно.");
+
+            ShareScans = cfg.Bind("Behavior", "ShareScans", true,
+                "Работает вместе с RequireScanToShow: сканы видны всему отряду — просветил один, увидели все. Выключи, и каждый будет видеть в оверлее только то, что просканировал сам. Решает хост для всего лобби.");
 
             NotifyMode = cfg.Bind("Behavior", "NotifyMode", false,
                 "Режим уведомлений: панель не висит на экране постоянно, а спит невидимой и разгорается только когда что-то изменилось. Над ней появляется мельтешащая папка, она влетает в панель и растворяется, изменившиеся цифры коротко мерцают. Включение и выключение озвучены радар-бустером.");

@@ -1,5 +1,9 @@
 # Changelog — LCBridgeOverlay
 
+## 1.8.2
+- **New `ShareScans`.** Scans reach the whole crew by default; turn it off and each player sees only what they scanned themselves. Nothing is sent and nothing is accepted while it is off, so it holds even if someone else leaves sharing on. The host decides it for the lobby, like the other reveal settings.
+- **The notification sound no longer sounds like a radar booster.** It is still built from the booster's own clips, but plays through the mod's own 2D source with the pitch shifted, the low end cut and a short echo, so it reads as an interface alert and cannot be mistaken for the item in play. It follows the game's volume.
+
 ## 1.8.1
 - **Scanning a creature reveals it again.** The scanner hook never fired in a loaded modpack — another mod intercepts the path to it, and not a single scan was recorded. The scanner's result is now read directly each tick instead of intercepting the route to it, so other mods on that path no longer matter. Traps are picked up the same way.
 - **Moon names went orange and stayed there.** The new number blinking took the current colour as its base every frame, but the panel only repaints about once a second, so the tint compounded until the text was permanently accented. The original colour is remembered once and restored when the blink ends.

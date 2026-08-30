@@ -51,6 +51,7 @@ namespace LCBridgeOverlay
             public bool Monsters, Traps, DoorRadar, Apparatus, Events, Countdown, LootMult, LevelScrap, Interior;
             public bool RequireScan;   // хост может ПРИНУДИТЕЛЬНО требовать скан
             public bool ResetScans;    // и требовать пересканировать всё каждый день
+            public bool ShareScans;    // и разрешать/запрещать обмен сканами
             public float DoorRadius;
 
             public static HostPolicy FromLocalConfig()
@@ -68,6 +69,7 @@ namespace LCBridgeOverlay
                     Interior = true,
                     RequireScan = ConfigSettings.RequireScanToShow.Value,
                     ResetScans = ConfigSettings.ResetScansEachDay.Value,
+                    ShareScans = ConfigSettings.ShareScans.Value,
                     DoorRadius = ConfigSettings.DoorRadarRadius.Value,
                 };
             }
@@ -75,7 +77,7 @@ namespace LCBridgeOverlay
             /// <summary>Ничего не разрешено: хоста с модом нет.</summary>
             public static HostPolicy Blocked()
             {
-                return new HostPolicy { RequireScan = true, ResetScans = false, DoorRadius = 0f };
+                return new HostPolicy { RequireScan = true, ResetScans = false, ShareScans = false, DoorRadius = 0f };
             }
 
             public ushort Bits()
@@ -92,6 +94,7 @@ namespace LCBridgeOverlay
                 if (RequireScan) b |= 1 << 8;
                 if (Interior) b |= 1 << 9;
                 if (ResetScans) b |= 1 << 10;
+                if (ShareScans) b |= 1 << 11;
                 return b;
             }
 
@@ -110,6 +113,7 @@ namespace LCBridgeOverlay
                     RequireScan = (b & (1 << 8)) != 0,
                     Interior = (b & (1 << 9)) != 0,
                     ResetScans = (b & (1 << 10)) != 0,
+                    ShareScans = (b & (1 << 11)) != 0,
                     DoorRadius = radius,
                 };
             }
@@ -223,7 +227,11 @@ namespace LCBridgeOverlay
                     // свои сканы хост тоже кладёт в общий реестр через патч скана;
                     // раздаём набор, когда он изменился
                     ScanRegistry.TakePending();
-                    if (ScanRegistry.Dirty) { ScanRegistry.Dirty = false; BroadcastScans(); }
+                    if (ScanRegistry.Dirty)
+                    {
+                        ScanRegistry.Dirty = false;
+                        if (Gate.ShareScans) BroadcastScans();   // обмен разрешён хостом
+                    }
                     return;
                 }
 
@@ -239,7 +247,8 @@ namespace LCBridgeOverlay
                 if (State == Link.Granted)
                 {
                     var mine = ScanRegistry.TakePending();
-                    if (mine != null) SendScans(mine, NetworkManager.ServerClientId);
+                    // если обмен запрещён, свои сканы наружу не отдаём вовсе
+                    if (mine != null && Gate.ShareScans) SendScans(mine, NetworkManager.ServerClientId);
                 }
 
                 // Периодически спрашиваем заново. Это чинит перезаход хоста в сейв:
@@ -309,7 +318,8 @@ namespace LCBridgeOverlay
                 }
                 _policy = HostPolicy.FromLocalConfig();
                 SendPolicyTo(sender);
-                SendScans(ScanRegistry.Snapshot(), sender);   // и что уже просканировано
+                if (ConfigSettings.ShareScans.Value)
+                    SendScans(ScanRegistry.Snapshot(), sender);   // и что уже просканировано
                 Plugin.Log?.LogInfo($"[net] клиенту {sender} отправлена политика хоста.");
             }
             catch (Exception e) { Plugin.Log?.LogWarning($"[net] OnHello: {e.Message}"); }
@@ -411,6 +421,7 @@ namespace LCBridgeOverlay
                 if (wire != Wire) return;
                 reader.ReadValueSafe(out int n);
                 if (n < 0 || n > 400) return;
+                if (!Gate.ShareScans) return;   // обмен запрещён — чужие сканы не принимаем
 
                 var ids = new ulong[n];
                 for (int i = 0; i < n; i++) reader.ReadValueSafe(out ids[i]);
@@ -558,6 +569,12 @@ namespace LCBridgeOverlay
 
         /// <summary>Требование скана: хост может включить его принудительно.</summary>
         public static bool RequireScan => ConfigSettings.RequireScanToShow.Value || P.RequireScan;
+
+        /// <summary>Делиться ли сканами с отрядом — тоже решает хост.</summary>
+        public static bool ShareScans =>
+            OverlayNet.State == OverlayNet.Link.Granted
+                ? P.ShareScans
+                : ConfigSettings.ShareScans.Value;
 
         /// <summary>Забывать сканы каждый день — решает хост, чтобы лобби не разъезжалось.</summary>
         public static bool ResetScansDaily =>
