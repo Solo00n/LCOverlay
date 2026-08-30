@@ -744,7 +744,10 @@ namespace LCBridgeOverlay
                                   $"{Localization.T("out")} <b>{p.itemsOutside}</b> / " +
                                   $"{Localization.T("hives")} <b>{p.beehiveCount}</b>";
 
-            _oldBirdText.gameObject.SetActive(onMoon && p.hasOldBird);
+            // В режиме скана эта надпись — бесплатная подсказка: она сообщает о птице
+            // до того, как её вообще увидели. Иконка при этом работает как обычно,
+            // появляясь после скана.
+            _oldBirdText.gameObject.SetActive(onMoon && p.hasOldBird && !Gate.RequireScan);
 
             // 2.14: лампа (аппарат) — пока он в комплексе
             if (_lampSlot != null)

@@ -49,6 +49,7 @@ namespace LCBridgeOverlay
         public static ConfigEntry<bool> RequireScanToShow;    // монстр виден только после сканирования
         public static ConfigEntry<bool> ProximityFade;        // чем ближе монстр, тем менее прозрачна иконка
         public static ConfigEntry<bool> ProximityShake;       // чем ближе монстр, тем нервнее трясётся иконка
+        public static ConfigEntry<bool> ResetScansEachDay;    // забывать все сканы на новый день
         public static ConfigEntry<bool> TeamDeaths;           // считать смерти всей команды
         public static ConfigEntry<bool> DeathsOnlyOnLeave;    // засчитывать смерти только при отлёте с луны
         public static ConfigEntry<bool> HideOnPopups;         // прятать оверлей на игровых окнах
@@ -206,6 +207,9 @@ namespace LCBridgeOverlay
 
             ProximityShake = cfg.Bind("Behavior", "ProximityShake", true,
                 "Чем ближе монстр, тем сильнее дрожит его иконка: издалека — еле заметное покачивание, вплотную — нервная тряска.");
+
+            ResetScansEachDay = cfg.Bind("Behavior", "ResetScansEachDay", false,
+                "Работает вместе с RequireScanToShow: каждый новый день все сканы забываются, включая уже открытый бестиарий. Тогда монстров и ловушки приходится сканировать заново каждую высадку, и заранее знать, что тебя ждёт, невозможно.");
 
             // [WebSocket]
             WebSocketEnabled = cfg.Bind("WebSocket", "Enabled", false,

@@ -31,8 +31,22 @@ namespace LCBridgeOverlay
                 if (ai != null)
                 {
                     MonsterState.MarkScanned(ai.GetInstanceID());
+                    ScanRegistry.MarkLocal(ai);            // и в общий реестр — для остальных игроков
                     if (_logged.Add(ai.GetInstanceID()))
                         Plugin.Log?.LogInfo($"[scan] отсканирован {ai.GetType().Name} (\"{node.headerText}\") — покажем в оверлее.");
+                    return;
+                }
+
+                // Ловушки при RequireScanToShow тоже должны требовать скана: турель,
+                // мина и шипы — обычные сетевые объекты, помечаем их так же.
+                Component trap = node.GetComponentInParent<Turret>();
+                if (trap == null) trap = node.GetComponentInParent<Landmine>();
+                if (trap == null) trap = node.GetComponentInParent<SpikeRoofTrap>();
+                if (trap != null)
+                {
+                    ScanRegistry.MarkLocal(trap);
+                    if (_logged.Add(trap.GetInstanceID()))
+                        Plugin.Log?.LogInfo($"[scan] отсканирована ловушка {trap.GetType().Name} — покажем в оверлее.");
                 }
             }
             catch { /* сканирование не должно ронять оверлей */ }

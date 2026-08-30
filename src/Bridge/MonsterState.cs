@@ -225,7 +225,12 @@ namespace LCBridgeOverlay
                         Time.unscaledTime - ht <= HurtHold) tok += "+Hurt";
 
                     // отсканирован: по бестиарию игры ИЛИ пойман нашим патчем узла скана
-                    if (IsScannedByBestiary(ai) || _scanned.Contains(ai.GetInstanceID())) tok += "+Scanned";
+                    // скан засчитан, если: его видел бестиарий игры (кроме режима
+                    // «забывать каждый день» — там прошлые открытия не в счёт),
+                    // либо это наш скан, либо кто-то из лобби уже отсканировал
+                    bool byBestiary = !Gate.ResetScansDaily && IsScannedByBestiary(ai);
+                    if (byBestiary || _scanned.Contains(ai.GetInstanceID()) || ScanRegistry.HasFor(ai))
+                        tok += "+Scanned";
                     if (tok.Length > 0) _tokens[ai.GetInstanceID()] = tok;
                 }
 

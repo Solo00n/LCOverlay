@@ -1,5 +1,13 @@
 # Changelog — LCBridgeOverlay
 
+## 1.7.0
+Scan-to-reveal mode was leaking information it was supposed to withhold, and it did not carry between players. Both are fixed.
+
+- **A scan by one player now counts for everybody.** Scans used to be remembered by an instance number, which is private to each machine, so sharing them was impossible in principle. They are keyed on the network id instead, which is the same for everyone in the lobby, and passed around: a player's scans reach the host, the host hands the combined set to everyone, and someone who joins late receives it immediately.
+- **Traps have to be scanned too.** Turrets, mines and spike traps appeared for free while monsters stayed hidden. If a trap has no scan node at all it is still shown, since otherwise it could never appear.
+- **The "OLD BIRD" line no longer gives the bird away** while scanning is required — it announced one before anybody had seen it. Its icon still appears once scanned, as normal.
+- **New `ResetScansEachDay`.** Every landing starts blank: the same creatures and traps have to be scanned again, and the bestiary's earlier unlocks stop counting, so a day cannot be read in advance. The host decides this for the lobby, like the other reveal settings.
+
 ## 1.6.3
 - **The death counter is the host's, and it resets.** It was reading the save file's lifetime death total, which is loaded from disk and never cleared, so it survived restarts and counted deaths from previous runs. The count is now measured from the start of the current run and broadcast by the host, so everyone sees the same number and a new run starts at zero.
 - **Turrets on the ship are no longer counted as hazards.** Mini turrets bought from Defend Facility and carried aboard were showing up in the trap panel alongside the ones trying to kill you. Anything standing inside the ship is treated as yours and left out.

@@ -404,6 +404,10 @@ namespace LCBridgeOverlay
             var result = new List<string>();
             try
             {
+                // в режиме «показывать только просканированное» ловушки тоже прячем,
+                // пока их не просветят сканером — иначе мины и турели выдавали бы себя даром
+                bool needScan = Gate.RequireScan;
+
                 // собираем позиции по человекочитаемому имени (для количества + дистанции)
                 var pos = new Dictionary<string, List<Vector3>>();
                 void Add(string label, Vector3 p)
@@ -421,6 +425,7 @@ namespace LCBridgeOverlay
                         {
                             if (o == null) continue;
                             if (OnShip(o.transform.position)) continue;   // своя, на корабле
+                            if (needScan && ScanRegistry.Scannable(o) && !ScanRegistry.HasFor(o)) continue;
                             Add(label, o.transform.position);
                         }
                     }
@@ -442,6 +447,7 @@ namespace LCBridgeOverlay
                             if (g == null || g.isHeld || g.isHeldByEnemy) continue; // в руках — не ловушка
                             if (g.isInShipRoom) continue;                           // принесли на корабль
                             if (OnShip(g.transform.position)) continue;
+                            if (needScan && ScanRegistry.Scannable(g) && !ScanRegistry.HasFor(g)) continue;
                             Add(label, g.transform.position);
                         }
                     }

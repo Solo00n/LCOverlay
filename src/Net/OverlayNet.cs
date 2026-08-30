@@ -30,6 +30,7 @@ namespace LCBridgeOverlay
         private const string HelloMsg = "LCBridgeOverlay_hello";
         private const string PolicyMsg = "LCBridgeOverlay_policy";
         private const string StateMsg  = "LCBridgeOverlay_state";   // таймер/ивенты от хоста
+        private const string ScanMsg   = "LCBridgeOverlay_scan";    // кто кого просканировал
         private const byte Wire = 2;        // версия протокола (2: в состоянии появились смерти)
         private const float WaitSeconds = 8f;   // сколько ждём ответ хоста
         private const float RetrySeconds = 10f; // и как часто пробуем снова
@@ -49,6 +50,7 @@ namespace LCBridgeOverlay
         {
             public bool Monsters, Traps, DoorRadar, Apparatus, Events, Countdown, LootMult, LevelScrap, Interior;
             public bool RequireScan;   // хост может ПРИНУДИТЕЛЬНО требовать скан
+            public bool ResetScans;    // и требовать пересканировать всё каждый день
             public float DoorRadius;
 
             public static HostPolicy FromLocalConfig()
@@ -65,6 +67,7 @@ namespace LCBridgeOverlay
                     LevelScrap = true,
                     Interior = true,
                     RequireScan = ConfigSettings.RequireScanToShow.Value,
+                    ResetScans = ConfigSettings.ResetScansEachDay.Value,
                     DoorRadius = ConfigSettings.DoorRadarRadius.Value,
                 };
             }
@@ -72,7 +75,7 @@ namespace LCBridgeOverlay
             /// <summary>Ничего не разрешено: хоста с модом нет.</summary>
             public static HostPolicy Blocked()
             {
-                return new HostPolicy { RequireScan = true, DoorRadius = 0f };
+                return new HostPolicy { RequireScan = true, ResetScans = false, DoorRadius = 0f };
             }
 
             public ushort Bits()
@@ -88,6 +91,7 @@ namespace LCBridgeOverlay
                 if (LevelScrap) b |= 1 << 7;
                 if (RequireScan) b |= 1 << 8;
                 if (Interior) b |= 1 << 9;
+                if (ResetScans) b |= 1 << 10;
                 return b;
             }
 
@@ -105,6 +109,7 @@ namespace LCBridgeOverlay
                     LevelScrap = (b & (1 << 7)) != 0,
                     RequireScan = (b & (1 << 8)) != 0,
                     Interior = (b & (1 << 9)) != 0,
+                    ResetScans = (b & (1 << 10)) != 0,
                     DoorRadius = radius,
                 };
             }
@@ -164,6 +169,7 @@ namespace LCBridgeOverlay
                 nm.CustomMessagingManager.RegisterNamedMessageHandler(HelloMsg, OnHello);
                 nm.CustomMessagingManager.RegisterNamedMessageHandler(PolicyMsg, OnPolicy);
                 nm.CustomMessagingManager.RegisterNamedMessageHandler(StateMsg, OnState);
+                nm.CustomMessagingManager.RegisterNamedMessageHandler(ScanMsg, OnScan);
                 _registered = true;
             }
             catch (Exception e) { Plugin.Log?.LogWarning($"[net] регистрация не удалась: {e.Message}"); }
@@ -214,6 +220,10 @@ namespace LCBridgeOverlay
                         !Mathf.Approximately(_policy.DoorRadius, _lastSentRadius))
                         BroadcastPolicy();
                     BroadcastState();   // таймер, токен сброса и ивенты — всем
+                    // свои сканы хост тоже кладёт в общий реестр через патч скана;
+                    // раздаём набор, когда он изменился
+                    ScanRegistry.TakePending();
+                    if (ScanRegistry.Dirty) { ScanRegistry.Dirty = false; BroadcastScans(); }
                     return;
                 }
 
@@ -223,6 +233,13 @@ namespace LCBridgeOverlay
                     State = Link.Denied;
                     Plugin.Log?.LogInfo("[net] хост не ответил — мода у него нет. " +
                                         "Панели с подсказками выключены: клиентское преимущество в этом сообществе запрещено.");
+                }
+
+                // наши свежие сканы — хосту, он разошлёт их остальным
+                if (State == Link.Granted)
+                {
+                    var mine = ScanRegistry.TakePending();
+                    if (mine != null) SendScans(mine, NetworkManager.ServerClientId);
                 }
 
                 // Периодически спрашиваем заново. Это чинит перезаход хоста в сейв:
@@ -292,6 +309,7 @@ namespace LCBridgeOverlay
                 }
                 _policy = HostPolicy.FromLocalConfig();
                 SendPolicyTo(sender);
+                SendScans(ScanRegistry.Snapshot(), sender);   // и что уже просканировано
                 Plugin.Log?.LogInfo($"[net] клиенту {sender} отправлена политика хоста.");
             }
             catch (Exception e) { Plugin.Log?.LogWarning($"[net] OnHello: {e.Message}"); }
@@ -338,6 +356,83 @@ namespace LCBridgeOverlay
                 }
             }
             catch (Exception e) { Plugin.Log?.LogWarning($"[net] политика не ушла клиенту {clientId}: {e.Message}"); }
+        }
+
+        // ================= общие сканы =================
+
+        /// <summary>
+        /// Кто-то просканировал монстра или ловушку — это должно быть видно всем.
+        /// Клиент шлёт хосту свои свежие сканы, хост — сводный набор всем остальным.
+        ///
+        /// Ключ — NetworkObjectId, он одинаков у всех в лобби. Сообщение только
+        /// ДОБАВЛЯЕТ: очистку на новый день каждая сторона делает у себя сама
+        /// (по разрешённой хостом настройке), поэтому гонок «стёрли только что
+        /// добавленное» здесь не возникает.
+        /// </summary>
+        private static void SendScans(ulong[] ids, ulong target)
+        {
+            try
+            {
+                var nm = NM;
+                if (nm == null || nm.CustomMessagingManager == null || ids == null || ids.Length == 0) return;
+                if (ids.Length > 400) return;   // защита от абсурдного размера
+
+                using (var w = new FastBufferWriter(4 + ids.Length * 8, Allocator.Temp, 8192))
+                {
+                    w.WriteValueSafe(Wire);
+                    w.WriteValueSafe(ids.Length);
+                    foreach (var id in ids) w.WriteValueSafe(id);
+                    nm.CustomMessagingManager.SendNamedMessage(ScanMsg, target, w, NetworkDelivery.ReliableFragmentedSequenced);
+                }
+            }
+            catch (Exception e) { Plugin.Log?.LogWarning($"[net] сканы не ушли: {e.Message}"); }
+        }
+
+        private static void BroadcastScans()
+        {
+            var nm = NM;
+            if (nm == null || !nm.IsServer || nm.ConnectedClientsIds == null) return;
+            var all = ScanRegistry.Snapshot();
+            if (all.Length == 0) return;
+            foreach (var id in nm.ConnectedClientsIds)
+            {
+                if (id == NetworkManager.ServerClientId) continue;
+                SendScans(all, id);
+            }
+        }
+
+        private static void OnScan(ulong sender, FastBufferReader reader)
+        {
+            try
+            {
+                var nm = NM;
+                if (nm == null) return;
+                reader.ReadValueSafe(out byte wire);
+                if (wire != Wire) return;
+                reader.ReadValueSafe(out int n);
+                if (n < 0 || n > 400) return;
+
+                var ids = new ulong[n];
+                for (int i = 0; i < n; i++) reader.ReadValueSafe(out ids[i]);
+
+                if (nm.IsServer)
+                {
+                    // клиент прислал свои сканы — принимаем и раздадим остальным
+                    int before = ScanRegistry.Count;
+                    ScanRegistry.Merge(ids);
+                    if (ScanRegistry.Count != before)
+                    {
+                        ScanRegistry.Dirty = true;
+                        Plugin.Log?.LogInfo($"[scan] игрок {sender} поделился сканами (+{ScanRegistry.Count - before}).");
+                    }
+                }
+                else
+                {
+                    if (sender != NetworkManager.ServerClientId) return;
+                    ScanRegistry.Merge(ids);
+                }
+            }
+            catch (Exception e) { Plugin.Log?.LogWarning($"[net] OnScan: {e.Message}"); }
         }
 
         // ================= состояние забега (таймер / ивенты) =================
@@ -463,6 +558,12 @@ namespace LCBridgeOverlay
 
         /// <summary>Требование скана: хост может включить его принудительно.</summary>
         public static bool RequireScan => ConfigSettings.RequireScanToShow.Value || P.RequireScan;
+
+        /// <summary>Забывать сканы каждый день — решает хост, чтобы лобби не разъезжалось.</summary>
+        public static bool ResetScansDaily =>
+            OverlayNet.State == OverlayNet.Link.Granted
+                ? P.ResetScans
+                : ConfigSettings.ResetScansEachDay.Value;
 
         /// <summary>Хост без мода — панели с подсказками погашены.</summary>
         public static bool Restricted => OverlayNet.State != OverlayNet.Link.Granted;

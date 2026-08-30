@@ -45,6 +45,18 @@ namespace LCBridgeOverlay
         [HarmonyPostfix]
         public static void OnStartGame()
         {
+            // Новый день: если включено, забываем все сканы — монстров и ловушки
+            // придётся просвечивать заново, и знать заранее, что на луне, нельзя.
+            try
+            {
+                if (Gate.ResetScansDaily)
+                {
+                    ScanRegistry.Clear();
+                    Plugin.Log?.LogInfo("[scan] новый день — сканы сброшены.");
+                }
+            }
+            catch { }
+
             GameState.OnNewRound();
         }
 
