@@ -86,6 +86,10 @@ All settings live in the config file `gdlp.lcbridgeoverlay.cfg`. Widget and beha
 | CameraSway / CameraSwayStrength | true / 1.0 | Panel sways with the camera. Zero disables it. |
 | FadeWhenIdle | true | Dim the panel when the camera is still. |
 | ProximityFade | true | Closer monsters and traps get a more solid icon. |
+| ProximityShake | true | Icons shake harder the closer the creature is; barely a drift far off, a jitter up close. |
+| ResetScansEachDay | false | With RequireScanToShow: every landing starts blank, so the same creatures and traps must be scanned again. |
+| NotifyMode | false | The panel sleeps invisible and lights up only when something changes, announced by a flickering packet. |
+| NotifyHoldSeconds | 6 | How long the panel stays lit after the last change. |
 | NearestVariantOnly | true | Always one icon per monster, even with several versions. |
 | VariantNearDistance | 14 | Within this range the icon locks to the version that is actually near. |
 | VariantCycleSeconds | 2 | With none near, versions fade into one another on this interval. |
@@ -208,6 +212,10 @@ Every integration is optional. When a mod is absent the related information is s
 | CameraSway / CameraSwayStrength | true / 1.0 | Покачивание панели за камерой. Ноль отключает. |
 | FadeWhenIdle | true | Приглушать панель, когда камера неподвижна. |
 | ProximityFade | true | Чем ближе монстр или ловушка, тем плотнее иконка. |
+| ProximityShake | true | Чем ближе существо, тем сильнее дрожит иконка: издалека еле заметно, вплотную — нервно. |
+| ResetScansEachDay | false | Вместе с RequireScanToShow: каждая высадка с чистого листа, всё приходится сканировать заново. |
+| NotifyMode | false | Панель спит невидимой и разгорается только на изменения, о которых сообщает мельтешащая папка. |
+| NotifyHoldSeconds | 6 | Сколько секунд панель остаётся видимой после последней новости. |
 | NearestVariantOnly | true | Всегда одна иконка на монстра, даже если версий несколько. |
 | VariantNearDistance | 14 | В пределах этой дистанции иконка закрепляется за версией, что рядом. |
 | VariantCycleSeconds | 2 | Если рядом никого — версии плавно сменяют друг друга с этим интервалом. |

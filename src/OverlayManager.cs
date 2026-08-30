@@ -48,6 +48,10 @@ namespace LCBridgeOverlay
         private GameObject _headerGo, _headerDivider, _locationGo, _quotaGo, _dayDeathsGo, _tickerGo;
         private TextMeshProUGUI _timerText;
         private EyeWidget _topEye;     // глаз-индикатор связи сверху (закрывается при уходе с корабля)
+        private NotifyWidget _notify;  // режим уведомлений: панель спит и просыпается на новости
+        private string _sigQuota, _sigMon, _sigTrap, _sigEvent, _sigMoon;
+        private int _sigDeaths = int.MinValue, _sigDay = int.MinValue, _sigLoot = int.MinValue;
+        private bool _sigReady;
         private TextMeshProUGUI _moonText, _interiorText, _itemsText, _oldBirdText;
         private Image _lampImg;                       // 2.14: иконка аппарата у интерьера
         private GameObject _lampSlot;                 // её место в строке интерьера
@@ -196,6 +200,10 @@ namespace LCBridgeOverlay
             // перспектива запечена под старый размер панели — при изменении высоты
             // (баннер победы и т.п.) пересчитываем, иначе Q1/Q2/Q3 «уезжают» из рамок
             RewarpOnResize();
+
+            // мерцание изменившихся цифр — САМЫМ ПОСЛЕДНИМ: Refresh() выше проставляет
+            // цвета заново и затёр бы его
+            if (ConfigSettings.NotifyMode.Value) _notify?.ApplyFlicker();
         }
 
         /// <summary>
@@ -209,6 +217,9 @@ namespace LCBridgeOverlay
             _prevWantRun = null;
             _lastQuotaIndex = null;
             _prevResetToken = null;
+            _sigReady = false;
+            _notify?.ResetAll();
+            RadarSfx.Forget();
             _marksShown = -1;          // линия меток перерисуется с нуля
             _showingLastRun = false;
             _userHidden = false;
@@ -248,6 +259,7 @@ namespace LCBridgeOverlay
         private void OnPayload(BridgePayload p)
         {
             _dirty = true;
+            DetectNews(p);
 
             if (_loggedOnShip != p.onShip)
             {
@@ -444,6 +456,59 @@ namespace LCBridgeOverlay
             }
         }
 
+        /// <summary>
+        /// Что изменилось с прошлого пакета. Каждое изменение будит панель и роняет
+        /// «папку» над ней; соответствующая цифра коротко мерцает.
+        ///
+        /// Сигнатуры монстров и ловушек чистим от дистанций и состояний: иначе
+        /// подходящий монстр слал бы новость каждую секунду.
+        /// </summary>
+        private void DetectNews(BridgePayload p)
+        {
+            if (!ConfigSettings.NotifyMode.Value || _notify == null) { _sigReady = false; return; }
+            if (p == null) return;
+
+            string mon = NewsSig(p.monstersOutside) + "|" + NewsSig(p.monstersInside);
+            string trap = NewsSig(p.traps);
+            string ev = p.brutalEvent ?? "";
+            string moon = (p.moonName ?? "") + "/" + (p.weatherFull ?? "");
+            string quota = p.quotaValue + "/" + p.quotaIndex;
+
+            // первый пакет — только запоминаем, иначе панель вспыхнула бы на пустом месте
+            if (!_sigReady)
+            {
+                _sigReady = true;
+                _sigMon = mon; _sigTrap = trap; _sigEvent = ev; _sigMoon = moon; _sigQuota = quota;
+                _sigDeaths = p.deaths; _sigDay = p.dayCount; _sigLoot = p.shipLoot;
+                return;
+            }
+
+            if (mon != _sigMon) { _sigMon = mon; _notify.Ping(NotifyWidget.Channel.Monsters, null); }
+            if (trap != _sigTrap) { _sigTrap = trap; _notify.Ping(NotifyWidget.Channel.Traps, null); }
+            if (ev != _sigEvent) { _sigEvent = ev; _notify.Ping(NotifyWidget.Channel.Events, _eventText); }
+            if (moon != _sigMoon) { _sigMoon = moon; _notify.Ping(NotifyWidget.Channel.Moon, _moonText); }
+            if (quota != _sigQuota) { _sigQuota = quota; _notify.Ping(NotifyWidget.Channel.Quota, _lootQuotaText); }
+            if (p.deaths != _sigDeaths) { _sigDeaths = p.deaths; _notify.Ping(NotifyWidget.Channel.Deaths, _deathsText); }
+            if (p.dayCount != _sigDay) { _sigDay = p.dayCount; _notify.Ping(NotifyWidget.Channel.Day, _dayText); }
+            if (p.shipLoot != _sigLoot) { _sigLoot = p.shipLoot; _notify.Ping(NotifyWidget.Channel.Loot, _lootQuotaText); }
+        }
+
+        /// <summary>Имена без дистанций и мимолётных состояний — только состав.</summary>
+        private static string NewsSig(string[] arr)
+        {
+            if (arr == null || arr.Length == 0) return "";
+            var sb = new StringBuilder(64);
+            foreach (var raw in arr)
+            {
+                if (string.IsNullOrEmpty(raw)) continue;
+                string t = System.Text.RegularExpressions.Regex.Replace(
+                    raw, @"\s*@\d+|\+hurt|\+w\d|\+scanned", "",
+                    System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                sb.Append(t.Trim()).Append(';');
+            }
+            return sb.ToString();
+        }
+
         private void UpdateVisibility(float dt)
         {
             var p = DataParser.Current;
@@ -495,7 +560,10 @@ namespace LCBridgeOverlay
             // плавно приглушаем на паузе (см. PauseDimAlpha) — уходит в фон под меню Esc
             _pauseFade = Mathf.MoveTowards(_pauseFade, paused ? 1f : 0f, dt / 0.2f);
             float pauseMul = Mathf.Lerp(1f, PauseDimAlpha, _pauseFade);
-            _group.alpha = e * _idleAlpha * pauseMul; // + затухание при неподвижной камере
+            // режим уведомлений: панель спит с нулевой прозрачностью и разгорается
+            // только на новости (сама «новость» приходит из OnPayload)
+            float wake = (ConfigSettings.NotifyMode.Value && _notify != null) ? _notify.Wake : 1f;
+            _group.alpha = e * _idleAlpha * pauseMul * wake; // + затухание при неподвижной камере
 
             bool anyVisible = _vis > 0.001f;
             if (_root.gameObject.activeSelf != anyVisible)
@@ -721,7 +789,9 @@ namespace LCBridgeOverlay
             if (!ConfigSettings.ShowVictoryBanner.Value) _victory.Hide();
 
             // глаз-индикатор сверху: связь есть — свои цвета (рисунок), нет связи — притушен серым
-            _topEye.Img.color = connected ? Color.white : new Color(0.5f, 0.5f, 0.5f, 1f);
+            // глаз красим в цвет стиля (в «Game» это синие скобки, и белый глаз
+            // на их фоне выглядел чужеродно)
+            _topEye.Img.color = connected ? S.Frame : OverlayStyle.WithA(S.FrameDim, 0.6f);
 
             _timerText.text = FmtTime((int)_timerSec);
             _timerText.color = _timerRunning ? Color.white : new Color(1f, 1f, 1f, 0.6f);
@@ -1292,6 +1362,9 @@ namespace LCBridgeOverlay
             var spacerL = NewUI("SpacerL", _headerGo.transform);
             Flexible(spacerL, 1f);
             _topEye = EclipseSun.BuildInlineEye(_headerGo.transform, 60f, 46f);
+
+            _notify = _root.gameObject.AddComponent<NotifyWidget>();
+            _notify.Init(_root, S);
             var spacerR = NewUI("SpacerR", _headerGo.transform);
             Flexible(spacerR, 1f);
 

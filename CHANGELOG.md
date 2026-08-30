@@ -1,5 +1,9 @@
 # Changelog — LCBridgeOverlay
 
+## 1.8.0
+- **New notification mode (`NotifyMode`).** Instead of sitting on screen all run, the panel sleeps invisible and wakes only when something actually changes. A packet in the overlay's own colour appears above it, flickering like an eight-bit image on a bad signal, then slides down into the top of the panel and dissolves as the new information arrives; whichever number changed blinks. The panel fades back out after `NotifyHoldSeconds` of quiet. Waking and sleeping are announced with the game's own radar booster power-up and power-down sounds.
+- **The eye follows the overlay's colour.** It was drawn in red and left untinted, which looked wrong against the blue-bracketed style. The artwork is converted to a white mask on load, so it now takes the current style's colour cleanly instead of muddying it — tinting the red original would have multiplied red by blue.
+
 ## 1.7.0
 Scan-to-reveal mode was leaking information it was supposed to withhold, and it did not carry between players. Both are fixed.
 

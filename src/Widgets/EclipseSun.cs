@@ -23,6 +23,27 @@ namespace LCBridgeOverlay
             return _sprite;
         }
 
+        /// <summary>
+        /// Картинка глаза нарисована КРАСНОЙ. Если такую просто затонировать, цвет
+        /// перемножится (красный × синий = грязно-фиолетовый), поэтому переводим её
+        /// в белую маску, сохраняя альфу: тогда любой тон ложится чисто.
+        /// </summary>
+        private static void Whiten(Texture2D tex)
+        {
+            try
+            {
+                var px = tex.GetPixels32();
+                for (int i = 0; i < px.Length; i++)
+                {
+                    if (px[i].a == 0) continue;
+                    px[i].r = 255; px[i].g = 255; px[i].b = 255;
+                }
+                tex.SetPixels32(px);
+                tex.Apply(false, false);
+            }
+            catch { }
+        }
+
         private static Sprite LoadEmbedded()
         {
             try
@@ -35,6 +56,7 @@ namespace LCBridgeOverlay
                 stream.Dispose();
                 var tex = new Texture2D(2, 2, TextureFormat.RGBA32, false) { filterMode = FilterMode.Bilinear };
                 if (!ImageConversion.LoadImage(tex, bytes)) return null;
+                Whiten(tex);   // чтобы глаз красился в цвет стиля, а не мутнел
                 return Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f), 100f);
             }
             catch { return null; }
