@@ -1,5 +1,13 @@
 # Changelog — LCBridgeOverlay
 
+## 1.10.3
+- **Creatures no longer flip as they walk.** The artwork does not face a consistent direction to begin with, so mirroring it turned as many of them backwards as it turned the right way round.
+- **They keep out of each other's way.** Marks that end up closer than an icon's width push apart, so two creatures in the same part of the facility no longer stack into one. Outside they also have far more room to pace.
+- **Facility creatures are drawn half again as large** as the ones outside.
+- **Vector icons: a heavier outline**, a colour of your choosing (`VectorIconColor` — red by default, or blue, or the overlay's own), and a solid fill once something is within eight metres, since a thin outline is exactly what you cannot read when it matters.
+- **Unrecognised weather now shows a plain cloud** instead of nothing, and the raw weather name is written to the log, so a modded one can be given its own symbol.
+- **The event plate logs why it is on screen** — every term that decides it — rather than leaving us to guess.
+
 ## 1.10.2
 - **Two of the same creature on the schematic.** The data groups creatures together with their state, so one species in two states arrived as two entries — hence two dogs where there was one. The schematic now collapses entries that share an icon.
 - **Creatures outside walk too**, and every creature faces the way it is going: the icon mirrors on the turn. `slotout` accepts a full segment now, and falls back to pacing around its point.

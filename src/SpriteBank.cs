@@ -223,6 +223,31 @@ namespace LCBridgeOverlay
             return Wrap(dst, FilterMode.Point);
         }
 
+        /// <summary>
+        /// Залитый силуэт того же ключа. Нужен, когда монстр совсем рядом: контур
+        /// на таком расстоянии читается плохо, а сплошное пятно — сразу.
+        /// В остальных стилях просто возвращает обычную иконку.
+        /// </summary>
+        public static Sprite GetSolid(string key)
+        {
+            if (string.IsNullOrEmpty(key)) return null;
+            string st = (ConfigSettings.MonsterIconStyle.Value ?? "Render").Trim().ToLowerInvariant();
+            if (st != "vector") return Get(key);
+
+            string ck = "solid:" + key;
+            if (_styled.TryGetValue(ck, out var got)) return got;
+            Sprite made = null;
+            try
+            {
+                var src = GetRaw(key);
+                if (src != null && src.texture != null) made = Silhouette(src.texture);
+            }
+            catch { }
+            if (made == null) made = Get(key);
+            _styled[ck] = made;
+            return made;
+        }
+
         /// <summary>Квантование канала до 5 ступеней — узнаваемая палитра старых игр.</summary>
         private static byte Q(int v) => (byte)Mathf.Clamp(Mathf.RoundToInt(v / 51f) * 51, 0, 255);
 
@@ -241,7 +266,8 @@ namespace LCBridgeOverlay
             bool Solid(int x, int y) =>
                 x >= 0 && y >= 0 && x < w && y < h && px[y * w + x].a > 90;
 
-            int th = Mathf.Max(1, Mathf.RoundToInt(Mathf.Max(w, h) / 110f));  // толщина под размер
+            // толще, чем было: на 110 контур получался волосяным и терялся
+            int th = Mathf.Max(2, Mathf.RoundToInt(Mathf.Max(w, h) / 55f));
             for (int y = 0; y < h; y++)
                 for (int x = 0; x < w; x++)
                 {

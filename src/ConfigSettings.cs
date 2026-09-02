@@ -54,6 +54,7 @@ namespace LCBridgeOverlay
         public static ConfigEntry<bool> RememberSeenMonsters; // помнить, кто водится на каждой луне
         public static ConfigEntry<bool> RequireSignalTranslator; // обмен только при купленном трансляторе
         public static ConfigEntry<string> MonsterIconStyle;   // Render | Pixel | Vector | Symbol
+        public static ConfigEntry<string> VectorIconColor;    // Red | Blue | Theme
         public static ConfigEntry<bool> ShowFacilityMap;      // схема локации на улице
         public static ConfigEntry<string> MapLightMode;       // Effects | Schematic
         public static ConfigEntry<string> MapWeatherMode;     // Schematic | Effects
@@ -231,6 +232,9 @@ namespace LCBridgeOverlay
 
             MonsterIconStyle = cfg.Bind("General", "MonsterIconStyle", "Render",
                 "Как рисовать иконки монстров: Render — как есть, Pixel — 8-битный вид, Vector — только контур линиями, Symbol — сплошной силуэт в цвет темы.");
+
+            VectorIconColor = cfg.Bind("General", "VectorIconColor", "Red",
+                "Цвет иконок в стилях Vector и Symbol: Red, Blue или Theme (взять из темы оверлея).");
 
             ShowFacilityMap = cfg.Bind("Widgets", "ShowFacilityMap", true,
                 "Вне корабля вместо полной панели показывать маленькую схему локации: поверхность, вход, комплекс и пещеры, монстры точками по зонам, лампы по настоящему свету, погода и лут. Сделано так, чтобы не мешать при передвижении.");

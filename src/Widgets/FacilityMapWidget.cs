@@ -829,8 +829,8 @@ namespace LCBridgeOverlay
         private void PlaceDots(List<Image> dots, string[] names, bool walking)
         {
             // Отбираем и СХЛОПЫВАЕМ по иконке: пакет группирует монстров вместе с
-            // их состояниями, поэтому один и тот же вид в разных состояниях приходил
-            // отдельными записями — на схеме это выглядело как две одинаковые собаки.
+            // их состояниями, поэтому один вид в разных состояниях приходил
+            // отдельными записями — на схеме это выглядело как два одинаковых зверя.
             var shown = new List<string>();
             var seen = new List<string>();
             if (names != null)
@@ -851,6 +851,44 @@ namespace LCBridgeOverlay
             float t = Time.unscaledTime;
             var paths = walking ? _inPaths : _outPaths;
             var slots = walking ? _inSlots : _outSlots;
+            float baseScale = walking ? 1.5f : 1f;      // в комплексе крупнее
+
+            // сначала считаем, кто где хочет стоять
+            int n = Mathf.Min(dots.Count, shown.Count);
+            var want = new Vector2[dots.Count];
+            for (int i = 0; i < n; i++)
+            {
+                Vector2 off = Vector2.zero;
+                if (i < paths.Count && i < slots.Count)
+                {
+                    var seg = paths[i];
+                    float sp = 0.07f + (i % 5) * 0.018f;
+                    float ph = Mathf.PingPong(t * sp + i * 0.41f, 1f);
+                    var a = new Vector2(seg.x, seg.y);
+                    var b = new Vector2(seg.z, seg.w);
+                    var pos = Vector2.Lerp(a, b, Mathf.SmoothStep(0f, 1f, ph));
+                    off = new Vector2(pos.x, -pos.y) - slots[i].anchoredPosition;
+                }
+                want[i] = off + new Vector2(0f, IconLift);
+            }
+
+            // и раздвигаем тех, кто налез друг на друга: иначе иконки перекрываются
+            // и вместо двух зверей видно одного
+            const float MinSep = 34f;
+            for (int pass = 0; pass < 2; pass++)
+                for (int i = 0; i < n; i++)
+                    for (int j = i + 1; j < n; j++)
+                    {
+                        if (i >= slots.Count || j >= slots.Count) continue;
+                        var pi = slots[i].anchoredPosition + want[i];
+                        var pj = slots[j].anchoredPosition + want[j];
+                        var d = pj - pi;
+                        float dist2 = d.magnitude;
+                        if (dist2 >= MinSep || dist2 < 0.001f) continue;
+                        var push = d.normalized * ((MinSep - dist2) * 0.5f);
+                        want[i] -= push;
+                        want[j] += push;
+                    }
 
             for (int i = 0; i < dots.Count; i++)
             {
@@ -868,61 +906,33 @@ namespace LCBridgeOverlay
                 }
 
                 string raw = shown[i];
-                var spr = MobIconFor(raw);
-                if (spr != null && img.sprite != spr) img.sprite = spr;
-
                 float dist = DistOf(raw);
                 float near = dist >= 0f ? Mathf.InverseLerp(40f, 4f, dist) : 0f;
 
-                // ---- ходьба по своему отрезку ----
-                Vector2 walkOff = Vector2.zero;
-                float face = 1f;
-                if (i < paths.Count && i < slots.Count)
-                {
-                    var seg = paths[i];
-                    float sp = 0.09f + (i % 4) * 0.025f;
-                    float ph = Mathf.PingPong(t * sp + i * 0.37f, 1f);
-                    var a = new Vector2(seg.x, seg.y);
-                    var b = new Vector2(seg.z, seg.w);
-                    var pos = Vector2.Lerp(a, b, Mathf.SmoothStep(0f, 1f, ph));
-                    walkOff = new Vector2(pos.x, -pos.y) - slots[i].anchoredPosition;
-
-                    // куда идём — туда и смотрим: отражаем картинку по горизонтали
-                    bool forward = Mathf.PingPong(t * sp + i * 0.37f + 0.02f, 1f) > ph;
-                    face = (b.x >= a.x) == forward ? 1f : -1f;
-                }
+                // вплотную — заливаем силуэт, чтобы контур не терялся
+                var spr = MobIconFor(raw, dist >= 0f && dist <= 8f);
+                if (spr != null && img.sprite != spr) img.sprite = spr;
 
                 float phase = i * 1.7f;
                 float amp = 3f + 9f * near * near * near;
                 float speed = 2f + 14f * near * near;
                 rt.localRotation = Quaternion.Euler(0f, 0f, Mathf.Sin((t + phase) * speed) * amp);
                 var jit = near > 0.01f ? NotifyWidget.PixelJitter(phase, 2.2f * near * near) : Vector2.zero;
-                // приподнимаем: иконка ставится центром, поэтому без сдвига ноги уходят в пол
-                rt.anchoredPosition = walkOff + jit + new Vector2(0f, IconLift);
+                rt.anchoredPosition = want[i] + jit;
 
-                float sc = 1f;
+                float sc = baseScale;
                 if (ConfigSettings.ScaleMonstersByCount.Value)
-                    sc = Mathf.Min(1.6f, 1f + 0.16f * (CountOf(raw) - 1));
-                rt.localScale = new Vector3(sc * face, sc, 1f);
+                    sc *= Mathf.Min(1.6f, 1f + 0.16f * (CountOf(raw) - 1));
+                rt.localScale = new Vector3(sc, sc, 1f);   // без зеркала: спрайты смотрят по-разному
 
                 float a2 = 1f;
                 if (ConfigSettings.ProximityFade.Value && dist >= 0f)
                     a2 = Mathf.Lerp(0.28f, 1f, Mathf.InverseLerp(34f, 6f, dist));
 
-                var col = MobRailWidget.TintedIconStylePublic() ? S.Frame : Color.white;
+                var col = MobRailWidget.IconTint(S);
                 col.a = Mathf.MoveTowards(img.color.a, a2, dt * 4f);
                 img.color = col;
             }
-        }
-
-        private static Sprite MobIconFor(string raw)
-        {
-            try
-            {
-                string key = MobRailWidget.IconKeyPublic(raw);
-                return string.IsNullOrEmpty(key) ? NotifyWidget.Folder() : SpriteBank.Get(key);
-            }
-            catch { return NotifyWidget.Folder(); }
         }
 
         /// <summary>На сколько поднять иконку над её точкой, чтобы не тонуть в полу.</summary>
@@ -937,6 +947,17 @@ namespace LCBridgeOverlay
                 return m.Success ? int.Parse(m.Groups[1].Value) : 1;
             }
             catch { return 1; }
+        }
+
+        private static Sprite MobIconFor(string raw, bool solid = false)
+        {
+            try
+            {
+                string key = MobRailWidget.IconKeyPublic(raw);
+                if (string.IsNullOrEmpty(key)) return NotifyWidget.Folder();
+                return solid ? SpriteBank.GetSolid(key) : SpriteBank.Get(key);
+            }
+            catch { return NotifyWidget.Folder(); }
         }
 
         /// <summary>Дистанция из строки монстра ("@42"), или -1.</summary>
@@ -971,6 +992,15 @@ namespace LCBridgeOverlay
             bool schematic = (ConfigSettings.MapWeatherMode.Value ?? "Schematic")
                              .Trim().ToLowerInvariant() != "effects";
 
+            if (w != _wxRaw)
+            {
+                _wxRaw = w;
+                Plugin.Log?.LogInfo($"[map] погода: \"{p.weatherFull}\" -> значок " +
+                                    (kind.Length > 0 ? kind : "неизвестна, рисуем общий"));
+            }
+            if (kind.Length == 0 && w.Length > 0 && w != "none" && w != "clear")
+                kind = "unknown";     // модовая погода: хоть что-то, но покажем
+
             if (kind != _wxKind || schematic != _wxSchematic)
             {
                 _wxKind = kind;
@@ -988,6 +1018,7 @@ namespace LCBridgeOverlay
         }
 
         private string _wxKind = "?";
+        private string _wxRaw;
         private bool _wxSchematic = true;
 
         /// <summary>Значок погоды — теми же линиями, что и вся схема.</summary>

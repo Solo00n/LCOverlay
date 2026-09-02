@@ -640,6 +640,7 @@ namespace LCBridgeOverlay
         }
 
         private bool _eventWindowOpen;
+        private bool _eventShownLast;
 
         /// <summary>
         /// В режиме уведомлений плашка ивента живёт двумя окнами: 10 секунд в начале
@@ -1028,6 +1029,17 @@ namespace LCBridgeOverlay
         {
             bool cfgOn = Gate.Events && (!ConfigSettings.NotifyMode.Value || _eventWindowOpen);
             bool show = cfgOn && onMoon && (_events.Count > 0 || BcmerEvents.BcmePresent());
+
+            // Плашка «не пропадает» уже не первый раз — печатаем ВСЕ слагаемые,
+            // чтобы стало видно, какое из них держит её на экране.
+            if (show != _eventShownLast)
+            {
+                _eventShownLast = show;
+                Plugin.Log?.LogInfo(
+                    $"[event] показ={show}: Gate.Events={Gate.Events}, notify={ConfigSettings.NotifyMode.Value}, " +
+                    $"окно={_eventWindowOpen} (осталось {_eventShowUntil - Time.unscaledTime:0.0}с), " +
+                    $"onMoon={onMoon}, ивентов={_events.Count}, BCME={BcmerEvents.BcmePresent()}");
+            }
             _eventPlate.SetVisible(show);
             if (!show) return;
 

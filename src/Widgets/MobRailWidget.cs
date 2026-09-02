@@ -509,6 +509,21 @@ namespace LCBridgeOverlay
         }
 
         /// <summary>Стиль иконок, который надо красить в цвет темы (контур и силуэт).</summary>
+        /// <summary>
+        /// Каким цветом рисовать иконку. Render и Pixel — своими цветами (белый
+        /// множитель), Vector и Symbol — маски, и им цвет задаёт настройка.
+        /// </summary>
+        public static Color IconTint(OverlayStyle style)
+        {
+            if (!TintedIconStyle()) return Color.white;
+            switch ((ConfigSettings.VectorIconColor.Value ?? "Red").Trim().ToLowerInvariant())
+            {
+                case "blue": return new Color(0.42f, 0.55f, 1f, 1f);
+                case "theme": return style != null ? style.Frame : Color.white;
+                default: return new Color(1f, 0.28f, 0.25f, 1f);   // красный по умолчанию
+            }
+        }
+
         public static bool TintedIconStylePublic() => TintedIconStyle();
 
         private static bool TintedIconStyle()
@@ -946,7 +961,7 @@ namespace LCBridgeOverlay
                 Appear = 0f,
                 // Vector/Symbol — белые маски: цвет им даёт тема, иначе они были бы
                 // просто белыми пятнами и не читались бы как часть оверлея
-                BaseColor = TintedIconStyle() && _mgr != null ? _mgr.Style.Frame : Color.white,
+                BaseColor = IconTint(_mgr != null ? _mgr.Style : null),
                 HurtFlash = hurt ? 1f : 0f,
                 // девиант — переворачиваем иконку вверх ногами
                 FlipY = (deviant && ConfigSettings.DeviantFlipIcon.Value) ? -1f : 1f,
