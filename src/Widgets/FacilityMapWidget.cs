@@ -852,8 +852,8 @@ namespace LCBridgeOverlay
             float t = Time.unscaledTime;
             var paths = walking ? _inPaths : _outPaths;
             var slots = walking ? _inSlots : _outSlots;
-            // в комплексе — полтора размера ОРИГИНАЛА, снаружи оригинал
-            float baseScale = walking ? 1.5f : 1f;
+            // от ОРИГИНАЛЬНОГО размера иконки: снаружи вдвое, в комплексе в полтора
+            float baseScale = walking ? 1.5f : 2f;
 
             // сначала считаем, кто где хочет стоять
             int n = Mathf.Min(dots.Count, shown.Count);
@@ -1022,37 +1022,45 @@ namespace LCBridgeOverlay
         private void UpdateWeather(BridgePayload p, float dt)
         {
             string w = (p.weatherFull ?? "").ToLowerInvariant();
-            string kind =
-                (w.Contains("eclips") || w.Contains("затмен")) ? "eclipse" :
-                (w.Contains("flood") || w.Contains("потоп")) ? "flood" :
-                (w.Contains("storm") || w.Contains("гроз")) ? "storm" :
-                (w.Contains("rain") || w.Contains("дожд")) ? "rain" :
-                (w.Contains("fog") || w.Contains("туман")) ? "fog" :
-                (w.Contains("dust") || w.Contains("пыл")) ? "dust" : "";
+
+            // Погоды складываются: WeatherTweaks выдаёт строки вида
+            // "Eclipsed + Stormy", а иногда и из трёх-четырёх слагаемых. Раньше
+            // брали первое совпадение и остальные пропадали — теперь собираем все.
+            var kinds = new List<string>();
+            void Add(string k) { if (!kinds.Contains(k)) kinds.Add(k); }
+            if (w.Contains("eclips") || w.Contains("затмен")) Add("eclipse");
+            if (w.Contains("flood") || w.Contains("потоп")) Add("flood");
+            if (w.Contains("storm") || w.Contains("гроз")) Add("storm");
+            if (w.Contains("rain") || w.Contains("дожд")) Add("rain");
+            if (w.Contains("fog") || w.Contains("туман")) Add("fog");
+            if (w.Contains("dust") || w.Contains("пыл")) Add("dust");
+            if (kinds.Count == 0 && w.Length > 0 && w != "none" && w != "clear") Add("unknown");
 
             bool schematic = (ConfigSettings.MapWeatherMode.Value ?? "Schematic")
                              .Trim().ToLowerInvariant() != "effects";
 
+            string key = string.Join(",", kinds.ToArray());
             if (w != _wxRaw)
             {
                 _wxRaw = w;
-                Plugin.Log?.LogInfo($"[map] погода: \"{p.weatherFull}\" -> значок " +
-                                    (kind.Length > 0 ? kind : "неизвестна, рисуем общий"));
+                Plugin.Log?.LogInfo($"[map] погода: \"{p.weatherFull}\" -> " +
+                                    (kinds.Count > 0 ? "значки " + key : "нечего рисовать"));
             }
-            if (kind.Length == 0 && w.Length > 0 && w != "none" && w != "clear")
-                kind = "unknown";     // модовая погода: хоть что-то, но покажем
 
-            if (kind != _wxKind || schematic != _wxSchematic)
+            if (key != _wxKind || schematic != _wxSchematic)
             {
-                _wxKind = kind;
+                _wxKind = key;
                 _wxSchematic = schematic;
                 foreach (var b in _weatherBits) if (b != null) Destroy(b.gameObject);
                 _weatherBits.Clear();
-                if (kind.Length > 0)
+
+                if (schematic)
                 {
-                    if (schematic) DrawWeatherGlyph(kind);
-                    else BuildWeatherFx(kind);
+                    // значки в столбик по левому краю: их может быть до четырёх
+                    for (int i = 0; i < kinds.Count; i++)
+                        DrawWeatherGlyph(kinds[i], 18f, 16f + i * 40f);
                 }
+                else if (kinds.Count > 0) BuildWeatherFx(kinds[0]);
             }
 
             if (!schematic) AnimateWeatherFx();
@@ -1063,9 +1071,8 @@ namespace LCBridgeOverlay
         private bool _wxSchematic = true;
 
         /// <summary>Значок погоды — теми же линиями, что и вся схема.</summary>
-        private void DrawWeatherGlyph(string kind)
+        private void DrawWeatherGlyph(string kind, float gx, float gy)
         {
-            const float gx = 22f, gy = 22f;
             var c = S.Frame;
             var soft = OverlayStyle.WithA(S.Frame, 0.55f);
 
@@ -1139,7 +1146,7 @@ namespace LCBridgeOverlay
         private void AnimateWeatherFx()
         {
             float t = Time.unscaledTime;
-            bool fog = _wxKind == "fog";
+            bool fog = _wxKind.StartsWith("fog");
             for (int i = 0; i < _weatherBits.Count; i++)
             {
                 var b = _weatherBits[i];

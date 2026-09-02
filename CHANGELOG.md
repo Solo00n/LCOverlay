@@ -1,5 +1,9 @@
 # Changelog — LCBridgeOverlay
 
+## 1.10.5
+- **Combined weather shows every part of it.** Weather mods hand over strings like "Eclipsed + Stormy", and only the first match was drawn; all of them are now, stacked down the left edge, up to four at once.
+- Creatures outside are back to twice the original size, with the facility ones at one and a half.
+
 ## 1.10.4
 - **The event plate can close on its own without notification mode.** The log settled it: the plate was staying up because notification mode was switched off, and the two showing windows were tied to it. `EventPlateAutoHide` now gives the same behaviour on its own — ten seconds after landing, five as the ship leaves.
 - **Creatures in the facility are half again the original size**, and the ones outside are back to it; they had ended up at double before the multiplier was even applied.
