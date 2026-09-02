@@ -220,7 +220,6 @@ namespace LCBridgeOverlay
             var frame = S.Frame;
             var dim = OverlayStyle.WithA(S.FrameDim, 0.6f);
             var scan = OverlayStyle.WithA(S.Frame, 0.10f);
-            var water = new Color(0.35f, 0.72f, 1f, 0.6f);
             var cave = OverlayStyle.WithA(S.Danger, 0.85f);
 
             // ---------- земля: кривая линия с резкими углами ----------
@@ -264,56 +263,63 @@ namespace LCBridgeOverlay
 
             // ---------- главная комната комплекса ----------
             const float rx = 34f, rw = 272f, rh = 96f;
-            Box(rx, roomY, rw, rh, 2.5f, frame);
+            // Потолок рисуем С РАЗРЫВОМ под коридором: сплошная линия перечёркивала
+            // проход, и коридор выглядел заглушенным.
+            Line(rx, roomY, hx, roomY, 2.5f, frame);
+            Line(hx + hw, roomY, rx + rw, roomY, 2.5f, frame);
+            Line(rx, roomY + rh, rx + rw, roomY + rh, 2.5f, frame);
+            Line(rx, roomY, rx, roomY + rh, 2.5f, frame);
+            Line(rx + rw, roomY, rx + rw, roomY + rh, 2.5f, frame);
             Fill(rx + 2f, roomY + 2f, rw - 4f, rh - 4f, scan);
 
-            // лифт на тросах: приехал из коридора
-            _elevTop = roomY + 10f;
-            _elevBottom = roomY + rh - 30f;
-            Line(hx + 5f, roomY, hx + 5f, roomY + 8f, 1.5f, dim, "Cable");
-            Line(hx + hw - 5f, roomY, hx + hw - 5f, roomY + 8f, 1.5f, dim, "Cable");
-            _elevCable1 = Line(hx + 5f, roomY, hx + 5f, _elevTop, 1.5f, dim, "Cable");
-            _elevCable2 = Line(hx + hw - 5f, roomY, hx + hw - 5f, _elevTop, 1.5f, dim, "Cable");
-            _elevCar = MakeCar(hx - 2f, _elevTop, hw + 4f, 24f, frame, scan);
+            // ---------- лифт на тросах ----------
+            // Кабина висит заметно ниже потолка, иначе тросы были длиной в десяток
+            // пикселей и их попросту не было видно. Тянем их от пола здания, через
+            // весь коридор, — так они и читаются как тросы.
+            _elevTop = roomY + 30f;
+            _elevBottom = roomY + rh - 26f;
+            _elevCableTop = by + bh;
+            _elevCable1 = Line(hx + 6f, _elevCableTop, hx + 6f, _elevTop, 1.5f, frame, "Cable");
+            _elevCable2 = Line(hx + hw - 6f, _elevCableTop, hx + hw - 6f, _elevTop, 1.5f, frame, "Cable");
+            _elevCar = MakeCar(hx - 3f, _elevTop, hw + 6f, 26f, frame, scan);
 
-            // рельсы по полу комнаты
+            // ---------- рельсы по полу, НЕ заходя под лифт ----------
             float railY = roomY + rh - 12f;
-            Line(rx + 10f, railY, rx + rw - 10f, railY, 2f, dim, "Rail");
-            Line(rx + 10f, railY + 6f, rx + rw - 10f, railY + 6f, 2f, dim, "Rail");
-            for (float x = rx + 18f; x < rx + rw - 14f; x += 18f)
-                Line(x, railY - 2f, x, railY + 8f, 1.5f, OverlayStyle.WithA(S.FrameDim, 0.4f), "Rail");
+            void Rails(float x1, float x2)
+            {
+                if (x2 - x1 < 16f) return;
+                Line(x1, railY, x2, railY, 2f, dim, "Rail");
+                Line(x1, railY + 6f, x2, railY + 6f, 2f, dim, "Rail");
+                for (float x = x1 + 8f; x < x2 - 4f; x += 18f)
+                    Line(x, railY - 2f, x, railY + 8f, 1.5f, OverlayStyle.WithA(S.FrameDim, 0.4f), "Rail");
+            }
+            Rails(rx + 10f, hx - 10f);
+            Rails(hx + hw + 10f, rx + rw - 10f);
 
-            // люминесцентные лампы: короткая ножка от ПОТОЛКА и трубка, больше ничего не касается
+            // ---------- люминесцентные лампы: ДВЕ ножки от потолка ----------
             var lampOn = new Color(1f, 0.85f, 0.15f, 1f);
             for (int i = 0; i < 3; i++)
             {
-                float lx = rx + 44f + i * 74f;
-                Line(lx + 16f, roomY + 2f, lx + 16f, roomY + 12f, 1.5f, dim, "LampStem");
-                _lampImgs.Add(Line(lx, roomY + 13f, lx + 32f, roomY + 13f, 5f, lampOn, "Lamp"));
+                float lx = rx + 30f + i * 62f;
+                const float lw = 34f;
+                Line(lx + 7f, roomY + 2f, lx + 7f, roomY + 14f, 1.5f, dim, "LampStem");
+                Line(lx + lw - 7f, roomY + 2f, lx + lw - 7f, roomY + 14f, 1.5f, dim, "LampStem");
+                _lampImgs.Add(Line(lx, roomY + 15f, lx + lw, roomY + 15f, 5f, lampOn, "Lamp"));
             }
 
             // ---------- шахта: из ЛЕВОЙ стены вниз и вправо, к ПРАВОЙ стене ----------
-            // Рисуем ЗАМКНУТЫМ контуром. Раньше каждый участок обводился своей парой
-            // стенок, и на изгибах они не стыковались — получалась мешанина отрезков
-            // вместо тоннеля.
             var spine = new[]
             {
-                new Vector2(rx, roomY + 62f),      // выход из левой стены комнаты
+                new Vector2(rx, roomY + 62f),
                 new Vector2(74f, 286f),
-                new Vector2(126f, 300f),
-                new Vector2(150f, 336f),           // большой зал
-                new Vector2(206f, 330f),
-                new Vector2(238f, 358f),
-                new Vector2(rx + rw, 360f),        // упирается в правую стену
+                new Vector2(126f, 302f),
+                new Vector2(152f, 338f),           // большой зал
+                new Vector2(208f, 330f),
+                new Vector2(240f, 360f),
+                new Vector2(rx + rw, 362f),
             };
-            var widths = new[] { 16f, 15f, 17f, 34f, 18f, 16f, 15f };
+            var widths = new[] { 17f, 16f, 18f, 34f, 19f, 17f, 16f };
             CaveOutline(spine, widths, cave);
-
-            // затопленная низина в большом зале
-            var low = spine[3];
-            Fill(low.x - 30f, low.y + 6f, 60f, 16f, OverlayStyle.WithA(water, 0.20f));
-            Line(low.x - 30f, low.y + 8f, low.x + 30f, low.y + 8f, 2f, water, "Water");
-            Line(low.x - 20f, low.y + 15f, low.x + 22f, low.y + 15f, 1.5f, OverlayStyle.WithA(water, 0.5f), "Water");
 
             // ---------- места для монстров ----------
             for (int i = 0; i < 8; i++)                       // уличные — над землёй, слева
@@ -342,16 +348,33 @@ namespace LCBridgeOverlay
         /// <summary>
         /// Обводка тоннеля одним замкнутым контуром.
         ///
-        /// Ключевой момент — стык на изгибе: нормаль в вершине берём как СРЕДНЮЮ от
-        /// двух соседних участков, иначе стенки соседних отрезков расходятся и рисунок
-        /// рассыпается на палки. Обходим левую сторону вперёд, торцуем, возвращаемся
-        /// правой — получается единый контур переменной ширины.
+        /// Два условия, без которых это не выглядит пещерой:
+        ///  1) стык на изгибе. Направление стенки в вершине берём как СРЕДНЕЕ от двух
+        ///     сходящихся участков, иначе стенки расходятся и рисунок рассыпается;
+        ///  2) неровность. Осевую дробим на короткие отрезки и уводим каждую точку в
+        ///     сторону по детерминированному шуму — стенка идёт множеством мелких
+        ///     звеньев и получается небрежной от руки, а не чертёжной.
         /// </summary>
-        private void CaveOutline(Vector2[] spine, float[] widths, Color col)
+        private void CaveOutline(Vector2[] ctrl, float[] ctrlW, Color col)
         {
-            int n = spine.Length;
-            if (n < 2) return;
+            if (ctrl == null || ctrl.Length < 2) return;
+            const int Sub = 6;                    // звеньев на участок — чем больше, тем живее
 
+            var spine = new List<Vector2>();
+            var wid = new List<float>();
+            for (int i = 0; i < ctrl.Length - 1; i++)
+            {
+                for (int k = 0; k < Sub; k++)
+                {
+                    float t = k / (float)Sub;
+                    spine.Add(Vector2.Lerp(ctrl[i], ctrl[i + 1], t));
+                    wid.Add(Mathf.Lerp(ctrlW[i], ctrlW[Mathf.Min(i + 1, ctrlW.Length - 1)], t));
+                }
+            }
+            spine.Add(ctrl[ctrl.Length - 1]);
+            wid.Add(ctrlW[ctrlW.Length - 1]);
+
+            int n = spine.Count;
             var left = new Vector2[n];
             var right = new Vector2[n];
 
@@ -362,17 +385,24 @@ namespace LCBridgeOverlay
                 else if (i == n - 1) dir = (spine[n - 1] - spine[n - 2]).normalized;
                 else
                 {
-                    // средняя от входящего и исходящего направления — это и есть
-                    // «ус» сглаженного стыка
                     var a = (spine[i] - spine[i - 1]).normalized;
                     var b = (spine[i + 1] - spine[i]).normalized;
                     dir = (a + b).normalized;
                     if (dir.sqrMagnitude < 0.0001f) dir = b;
                 }
                 var nrm = new Vector2(-dir.y, dir.x);
-                float w = widths != null && i < widths.Length ? widths[i] : 14f;
-                left[i] = spine[i] + nrm * w;
-                right[i] = spine[i] - nrm * w;
+
+                // шум разный для двух стенок, поэтому они не повторяют друг друга
+                float wl = wid[i] * (0.72f + 0.55f * Mathf.PerlinNoise(i * 0.55f, 3.1f));
+                float wr = wid[i] * (0.72f + 0.55f * Mathf.PerlinNoise(i * 0.55f, 9.7f));
+                // и лёгкое смещение вдоль оси — стенка перестаёт быть параллельной
+                var along = dir * (Mathf.PerlinNoise(i * 0.8f, 5.5f) - 0.5f) * 7f;
+
+                // концы не кривим: они должны точно упираться в стены комнаты
+                if (i == 0 || i == n - 1) { wl = wr = wid[i]; along = Vector2.zero; }
+
+                left[i] = spine[i] + nrm * wl + along;
+                right[i] = spine[i] - nrm * wr + along;
             }
 
             for (int i = 0; i < n - 1; i++)
@@ -380,7 +410,6 @@ namespace LCBridgeOverlay
                 Line(left[i].x, left[i].y, left[i + 1].x, left[i + 1].y, 2f, col, "Cave");
                 Line(right[i].x, right[i].y, right[i + 1].x, right[i + 1].y, 2f, col, "Cave");
             }
-            // торцы: у входа в комнату и у дальней стены
             Line(left[0].x, left[0].y, right[0].x, right[0].y, 2f, col, "Cave");
             Line(left[n - 1].x, left[n - 1].y, right[n - 1].x, right[n - 1].y, 2f, col, "Cave");
         }
@@ -388,7 +417,7 @@ namespace LCBridgeOverlay
         // ---- лифт ----
         private RectTransform _elevCar;
         private Image _elevCable1, _elevCable2;
-        private float _elevTop, _elevBottom, _elevPos;
+        private float _elevTop, _elevBottom, _elevPos, _elevCableTop;
 
         /// <summary>Кабина лифта: рамка с диагональной штриховкой.</summary>
         private RectTransform MakeCar(float x, float y, float w, float h, Color col, Color scan)
@@ -432,13 +461,12 @@ namespace LCBridgeOverlay
             float y = Mathf.Lerp(_elevTop, _elevBottom, _elevPos);
             _elevCar.anchoredPosition = new Vector2(_elevCar.anchoredPosition.x, -y);
 
-            // тросы тянутся за кабиной
+            // тросы тянутся за кабиной от самого пола здания
             foreach (var c in new[] { _elevCable1, _elevCable2 })
             {
                 if (c == null) continue;
                 var rt = (RectTransform)c.transform;
-                float top = -rt.anchoredPosition.y;
-                rt.sizeDelta = new Vector2(Mathf.Max(1f, y - top), rt.sizeDelta.y);
+                rt.sizeDelta = new Vector2(Mathf.Max(1f, y - _elevCableTop), rt.sizeDelta.y);
             }
         }
 

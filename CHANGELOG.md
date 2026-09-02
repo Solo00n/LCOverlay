@@ -1,5 +1,11 @@
 # Changelog — LCBridgeOverlay
 
+## 1.9.5
+- **The caves look hand-drawn now.** The passage is cut into many short links and each one is nudged aside by a fixed noise, with the two walls given different noise so they stop mirroring each other. They came out ruler-straight before because the outline followed the control points exactly. The water is gone.
+- **The corridor is open again.** The room's ceiling was drawn as one unbroken line straight across the passage, sealing it; it now has a gap where the corridor comes down.
+- **The lift's cables are visible.** They hung from the ceiling to a car parked just beneath it — about ten pixels of rope. They now run from the building's floor, down the corridor, to the car, and pay out as it descends.
+- **The rails stop short of the lift** instead of running underneath it, and the strip lights hang from two stems each rather than balancing on one.
+
 ## 1.9.4
 - **The frame is back aboard the ship** and gone outside. Last version removed the corners everywhere; now the whole set — corners and the blinking pixels alike — is present on the ship and hidden while the schematic has the panel.
 - **The side rails of creature icons are hidden with the schematic.** They were repeating what the drawing already showed, on both edges of the screen.
