@@ -185,7 +185,7 @@ namespace LCBridgeOverlay
             rt.anchorMin = rt.anchorMax = new Vector2(0f, 1f);
             rt.pivot = new Vector2(0.5f, 0.5f);
             rt.anchoredPosition = new Vector2(x, -y);
-            rt.sizeDelta = new Vector2(60f, 60f);
+            rt.sizeDelta = new Vector2(30f, 30f);
             return rt;
         }
 
@@ -196,7 +196,7 @@ namespace LCBridgeOverlay
             rt.SetParent(slot, false);
             rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
             rt.pivot = new Vector2(0.5f, 0.5f);
-            rt.sizeDelta = new Vector2(60f, 60f);
+            rt.sizeDelta = new Vector2(30f, 30f);
             var img = go.GetComponent<Image>();
             img.sprite = NotifyWidget.Folder();   // пока не пришла иконка — «пакет данных»
             img.raycastTarget = false;
@@ -246,7 +246,7 @@ namespace LCBridgeOverlay
             var frame = S.Frame;
             var dim = OverlayStyle.WithA(S.FrameDim, 0.6f);
             var scan = OverlayStyle.WithA(S.Frame, 0.10f);
-            var cave = OverlayStyle.WithA(S.Danger, 0.85f);
+            var cave = OverlayStyle.WithA(S.Frame, 0.85f);
 
             // ---------- земля: кривая линия с резкими углами ----------
             var ground = new[]
@@ -484,7 +484,8 @@ namespace LCBridgeOverlay
                 img.type = Image.Type.Simple;
 
                 if (l.IsLamp) { img.color = Color.white; _lampImgs.Add(img); }
-                else if (l.IsCave) img.color = OverlayStyle.WithA(S.Danger, 0.9f);
+                // шахту красим в тему, а не в красный: на схеме она часть постройки
+                else if (l.IsCave) img.color = OverlayStyle.WithA(S.Frame, 0.9f);
                 else img.color = S.Frame;
 
                 if (l.IsElevator)
@@ -560,7 +561,7 @@ namespace LCBridgeOverlay
             var frame = S.Frame;
             var dim = OverlayStyle.WithA(S.FrameDim, 0.6f);
             var scan = OverlayStyle.WithA(S.Frame, 0.10f);
-            var cave = OverlayStyle.WithA(S.Danger, 0.85f);
+            var cave = OverlayStyle.WithA(S.Frame, 0.85f);
             var lampOn = new Color(1f, 0.85f, 0.15f, 1f);
 
             Color Pick(string a)
@@ -851,7 +852,8 @@ namespace LCBridgeOverlay
             float t = Time.unscaledTime;
             var paths = walking ? _inPaths : _outPaths;
             var slots = walking ? _inSlots : _outSlots;
-            float baseScale = walking ? 1.5f : 1f;      // в комплексе крупнее
+            // в комплексе — полтора размера ОРИГИНАЛА, снаружи оригинал
+            float baseScale = walking ? 1.5f : 1f;
 
             // сначала считаем, кто где хочет стоять
             int n = Mathf.Min(dots.Count, shown.Count);
@@ -909,9 +911,12 @@ namespace LCBridgeOverlay
                 float dist = DistOf(raw);
                 float near = dist >= 0f ? Mathf.InverseLerp(40f, 4f, dist) : 0f;
 
-                // вплотную — заливаем силуэт, чтобы контур не терялся
-                var spr = MobIconFor(raw, dist >= 0f && dist <= 8f);
+                var spr = MobIconFor(raw);
                 if (spr != null && img.sprite != spr) img.sprite = spr;
+
+                // заливка ПОСТЕПЕННО проступает с приближением: отдельный силуэт
+                // поверх контура, его прозрачность и есть «насколько близко».
+                UpdateSolidOverlay(img, raw, near);
 
                 float phase = i * 1.7f;
                 float amp = 3f + 9f * near * near * near;
@@ -958,6 +963,42 @@ namespace LCBridgeOverlay
                 return solid ? SpriteBank.GetSolid(key) : SpriteBank.Get(key);
             }
             catch { return NotifyWidget.Folder(); }
+        }
+
+        /// <summary>
+        /// Силуэт поверх контурной иконки. Чем ближе монстр, тем он плотнее —
+        /// раньше подмена шла одним кадром на пороге, и это выглядело как рывок.
+        /// </summary>
+        private static void UpdateSolidOverlay(Image host, string raw, float near)
+        {
+            try
+            {
+                if (host == null) return;
+                var solid = MobIconFor(raw, true);
+                Image fill = null;
+                if (host.transform.childCount > 0)
+                    fill = host.transform.GetChild(0).GetComponent<Image>();
+
+                if (fill == null)
+                {
+                    var go = new GameObject("Solid", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+                    var rt = (RectTransform)go.transform;
+                    rt.SetParent(host.transform, false);
+                    rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one;
+                    rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+                    fill = go.GetComponent<Image>();
+                    fill.raycastTarget = false;
+                    fill.preserveAspect = true;
+                }
+
+                if (solid != null && fill.sprite != solid) fill.sprite = solid;
+                var c = host.color;
+                // порог начинается не с нуля: издалека заливки быть не должно вовсе
+                float k = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.35f, 0.95f, near));
+                fill.color = new Color(c.r, c.g, c.b, c.a * k);
+                fill.enabled = k > 0.01f;
+            }
+            catch { }
         }
 
         /// <summary>Дистанция из строки монстра ("@42"), или -1.</summary>

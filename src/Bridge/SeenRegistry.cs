@@ -97,6 +97,13 @@ namespace LCBridgeOverlay
             Save();
         }
 
+        /// <summary>
+        /// Новая игра — память по лунам обнуляется. Иначе она переживала и удаление
+        /// сейва, и рестарт мира: в режиме скана монстры показывались сразу, будто
+        /// их уже просветили, и весь смысл режима терялся.
+        /// </summary>
+        public static void ForgetAll() => Forget();
+
         public static void Forget()
         {
             _byMoon.Clear();

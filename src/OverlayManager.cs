@@ -643,6 +643,14 @@ namespace LCBridgeOverlay
         private bool _eventShownLast;
 
         /// <summary>
+        /// Гаснет ли плашка ивента сама. Раньше это было привязано ТОЛЬКО к режиму
+        /// уведомлений, и при выключенном режиме плашка честно висела весь день —
+        /// со стороны это выглядело как «не пропадает».
+        /// </summary>
+        private static bool EventWindowed =>
+            ConfigSettings.NotifyMode.Value || ConfigSettings.EventPlateAutoHide.Value;
+
+        /// <summary>
         /// В режиме уведомлений плашка ивента живёт двумя окнами: 10 секунд в начале
         /// дня и 5 при отлёте. Считаем это КАЖДЫЙ кадр: раньше проверка сидела внутри
         /// Refresh, который зовётся раз в пакет, и плашка гасла с запозданием либо,
@@ -650,7 +658,7 @@ namespace LCBridgeOverlay
         /// </summary>
         private void UpdateEventWindow()
         {
-            if (!ConfigSettings.NotifyMode.Value) { _eventWindowOpen = true; return; }
+            if (!EventWindowed) { _eventWindowOpen = true; return; }
 
             bool leaving = ShipLeavingNow();
             if (leaving && !_wasLeavingForEvent)
@@ -1027,7 +1035,7 @@ namespace LCBridgeOverlay
 
         private void RefreshEventPlate(bool onMoon)
         {
-            bool cfgOn = Gate.Events && (!ConfigSettings.NotifyMode.Value || _eventWindowOpen);
+            bool cfgOn = Gate.Events && (!EventWindowed || _eventWindowOpen);
             bool show = cfgOn && onMoon && (_events.Count > 0 || BcmerEvents.BcmePresent());
 
             // Плашка «не пропадает» уже не первый раз — печатаем ВСЕ слагаемые,
@@ -1036,7 +1044,7 @@ namespace LCBridgeOverlay
             {
                 _eventShownLast = show;
                 Plugin.Log?.LogInfo(
-                    $"[event] показ={show}: Gate.Events={Gate.Events}, notify={ConfigSettings.NotifyMode.Value}, " +
+                    $"[event] показ={show}: Gate.Events={Gate.Events}, окно-режим={EventWindowed}, " +
                     $"окно={_eventWindowOpen} (осталось {_eventShowUntil - Time.unscaledTime:0.0}с), " +
                     $"onMoon={onMoon}, ивентов={_events.Count}, BCME={BcmerEvents.BcmePresent()}");
             }

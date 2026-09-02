@@ -150,6 +150,8 @@ namespace LCBridgeOverlay
         /// </summary>
         public static void ResetForNewSave()
         {
+            // и память по лунам: новый сейв начинается вслепую
+            try { SeenRegistry.ForgetAll(); } catch { }
             ShowLastRun = false;
             LastRunJson = null;
             GameState.ResetDeaths();   // + RunStats.ResetRun() + bump resetToken

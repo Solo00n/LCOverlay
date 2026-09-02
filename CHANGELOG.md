@@ -1,5 +1,12 @@
 # Changelog — LCBridgeOverlay
 
+## 1.10.4
+- **The event plate can close on its own without notification mode.** The log settled it: the plate was staying up because notification mode was switched off, and the two showing windows were tied to it. `EventPlateAutoHide` now gives the same behaviour on its own — ten seconds after landing, five as the ship leaves.
+- **Creatures in the facility are half again the original size**, and the ones outside are back to it; they had ended up at double before the multiplier was even applied.
+- **The fill comes in gradually with distance** rather than switching over in one frame at a threshold: a solid silhouette rises over the outline as something closes in.
+- **The shaft is drawn in the overlay's colour** instead of red.
+- **A new save forgets which creatures live where.** The moon memory outlived deleting a save and restarting the world, so scan-to-reveal handed you everything the moment you landed and the mode lost its point.
+
 ## 1.10.3
 - **Creatures no longer flip as they walk.** The artwork does not face a consistent direction to begin with, so mirroring it turned as many of them backwards as it turned the right way round.
 - **They keep out of each other's way.** Marks that end up closer than an icon's width push apart, so two creatures in the same part of the facility no longer stack into one. Outside they also have far more room to pace.
