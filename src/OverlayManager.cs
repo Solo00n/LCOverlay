@@ -184,6 +184,7 @@ namespace LCBridgeOverlay
             UpdateVisibility(Time.unscaledDeltaTime);
             UpdateEndOfDay();      // независимо от панели: цифры по центру экрана
             UpdateFacilityMap();   // и схема локации — тоже сама по себе
+            UpdateEventWindow();   // окно показа ивента в режиме уведомлений
             PositionTrapRail();
 
             // таймер обновляем КАЖДЫЙ кадр — с миллисекундами
@@ -630,11 +631,40 @@ namespace LCBridgeOverlay
         private float _eventShowUntil = -999f;
         private bool _wasLeavingForEvent;
 
-        /// <summary>Новый день — показать ивент на 10 секунд.</summary>
+        /// <summary>Сели на луну — показать ивент на 10 секунд.</summary>
         public void NotifyDayStarted()
         {
             _eventShowUntil = Time.unscaledTime + 10f;
             _notify?.WakeUp();
+            Plugin.Log?.LogInfo("[notify] начало дня — плашка ивента на 10 с.");
+        }
+
+        private bool _eventWindowOpen;
+
+        /// <summary>
+        /// В режиме уведомлений плашка ивента живёт двумя окнами: 10 секунд в начале
+        /// дня и 5 при отлёте. Считаем это КАЖДЫЙ кадр: раньше проверка сидела внутри
+        /// Refresh, который зовётся раз в пакет, и плашка гасла с запозданием либо,
+        /// если пакет не менялся, не гасла вовсе.
+        /// </summary>
+        private void UpdateEventWindow()
+        {
+            if (!ConfigSettings.NotifyMode.Value) { _eventWindowOpen = true; return; }
+
+            bool leaving = ShipLeavingNow();
+            if (leaving && !_wasLeavingForEvent)
+            {
+                _eventShowUntil = Time.unscaledTime + 5f;
+                Plugin.Log?.LogInfo("[notify] отлёт — плашка ивента на 5 с.");
+            }
+            _wasLeavingForEvent = leaving;
+
+            bool open = Time.unscaledTime < _eventShowUntil;
+            if (open != _eventWindowOpen)
+            {
+                _eventWindowOpen = open;
+                _dirty = true;              // пересобрать панель под новое состояние
+            }
         }
 
         /// <summary>Показать/скрыть обычные блоки панели (когда их подменяет схема).</summary>
@@ -870,7 +900,7 @@ namespace LCBridgeOverlay
             foreach (var pb in _pixbits) if (pb != null) pb.Master = showPanel;
             _topEye.gameObject.SetActive(showPanel);
             _headerGo.SetActive(showPanel || ConfigSettings.ShowTimer.Value);
-            _headerDivider.SetActive(showPanel);
+            _headerDivider.SetActive(showPanel && !_mapShown);
             _timerText.transform.parent.gameObject.SetActive(ConfigSettings.ShowTimer.Value);
             // Пока показана схема, обычные блоки не возвращаем: Refresh() зовётся на
             // каждый пакет и раньше включал их обратно сразу после того, как схема их
@@ -996,15 +1026,7 @@ namespace LCBridgeOverlay
 
         private void RefreshEventPlate(bool onMoon)
         {
-            bool cfgOn = Gate.Events;
-            if (ConfigSettings.NotifyMode.Value)
-            {
-                // отлёт — показать на 5 секунд
-                bool leaving = ShipLeavingNow();
-                if (leaving && !_wasLeavingForEvent) _eventShowUntil = Time.unscaledTime + 5f;
-                _wasLeavingForEvent = leaving;
-                cfgOn = cfgOn && Time.unscaledTime < _eventShowUntil;
-            }
+            bool cfgOn = Gate.Events && (!ConfigSettings.NotifyMode.Value || _eventWindowOpen);
             bool show = cfgOn && onMoon && (_events.Count > 0 || BcmerEvents.BcmePresent());
             _eventPlate.SetVisible(show);
             if (!show) return;

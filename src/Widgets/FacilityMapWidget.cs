@@ -37,6 +37,7 @@ namespace LCBridgeOverlay
         private readonly List<RectTransform> _outSlots = new List<RectTransform>();
         private readonly List<RectTransform> _inSlots = new List<RectTransform>();
         private readonly List<Vector4> _inPaths = new List<Vector4>();   // маршруты хождения
+        private readonly List<Vector4> _outPaths = new List<Vector4>();  // и снаружи тоже
         private readonly List<Image> _outDots = new List<Image>();
         private readonly List<Image> _inDots = new List<Image>();
 
@@ -184,7 +185,7 @@ namespace LCBridgeOverlay
             rt.anchorMin = rt.anchorMax = new Vector2(0f, 1f);
             rt.pivot = new Vector2(0.5f, 0.5f);
             rt.anchoredPosition = new Vector2(x, -y);
-            rt.sizeDelta = new Vector2(30f, 30f);
+            rt.sizeDelta = new Vector2(60f, 60f);
             return rt;
         }
 
@@ -195,7 +196,7 @@ namespace LCBridgeOverlay
             rt.SetParent(slot, false);
             rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
             rt.pivot = new Vector2(0.5f, 0.5f);
-            rt.sizeDelta = new Vector2(30f, 30f);
+            rt.sizeDelta = new Vector2(60f, 60f);
             var img = go.GetComponent<Image>();
             img.sprite = NotifyWidget.Folder();   // пока не пришла иконка — «пакет данных»
             img.raycastTarget = false;
@@ -216,6 +217,7 @@ namespace LCBridgeOverlay
             for (int i = _art.childCount - 1; i >= 0; i--) Destroy(_art.GetChild(i).gameObject);
             _lampImgs.Clear(); _weatherBits.Clear();
             _outSlots.Clear(); _inSlots.Clear(); _outDots.Clear(); _inDots.Clear();
+            _inPaths.Clear(); _outPaths.Clear();
             _elevCar = null;
 
             // Порядок источников: картинки из папки, потом текстовый файл, потом
@@ -505,7 +507,12 @@ namespace LCBridgeOverlay
                 var n = c.N;
                 if (c.Op == "slotout" && n.Length >= 2)
                 {
-                    var sl = Slot(n[0], n[1]);
+                    // отрезок можно задать явно (4 числа), иначе монстр ходит вокруг точки
+                    var seg = n.Length >= 4
+                        ? new Vector4(n[0], n[1], n[2], n[3])
+                        : new Vector4(n[0] - 26f, n[1], n[0] + 26f, n[1]);
+                    _outPaths.Add(seg);
+                    var sl = Slot(seg.x, seg.y);
                     _outSlots.Add(sl); _outDots.Add(Dot(sl));
                 }
                 else if (c.Op == "slotin" && n.Length >= 4)
@@ -522,7 +529,9 @@ namespace LCBridgeOverlay
         {
             for (int i = 0; i < 8; i++)
             {
-                var sl = Slot(20f + i * 22f, 78f);
+                float x = 20f + i * 22f;
+                _outPaths.Add(new Vector4(x - 20f, 78f, x + 20f, 78f));
+                var sl = Slot(x - 20f, 78f);
                 _outSlots.Add(sl); _outDots.Add(Dot(sl));
             }
             _inPaths.Clear();
@@ -819,20 +828,29 @@ namespace LCBridgeOverlay
         /// </summary>
         private void PlaceDots(List<Image> dots, string[] names, bool walking)
         {
-            // отбираем ровно то же, что показала бы рейка
+            // Отбираем и СХЛОПЫВАЕМ по иконке: пакет группирует монстров вместе с
+            // их состояниями, поэтому один и тот же вид в разных состояниях приходил
+            // отдельными записями — на схеме это выглядело как две одинаковые собаки.
             var shown = new List<string>();
+            var seen = new List<string>();
             if (names != null)
                 foreach (var raw in names)
                 {
                     if (string.IsNullOrEmpty(raw)) continue;
-                    if (MobRailWidget.IsHiddenPublic(raw)) continue;   // мелочь вроде манticoil и локустов
+                    if (MobRailWidget.IsHiddenPublic(raw)) continue;
                     if (Gate.RequireScan &&
                         raw.IndexOf("+Scanned", System.StringComparison.OrdinalIgnoreCase) < 0) continue;
+
+                    string key = MobRailWidget.IconKeyPublic(raw) ?? raw;
+                    if (seen.Contains(key)) continue;
+                    seen.Add(key);
                     shown.Add(raw);
                 }
 
             float dt = Time.unscaledDeltaTime;
             float t = Time.unscaledTime;
+            var paths = walking ? _inPaths : _outPaths;
+            var slots = walking ? _inSlots : _outSlots;
 
             for (int i = 0; i < dots.Count; i++)
             {
@@ -857,32 +875,35 @@ namespace LCBridgeOverlay
                 float near = dist >= 0f ? Mathf.InverseLerp(40f, 4f, dist) : 0f;
 
                 // ---- ходьба по своему отрезку ----
-                Vector2 walk = Vector2.zero;
-                if (walking && i < _inPaths.Count)
+                Vector2 walkOff = Vector2.zero;
+                float face = 1f;
+                if (i < paths.Count && i < slots.Count)
                 {
-                    var seg = _inPaths[i];
-                    // своя скорость и фаза, чтобы не маршировали в ногу
-                    float ph = Mathf.PingPong(t * (0.09f + (i % 4) * 0.025f) + i * 0.37f, 1f);
+                    var seg = paths[i];
+                    float sp = 0.09f + (i % 4) * 0.025f;
+                    float ph = Mathf.PingPong(t * sp + i * 0.37f, 1f);
                     var a = new Vector2(seg.x, seg.y);
                     var b = new Vector2(seg.z, seg.w);
                     var pos = Vector2.Lerp(a, b, Mathf.SmoothStep(0f, 1f, ph));
-                    var home = _inSlots[i].anchoredPosition;
-                    walk = new Vector2(pos.x, -pos.y) - home;
+                    walkOff = new Vector2(pos.x, -pos.y) - slots[i].anchoredPosition;
+
+                    // куда идём — туда и смотрим: отражаем картинку по горизонтали
+                    bool forward = Mathf.PingPong(t * sp + i * 0.37f + 0.02f, 1f) > ph;
+                    face = (b.x >= a.x) == forward ? 1f : -1f;
                 }
 
-                // покачивание и дрожь по близости — как у иконок в рейке
                 float phase = i * 1.7f;
                 float amp = 3f + 9f * near * near * near;
                 float speed = 2f + 14f * near * near;
                 rt.localRotation = Quaternion.Euler(0f, 0f, Mathf.Sin((t + phase) * speed) * amp);
                 var jit = near > 0.01f ? NotifyWidget.PixelJitter(phase, 2.2f * near * near) : Vector2.zero;
-                rt.anchoredPosition = walk + jit;
+                // приподнимаем: иконка ставится центром, поэтому без сдвига ноги уходят в пол
+                rt.anchoredPosition = walkOff + jit + new Vector2(0f, IconLift);
 
-                // размер растёт от численности, если так настроена рейка
                 float sc = 1f;
                 if (ConfigSettings.ScaleMonstersByCount.Value)
                     sc = Mathf.Min(1.6f, 1f + 0.16f * (CountOf(raw) - 1));
-                rt.localScale = new Vector3(sc, sc, 1f);
+                rt.localScale = new Vector3(sc * face, sc, 1f);
 
                 float a2 = 1f;
                 if (ConfigSettings.ProximityFade.Value && dist >= 0f)
@@ -903,6 +924,9 @@ namespace LCBridgeOverlay
             }
             catch { return NotifyWidget.Folder(); }
         }
+
+        /// <summary>На сколько поднять иконку над её точкой, чтобы не тонуть в полу.</summary>
+        private const float IconLift = 22f;
 
         /// <summary>Сколько особей в записи ("Name x3 @20").</summary>
         private static int CountOf(string raw)

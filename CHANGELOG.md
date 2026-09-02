@@ -1,5 +1,12 @@
 # Changelog — LCBridgeOverlay
 
+## 1.10.2
+- **Two of the same creature on the schematic.** The data groups creatures together with their state, so one species in two states arrived as two entries — hence two dogs where there was one. The schematic now collapses entries that share an icon.
+- **Creatures outside walk too**, and every creature faces the way it is going: the icon mirrors on the turn. `slotout` accepts a full segment now, and falls back to pacing around its point.
+- **Icons are twice the size** and sit above their line rather than sinking into the floor.
+- **The stray line under the schematic is gone** — the divider was being switched back on with every packet, the same way the other rows were.
+- **The event plate closes on time.** Its ten-second window is measured from the ship landing, which is when the day begins for the player, and it is now checked every frame; before, the check sat inside the once-a-second refresh and could leave the plate up.
+
 ## 1.10.1
 - **The schematic can be a drawing you made.** Put PNG layers in `BepInEx/config/lcbridgeoverlay-map/` and the mod renders those instead of its own lines, stacked in filename order with point filtering, so pixel art stays pixel art. Draw in white: the image is used as a mask and the theme colours it. Keywords in the filename give a layer its job — `lamp` follows the facility lights, `cave` takes the danger colour, `elev` rides with the lift, `guide` is ignored. Re-entering a save picks up edited files, so there is no rebuild and no restart.
 - Creature positions stay in the text file, since they move: `slotout` for a spot outside, `slotin` for the stretch one paces inside.
