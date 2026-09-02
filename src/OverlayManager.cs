@@ -610,7 +610,29 @@ namespace LCBridgeOverlay
             bool want = ConfigSettings.ShowFacilityMap.Value &&
                         ConfigSettings.Enabled.Value &&
                         p != null && p.onMoon && !p.onShip && !p.loading;
+
+            // Схема ЗАМЕНЯЕТ обычное содержимое, а не дополняет его: вне корабля
+            // подробная панель мешает смотреть под ноги, и держать обе разом незачем.
+            if (want != _mapShown)
+            {
+                _mapShown = want;
+                SetPanelBlocks(!want);
+            }
             _map.Refresh(p, want);
+            if (want) _map.ApplyFonts(_fontBody, _fontBig);
+        }
+
+        private bool _mapShown;
+
+        /// <summary>Показать/скрыть обычные блоки панели (когда их подменяет схема).</summary>
+        private void SetPanelBlocks(bool on)
+        {
+            void Set(GameObject g) { if (g != null && g.activeSelf != on) g.SetActive(on); }
+            Set(_locationGo);
+            Set(_quotaGo);
+            Set(_dayDeathsGo);
+            Set(_tickerGo);
+            Set(_headerDivider);
         }
 
         private static float EaseOutCubic(float t) => 1f - Mathf.Pow(1f - t, 3f);
@@ -1415,10 +1437,10 @@ namespace LCBridgeOverlay
             _notify = _root.gameObject.AddComponent<NotifyWidget>();
             _notify.Init(S);
 
-            // схема локации живёт на КАНВАСЕ, а не внутри панели: она не должна
-            // ни съезжать вместе с ней, ни гаснуть в режиме уведомлений
-            _map = _root.parent.gameObject.AddComponent<FacilityMapWidget>();
-            _map.Init(this, (RectTransform)_root.parent, S);
+            // Схема — блок САМОЙ панели: на улице она встаёт на её место и получает
+            // её ширину, наклон, масштаб, качание камеры и перспективу даром.
+            _map = _root.gameObject.AddComponent<FacilityMapWidget>();
+            _map.Init(this, _root, S, PanelWidth);
             var spacerR = NewUI("SpacerR", _headerGo.transform);
             Flexible(spacerR, 1f);
 

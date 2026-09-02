@@ -29,7 +29,6 @@ namespace LCBridgeOverlay
         private OverlayManager _mgr;
         private OverlayStyle S;
         private RectTransform _root;
-        private CanvasGroup _group;
 
         private TextMeshProUGUI _moonText, _lootText;
         private RectTransform _art;             // сама схема
@@ -41,39 +40,58 @@ namespace LCBridgeOverlay
         private readonly List<Image> _inDots = new List<Image>();
 
         private string _builtFor;               // для какого интерьера собрана схема
-        private float _vis;
+        private float _wxMul = 1f;
         private bool _lightsOn = true;
         private float _lightPulse;
 
         // ================= сборка =================
 
-        public void Init(OverlayManager mgr, RectTransform parent, OverlayStyle style)
+        public void Init(OverlayManager mgr, RectTransform parent, OverlayStyle style, float panelWidth)
         {
             _mgr = mgr;
             S = style;
 
-            var go = new GameObject("FacilityMap", typeof(RectTransform), typeof(CanvasGroup));
+            // Схема — ОБЫЧНЫЙ блок панели, а не отдельный слой: так она сама собой
+            // получает её положение, наклон, масштаб, качание вслед за камерой,
+            // прозрачность и перспективу, а не повторяет всё это своим кодом.
+            float inner = panelWidth - 30f;              // минус паддинги layout-группы
+            _fit = inner / W;                            // рисуем в своих координатах, растягиваем целиком
+
+            var go = new GameObject("FacilityMap", typeof(RectTransform));
             _root = (RectTransform)go.transform;
             _root.SetParent(parent, false);
-            _root.anchorMin = _root.anchorMax = new Vector2(0.5f, 0f);
-            _root.pivot = new Vector2(0.5f, 0f);
-            _root.sizeDelta = new Vector2(W, H + 46f);
-            _root.anchoredPosition = new Vector2(0f, 60f);
-            _group = go.GetComponent<CanvasGroup>();
-            _group.interactable = false;
-            _group.blocksRaycasts = false;
-            _group.alpha = 0f;
 
-            _moonText = Text(_root, 20f, new Vector2(0f, -6f), TextAlignmentOptions.Top, S.Text);
-            _lootText = Text(_root, 13f, new Vector2(0f, -(H + 24f)), TextAlignmentOptions.Top, S.TextDim);
+            var le = go.AddComponent<LayoutElement>();
+            le.preferredWidth = inner;
+            le.preferredHeight = H * _fit + 52f;         // схема + название сверху + лут снизу
+            _le = le;
+
+            _moonText = Text(_root, 26f, new Vector2(0f, 0f), TextAlignmentOptions.Top, S.Text);
+            _lootText = Text(_root, 15f, new Vector2(0f, -(H * _fit + 30f)), TextAlignmentOptions.Top, S.TextDim);
 
             var artGo = new GameObject("Art", typeof(RectTransform));
             _art = (RectTransform)artGo.transform;
             _art.SetParent(_root, false);
             _art.anchorMin = _art.anchorMax = new Vector2(0f, 1f);
             _art.pivot = new Vector2(0f, 1f);
-            _art.anchoredPosition = new Vector2(0f, -26f);
+            _art.anchoredPosition = new Vector2(0f, -30f);
             _art.sizeDelta = new Vector2(W, H);
+            _art.localScale = new Vector3(_fit, _fit, 1f);   // увеличиваем всё разом
+
+            _root.gameObject.SetActive(false);
+        }
+
+        /// <summary>Корень блока — панель вешает на него перспективу.</summary>
+        public Transform Root => _root;
+
+        private float _fit = 1f;
+        private LayoutElement _le;
+
+        /// <summary>Шрифты берём те же, что у панели, — иначе схема выбивается из неё.</summary>
+        public void ApplyFonts(TMP_FontAsset body, TMP_FontAsset big)
+        {
+            if (_moonText != null && big != null) _moonText.font = big;
+            if (_lootText != null && body != null) _lootText.font = body;
         }
 
         private TextMeshProUGUI Text(RectTransform parent, float size, Vector2 pos,
@@ -89,6 +107,8 @@ namespace LCBridgeOverlay
             rt.offsetMax = new Vector2(0f, rt.offsetMax.y);
             rt.sizeDelta = new Vector2(0f, size * 1.5f);
             rt.anchoredPosition = pos;
+            rt.offsetMin = new Vector2(0f, rt.offsetMin.y);
+            rt.offsetMax = new Vector2(0f, rt.offsetMax.y);
 
             var t = go.AddComponent<TextMeshProUGUI>();
             t.fontSize = size;
@@ -271,6 +291,10 @@ namespace LCBridgeOverlay
             }
 
             _builtFor = interior ?? "";
+
+            // Перспективу вешаем ЗДЕСЬ, а не при создании виджета: линии и метки
+            // рождаются только сейчас, и на пустой блок вешать было нечего.
+            try { _mgr?.AddPerspectiveToTree(_art); } catch { }
         }
 
         // ================= жизнь =================
@@ -279,13 +303,10 @@ namespace LCBridgeOverlay
         {
             if (_root == null) return;
 
-            float dt = Time.unscaledDeltaTime;
-            _vis = Mathf.MoveTowards(_vis, wantVisible ? 1f : 0f, dt / 0.35f);
-            _group.alpha = _vis;
-            if (_root.gameObject.activeSelf != (_vis > 0.001f))
-                _root.gameObject.SetActive(_vis > 0.001f);
-            if (_vis <= 0.001f || p == null) return;
+            if (_root.gameObject.activeSelf != wantVisible) _root.gameObject.SetActive(wantVisible);
+            if (!wantVisible || p == null) return;
 
+            float dt = Time.unscaledDeltaTime;
             string interior = p.interiorType ?? "";
             if (_builtFor == null || _builtFor != interior) Build(interior);
 
@@ -426,10 +447,20 @@ namespace LCBridgeOverlay
                 b.color = OverlayStyle.WithA(S.Frame, flood ? 0.55f : 0.45f);
             }
 
-            // затмение приглушает всю схему, гроза изредка подсвечивает
+            // Затмение приглушает схему, гроза изредка подсвечивает. Трогаем ТОЛЬКО
+            // свои линии: общей прозрачностью владеет панель, и лезть в неё нельзя.
             float mul = eclipse ? 0.62f : 1f;
-            if (storm && Mathf.PerlinNoise(t * 1.7f, 4.2f) > 0.86f) mul *= 1.7f;
-            _group.alpha = Mathf.Clamp01(_vis * mul);
+            if (storm && Mathf.PerlinNoise(t * 1.7f, 4.2f) > 0.86f) mul *= 1.6f;
+            if (Mathf.Abs(mul - _wxMul) > 0.01f)
+            {
+                _wxMul = mul;
+                foreach (var img in _art.GetComponentsInChildren<Image>(true))
+                {
+                    if (img == null) continue;
+                    var c = img.color;
+                    img.color = new Color(c.r, c.g, c.b, Mathf.Clamp01(c.a * mul));
+                }
+            }
         }
     }
 }

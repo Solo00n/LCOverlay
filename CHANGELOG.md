@@ -1,5 +1,8 @@
 # Changelog — LCBridgeOverlay
 
+## 1.9.1
+- **The schematic now takes the panel's place instead of sitting beside it.** Step off the ship and the location, quota, day and ticker rows give way to the drawing; step back aboard and they return. It is built as a block of the panel itself rather than a separate layer, so it inherits the width, the tilt, the scale, the camera sway, the fade and the keystone perspective rather than reimplementing any of them, and it fills the panel edge to edge. Everything in it is drawn larger to match, and the moon name and loot line use the panel's own fonts.
+
 ## 1.9.0
 - **A schematic of the location, for when you are outside** (`ShowFacilityMap`). Rather than the full panel getting in the way while you move, a small drawing shows the surface, the entrance, the shaft down, the rooms and the caves. Creatures sit as marks in their own zones — above the ground line outside, below it inside — the moon's name stands over it and the loot inside, outside and in hives reads underneath. It is drawn from lines rather than an image, so it stays crisp at any size and keeps a transparent background; room interiors are filled with the overlay's own scanline blocks.
 - **The lamps follow the real lights.** They are yellow because they are light, not decoration, and they go out when the facility does. `MapLightMode` chooses whether that reads as a soft pulse or a plain on/off.
