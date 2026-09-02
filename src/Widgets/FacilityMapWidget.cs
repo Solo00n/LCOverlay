@@ -1205,8 +1205,10 @@ namespace LCBridgeOverlay
         {
             if (_shipSprite == null && _ship.Count == 0)
             {
-                // своя картинка важнее нарисованного силуэта
-                var spr = SpriteBank.FromFile(ShipImagePath, "dropship");
+                // Картинка доставщика встроена в мод (res/mobs/dropship.png), поэтому
+                // стили Pixel/Vector/Symbol применяются к ней сами. Файл в папке слоёв
+                // остаётся способом подменить её своей.
+                var spr = SpriteBank.FromFile(ShipImagePath, "dropship") ?? SpriteBank.Get("dropship");
                 if (spr != null)
                 {
                     var go = new GameObject("Dropship", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
@@ -1214,7 +1216,7 @@ namespace LCBridgeOverlay
                     rt.SetParent(_art, false);
                     rt.anchorMin = rt.anchorMax = new Vector2(0f, 1f);
                     rt.pivot = new Vector2(0.5f, 1f);
-                    rt.sizeDelta = new Vector2(46f, 56f);
+                    rt.sizeDelta = new Vector2(44f, 62f);
                     _shipSprite = go.GetComponent<Image>();
                     _shipSprite.sprite = spr;
                     _shipSprite.preserveAspect = true;

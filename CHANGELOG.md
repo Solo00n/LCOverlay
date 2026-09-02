@@ -1,5 +1,8 @@
 # Changelog — LCBridgeOverlay
 
+## 1.12.2
+- **The dropship has its proper artwork** now, cut from its white background and carried in the mod like the creature icons, so the Pixel, Vector and Symbol styles apply to it as well. Dropping a `dropship.png` into `lcbridgeoverlay-map/` still overrides it.
+
 ## 1.12.1
 - **The dropship comes down like a rocket.** It descends onto the open grass at the left of the drawing with its engines burning, cuts them while it sits unloading, and lifts off on them again when it is done — or the moment the crew's own ship leaves the moon.
 - **You can give it your own picture.** Drop a `dropship.png` into `lcbridgeoverlay-map/` and it is used in place of the drawn one, with a white background removed automatically and the same Pixel, Vector or Symbol treatment the creature icons get.
