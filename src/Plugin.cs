@@ -19,7 +19,7 @@ namespace LCBridgeOverlay
     {
         public const string GUID = "gdlp.lcbridgeoverlay";
         public const string NAME = "LCBridgeOverlay";
-        public const string VERSION = "1.10.0";
+        public const string VERSION = "1.10.1";
 
         public static Plugin Instance { get; private set; }
         public static ManualLogSource Log { get; private set; }

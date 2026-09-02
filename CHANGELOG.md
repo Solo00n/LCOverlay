@@ -1,5 +1,9 @@
 # Changelog — LCBridgeOverlay
 
+## 1.10.1
+- **The schematic can be a drawing you made.** Put PNG layers in `BepInEx/config/lcbridgeoverlay-map/` and the mod renders those instead of its own lines, stacked in filename order with point filtering, so pixel art stays pixel art. Draw in white: the image is used as a mask and the theme colours it. Keywords in the filename give a layer its job — `lamp` follows the facility lights, `cave` takes the danger colour, `elev` rides with the lift, `guide` is ignored. Re-entering a save picks up edited files, so there is no rebuild and no restart.
+- Creature positions stay in the text file, since they move: `slotout` for a spot outside, `slotin` for the stretch one paces inside.
+
 ## 1.10.0
 - **The schematic is now yours to draw.** It reads `gdlp.lcbridgeoverlay.map.txt` next to the config, and the mod writes the current drawing there on first run so there is something to start from. Move a line, resize a room, put the creatures somewhere else — reload the save and it is there, with no rebuild. If the file is missing or unreadable the built-in drawing is used, so nothing can break by editing it.
 - Every piece of the drawing is also published as a separate SVG, so it can be arranged in a vector editor instead of by numbers.

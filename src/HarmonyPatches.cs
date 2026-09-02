@@ -34,6 +34,7 @@ namespace LCBridgeOverlay
             try
             {
                 OverlayNet.Register();
+                MapImages.Forget();     // подхватить поправленные слои схемы
                 MonsterState.Reset();
                 ScanRegistry.Clear();
                 StartOfRound_Patches.ForgetScanClearDay();

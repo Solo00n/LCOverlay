@@ -218,8 +218,21 @@ namespace LCBridgeOverlay
             _outSlots.Clear(); _inSlots.Clear(); _outDots.Clear(); _inDots.Clear();
             _elevCar = null;
 
-            // Если рядом с конфигом лежит файл схемы — рисуем по нему. Так макет
-            // можно править самому, не пересобирая мод.
+            // Порядок источников: картинки из папки, потом текстовый файл, потом
+            // встроенный рисунок. Так свой макет можно принести и картинками,
+            // и координатами, ничего не пересобирая.
+            var imgs = MapImages.Load();
+            if (imgs != null && imgs.Count > 0)
+            {
+                DrawFromImages(imgs);
+                var slotsLay = MapLayout.Load();
+                if (slotsLay != null) AddSlotsFromLayout(slotsLay);
+                if (_inDots.Count == 0 && _outDots.Count == 0) DefaultSlots();
+                _builtFor = interior ?? "";
+                try { _mgr?.AddPerspectiveToTree(_art); } catch { }
+                return;
+            }
+
             var lay = MapLayout.Load();
             if (lay != null && DrawFromLayout(lay))
             {
@@ -227,7 +240,6 @@ namespace LCBridgeOverlay
                 try { _mgr?.AddPerspectiveToTree(_art); } catch { }
                 return;
             }
-
 
             var frame = S.Frame;
             var dim = OverlayStyle.WithA(S.FrameDim, 0.6f);
@@ -445,6 +457,89 @@ namespace LCBridgeOverlay
                 prev = pt;
             }
             Line(prev.x, prev.y, right[n - 1].x, right[n - 1].y, 2f, col, "Cave");
+        }
+
+        /// <summary>
+        /// Показ слоёв-картинок. Каждый слой растягивается на весь холст схемы, так
+        /// что рисовать можно в любом разрешении — важны пропорции, а не размер.
+        /// </summary>
+        private void DrawFromImages(List<MapImages.Layer> layers)
+        {
+            foreach (var l in layers)
+            {
+                var go = new GameObject("Layer_" + l.Name,
+                                        typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+                var rt = (RectTransform)go.transform;
+                rt.SetParent(_art, false);
+                rt.anchorMin = rt.anchorMax = new Vector2(0f, 1f);
+                rt.pivot = new Vector2(0f, 1f);
+                rt.anchoredPosition = Vector2.zero;
+                rt.sizeDelta = new Vector2(W, H);
+
+                var img = go.GetComponent<Image>();
+                img.sprite = l.Sprite;
+                img.raycastTarget = false;
+                img.type = Image.Type.Simple;
+
+                if (l.IsLamp) { img.color = Color.white; _lampImgs.Add(img); }
+                else if (l.IsCave) img.color = OverlayStyle.WithA(S.Danger, 0.9f);
+                else img.color = S.Frame;
+
+                if (l.IsElevator)
+                {
+                    // слой лифта ездит целиком: рисуй кабину в верхнем положении,
+                    // а мод сдвинет её вниз вместе с настоящей
+                    _elevCar = rt;
+                    _elevTop = 0f;
+                    _elevBottom = 30f;      // насколько слой уезжает вниз
+                }
+            }
+        }
+
+        /// <summary>Места монстров из текстового файла (картинки их не задают).</summary>
+        private void AddSlotsFromLayout(MapLayout lay)
+        {
+            _inPaths.Clear();
+            foreach (var c in lay.Cmds)
+            {
+                var n = c.N;
+                if (c.Op == "slotout" && n.Length >= 2)
+                {
+                    var sl = Slot(n[0], n[1]);
+                    _outSlots.Add(sl); _outDots.Add(Dot(sl));
+                }
+                else if (c.Op == "slotin" && n.Length >= 4)
+                {
+                    _inPaths.Add(new Vector4(n[0], n[1], n[2], n[3]));
+                    var sl = Slot(n[0], n[1]);
+                    _inSlots.Add(sl); _inDots.Add(Dot(sl));
+                }
+            }
+        }
+
+        /// <summary>Запасные места, если их нигде не задали.</summary>
+        private void DefaultSlots()
+        {
+            for (int i = 0; i < 8; i++)
+            {
+                var sl = Slot(20f + i * 22f, 78f);
+                _outSlots.Add(sl); _outDots.Add(Dot(sl));
+            }
+            _inPaths.Clear();
+            var paths = new[]
+            {
+                new Vector4(56f, 210f, 140f, 210f), new Vector4(160f, 210f, 244f, 210f),
+                new Vector4(70f, 192f, 150f, 192f), new Vector4(180f, 192f, 266f, 192f),
+                new Vector4(62f, 276f, 106f, 288f), new Vector4(120f, 296f, 156f, 312f),
+                new Vector4(140f, 330f, 190f, 328f), new Vector4(206f, 322f, 246f, 340f),
+                new Vector4(250f, 352f, 288f, 356f), new Vector4(170f, 336f, 214f, 330f),
+            };
+            foreach (var seg in paths)
+            {
+                _inPaths.Add(seg);
+                var sl = Slot(seg.x, seg.y);
+                _inSlots.Add(sl); _inDots.Add(Dot(sl));
+            }
         }
 
         /// <summary>
