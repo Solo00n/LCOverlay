@@ -57,7 +57,10 @@ namespace LCBridgeOverlay
         public static ConfigEntry<string> VectorIconColor;    // Red | Blue | Theme
         public static ConfigEntry<bool> ShowFacilityMap;      // схема локации на улице
         public static ConfigEntry<string> MapLightMode;       // Effects | Schematic
-        public static ConfigEntry<string> MapWeatherMode;     // Schematic | Effects
+        public static ConfigEntry<string> MapWeatherMode;     // Live | Icons
+        // цвет каждой погоды отдельно — как у иконок монстров и цифр отсчёта
+        public static ConfigEntry<string> ColorRain, ColorStorm, ColorFlood,
+                                          ColorEclipse, ColorFog, ColorDust, ColorMeteor;
         public static ConfigEntry<bool> NotifyMode;           // панель спит и просыпается на новости
         public static ConfigEntry<float> NotifyHoldSeconds;   // сколько держать её разбуженной
         public static ConfigEntry<bool> EventPlateAutoHide;   // плашка ивента гаснет сама
@@ -249,6 +252,16 @@ namespace LCBridgeOverlay
 
             MapWeatherMode = cfg.Bind("Widgets", "MapWeatherMode", "Live",
                 "Как схема показывает погоду: Live - погода происходит на схеме (капли бьются о землю, молнии, вода поднимается вместе с настоящей, солнце с луной идут по небу, туман плывёт и наводит помехи), Icons - просто значок в углу.");
+
+            // Имя цвета или #RRGGBB. Theme — взять цвет темы оверлея.
+            const string cdesc = "Цвет этой погоды на схеме: Red, Blue, White, Yellow, Green, Theme или #RRGGBB.";
+            ColorRain    = cfg.Bind("Widgets", "ColorRain",    "Blue",   cdesc);
+            ColorStorm   = cfg.Bind("Widgets", "ColorStorm",   "Yellow", cdesc);
+            ColorFlood   = cfg.Bind("Widgets", "ColorFlood",   "Blue",   cdesc);
+            ColorEclipse = cfg.Bind("Widgets", "ColorEclipse", "Red",    cdesc);
+            ColorFog     = cfg.Bind("Widgets", "ColorFog",     "White",  cdesc);
+            ColorDust    = cfg.Bind("Widgets", "ColorDust",    "Yellow", cdesc);
+            ColorMeteor  = cfg.Bind("Widgets", "ColorMeteor",  "Red",    cdesc);
 
             NotifyMode = cfg.Bind("Behavior", "NotifyMode", false,
                 "Режим уведомлений: панель не висит на экране постоянно, а спит невидимой и разгорается только когда что-то изменилось. Над ней появляется мельтешащая папка, она влетает в панель и растворяется, изменившиеся цифры коротко мерцают. Включение и выключение озвучены радар-бустером.");

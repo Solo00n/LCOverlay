@@ -34,13 +34,50 @@ namespace LCBridgeOverlay
         private readonly List<Image> _bolt = new List<Image>();
         private readonly List<Image> _sun = new List<Image>();
         private readonly List<Image> _moon = new List<Image>();
-        private Image _waterLine, _waterRipple, _waterFill;
+        private Image _waterLine, _waterRipple;
 
         private bool _rain, _storm, _flood, _eclipse, _fog, _meteor;
-        private float _boltAt = -99f, _boltNext = 5f;
+        private float _boltAt = -99f, _boltNext = 2.5f;
+        private float _bx1, _bx2, _broof;   // здание: дождь падает НА него
 
         /// <summary>Сила помех от тумана: 0 нет, 1 максимум. Её берут иконки монстров.</summary>
         public float FogAmount { get; private set; }
+
+        /// <summary>
+        /// Цвет конкретной погоды из настроек. Имя, #RRGGBB или Theme.
+        /// </summary>
+        private Color WxColor(string kind, float alpha = 1f)
+        {
+            string v = "Theme";
+            switch (kind)
+            {
+                case "rain": v = ConfigSettings.ColorRain.Value; break;
+                case "storm": v = ConfigSettings.ColorStorm.Value; break;
+                case "flood": v = ConfigSettings.ColorFlood.Value; break;
+                case "eclipse": v = ConfigSettings.ColorEclipse.Value; break;
+                case "fog": v = ConfigSettings.ColorFog.Value; break;
+                case "dust": v = ConfigSettings.ColorDust.Value; break;
+                case "meteor": v = ConfigSettings.ColorMeteor.Value; break;
+            }
+            var c = Parse(v);
+            c.a = alpha;
+            return c;
+        }
+
+        private Color Parse(string v)
+        {
+            v = (v ?? "Theme").Trim();
+            if (v.StartsWith("#") && ColorUtility.TryParseHtmlString(v, out var hex)) return hex;
+            switch (v.ToLowerInvariant())
+            {
+                case "red": return new Color(1f, 0.30f, 0.26f);
+                case "blue": return new Color(0.42f, 0.62f, 1f);
+                case "white": return new Color(0.92f, 0.94f, 1f);
+                case "yellow": return new Color(1f, 0.83f, 0.25f);
+                case "green": return new Color(0.42f, 0.95f, 0.55f);
+                default: return S != null ? S.Frame : Color.white;
+            }
+        }
 
         /// <summary>Туман внутри комплекса (ивент) — помехи и полосы там же.</summary>
         public bool FogInside { get; private set; }
@@ -86,7 +123,7 @@ namespace LCBridgeOverlay
             for (int i = _host.childCount - 1; i >= 0; i--) Object.Destroy(_host.GetChild(i).gameObject);
             _drops.Clear(); _splash.Clear(); _fogLines.Clear(); _meteors.Clear();
             _bolt.Clear(); _sun.Clear(); _moon.Clear();
-            _waterLine = _waterRipple = _waterFill = null;
+            _waterLine = _waterRipple = null;
 
             _rain = kinds.Contains("rain");
             _storm = kinds.Contains("storm");
@@ -102,7 +139,7 @@ namespace LCBridgeOverlay
             if (_rain || _storm)
                 for (int i = 0; i < 20; i++)
                 {
-                    var img = Line(0f, 0f, 3f, 9f, 1.5f, soft);
+                    var img = Line(0f, 0f, 3f, 9f, 1.5f, WxColor(_storm ? "storm" : "rain", 0.75f));
                     _drops.Add(new Drop
                     {
                         Rt = (RectTransform)img.transform, Img = img,
@@ -114,7 +151,13 @@ namespace LCBridgeOverlay
                 }
 
             if (_storm)
-                for (int i = 0; i < 4; i++) { var b = Line(0f, 0f, 1f, 1f, 2.5f, c); b.enabled = false; _bolt.Add(b); }
+                // молния толще и ярче: тонкая на схеме терялась и её просто не замечали
+                for (int i = 0; i < 6; i++)
+                {
+                    var b = Line(0f, 0f, 1f, 1f, 4f, WxColor("storm"));
+                    b.enabled = false;
+                    _bolt.Add(b);
+                }
 
             if (_meteor)
                 for (int i = 0; i < 4; i++)
@@ -124,7 +167,7 @@ namespace LCBridgeOverlay
                     for (int k = 0; k < 3; k++)
                     {
                         im[k] = Line(0f, 0f, 6f, 6f, 2.5f - k * 0.7f,
-                                     OverlayStyle.WithA(S.Frame, 0.9f - k * 0.28f));
+                                     WxColor("meteor", 0.9f - k * 0.28f));
                         seg[k] = (RectTransform)im[k].transform;
                     }
                     _meteors.Add(new Meteor
@@ -140,8 +183,8 @@ namespace LCBridgeOverlay
             if (_rain || _storm || _meteor)
                 for (int i = 0; i < 10; i++)
                 {
-                    var a = Line(0f, 0f, 4f, -4f, 1.5f, soft);
-                    var b = Line(0f, 0f, -4f, -4f, 1.5f, soft);
+                    var a = Line(0f, 0f, 4f, -4f, 1.5f, WxColor(_meteor ? "meteor" : "rain", 0.6f));
+                    var b = Line(0f, 0f, -4f, -4f, 1.5f, WxColor(_meteor ? "meteor" : "rain", 0.6f));
                     a.enabled = b.enabled = false;
                     _splash.Add(new Splash
                     {
@@ -152,25 +195,28 @@ namespace LCBridgeOverlay
 
             if (_flood)
             {
-                _waterFill = Line(0f, 0f, W, 0f, 1f, OverlayStyle.WithA(S.Frame, 0.10f));
-                _waterLine = Line(0f, 0f, W, 0f, 2.5f, OverlayStyle.WithA(S.Frame, 0.85f));
-                _waterRipple = Line(0f, 0f, W, 0f, 1.5f, OverlayStyle.WithA(S.Frame, 0.4f));
+                // Заливки больше нет: она красила пещеры и комнаты, а нужна только
+                // сама линия воды с рябью.
+                _waterLine = Line(0f, 0f, W, 0f, 2.5f, WxColor("flood", 0.9f));
+                _waterRipple = Line(0f, 0f, W, 0f, 1.5f, WxColor("flood", 0.45f));
             }
 
             if (_eclipse)
             {
-                for (int i = 0; i < 14; i++) _sun.Add(Line(0f, 0f, 1f, 1f, 2f, c));
-                for (int i = 0; i < 14; i++) _moon.Add(Line(0f, 0f, 1f, 1f, 2f, OverlayStyle.WithA(S.Frame, 0.35f)));
+                for (int i = 0; i < 16; i++) _sun.Add(Line(0f, 0f, 1f, 1f, 2f, WxColor("eclipse")));
+                for (int i = 0; i < 16; i++) _moon.Add(Line(0f, 0f, 1f, 1f, 2.5f, WxColor("eclipse", 0.55f)));
             }
 
             if (_fog)
                 for (int i = 0; i < 7; i++)
-                    _fogLines.Add(Line(0f, 0f, W, 0f, 2f, OverlayStyle.WithA(S.FrameDim, 0.3f)));
+                    _fogLines.Add(Line(0f, 0f, W, 0f, 2f, WxColor("fog", 0.28f)));
         }
 
         // ---------- ход ----------
-        public void Tick(float dt, float roomTop, float roomBottom, float caveTop, float caveBottom)
+        public void Tick(float dt, float roomTop, float roomBottom, float caveTop, float caveBottom,
+                         float bx1, float bx2, float broof)
         {
+            _bx1 = bx1; _bx2 = bx2; _broof = broof;
             float t = Time.unscaledTime;
             FogAmount = 0f;
 
@@ -178,9 +224,11 @@ namespace LCBridgeOverlay
             foreach (var d in _drops)
             {
                 d.Y += d.Sp * dt;
-                if (d.Y >= Ground)
+                // под зданием земли нет — там поверхность это крыша
+                float surface = SurfaceAt(d.X);
+                if (d.Y >= surface)
                 {
-                    PopSplash(d.X, Ground);
+                    PopSplash(d.X, surface);
                     d.Y = Random.Range(-30f, -4f);
                     d.X = Random.Range(4f, W - 4f);
                 }
@@ -196,6 +244,7 @@ namespace LCBridgeOverlay
                     _boltNext = Random.Range(3.5f, 8f);
                     float bx = Random.Range(30f, W - 30f);
                     float y = 0f;
+                    Plugin.Log?.LogInfo("[map] молния");
                     for (int i = 0; i < _bolt.Count; i++)
                     {
                         float ny = y + Ground / _bolt.Count;
@@ -204,8 +253,10 @@ namespace LCBridgeOverlay
                         bx = nx; y = ny;
                     }
                 }
+                // держим вспышку заметно дольше и мигаем реже: прежние 0.22 с с
+                // частым миганием на схеме просто не успевали попасться на глаза
                 float age = t - _boltAt;
-                bool on = age < 0.22f && Mathf.FloorToInt(age * 28f) % 2 == 0;
+                bool on = age < 0.5f && Mathf.FloorToInt(age * 12f) % 2 == 0;
                 foreach (var b in _bolt) b.enabled = on;
             }
 
@@ -251,17 +302,14 @@ namespace LCBridgeOverlay
             // ---- затопление ----
             if (_waterLine != null)
             {
+                // Вода стоит у самой поверхности и поднимается над ней, а не заливает
+                // подземелье: пещеры и комнаты красить нельзя.
                 float prog = FloodProgress();
-                float y = Mathf.Lerp(caveBottom, caveTop, prog);
+                float y = Mathf.Lerp(Ground + 4f, Ground - 22f, prog);
                 Place((RectTransform)_waterLine.transform, 8f, y, W - 8f, y, 2.5f);
                 Place((RectTransform)_waterRipple.transform, 16f, y + 5f + Mathf.Sin(t * 1.6f) * 1.5f,
                       W - 16f, y + 5f + Mathf.Sin(t * 1.6f + 1f) * 1.5f, 1.5f);
-                // «толща» воды: широкая полупрозрачная линия вниз от уровня
-                var wf = (RectTransform)_waterFill.transform;
-                float depth = Mathf.Max(2f, caveBottom - y);
-                wf.anchoredPosition = new Vector2(8f, -(y + depth * 0.5f));
-                wf.sizeDelta = new Vector2(W - 16f, depth);
-                wf.localRotation = Quaternion.identity;
+
             }
 
             // ---- затмение ----
@@ -273,8 +321,11 @@ namespace LCBridgeOverlay
                 float cy = Mathf.Lerp(64f, 22f, Mathf.Sin(tod * Mathf.PI));
                 Ring(_sun, cx, cy, 13f);
                 // луна наползает: к середине дня закрывает полностью
+                // Луна — шарик ВНУТРИ солнца: наползает по горизонтали и к середине
+                // дня встаёт ровно по центру. Раньше она уезжала и вбок, и вверх, и
+                // получались два разъехавшихся кружка.
                 float cover = Mathf.Sin(tod * Mathf.PI);
-                Ring(_moon, cx - Mathf.Lerp(26f, 0f, cover), cy - Mathf.Lerp(10f, 0f, cover), 13f);
+                Ring(_moon, cx - Mathf.Lerp(11f, 0f, cover), cy, 9f);
             }
 
             // ---- туман ----
@@ -300,11 +351,22 @@ namespace LCBridgeOverlay
             {
                 float a1 = i / (float)n * Mathf.PI * 2f;
                 float a2 = (i + 1) / (float)n * Mathf.PI * 2f;
-                Place((RectTransform)parts[i].transform,
-                      cx + Mathf.Cos(a1) * r, cy + Mathf.Sin(a1) * r,
-                      cx + Mathf.Cos(a2) * r, cy + Mathf.Sin(a2) * r, 2f);
+                float x1 = cx + Mathf.Cos(a1) * r, y1 = cy + Mathf.Sin(a1) * r;
+                float x2 = cx + Mathf.Cos(a2) * r, y2 = cy + Mathf.Sin(a2) * r;
+                // Заходя за здание, светило прячется ЗА ним, а не рисуется поверх.
+                bool hidden = Behind(x1, y1) && Behind(x2, y2);
+                parts[i].enabled = !hidden;
+                if (!hidden) Place((RectTransform)parts[i].transform, x1, y1, x2, y2, 2f);
             }
         }
+
+        /// <summary>Точка попадает на здание (значит перекрыта им).</summary>
+        private bool Behind(float x, float y) =>
+            x >= _bx1 && x <= _bx2 && y >= _broof && y <= Ground;
+
+        /// <summary>Высота поверхности в этой точке: крыша здания либо земля.</summary>
+        private float SurfaceAt(float x) =>
+            (x >= _bx1 && x <= _bx2) ? _broof : Ground;
 
         private void PopSplash(float x, float y)
         {

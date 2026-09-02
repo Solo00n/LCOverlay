@@ -883,7 +883,7 @@ namespace LCBridgeOverlay
             var paths = walking ? _inPaths : _outPaths;
             var slots = walking ? _inSlots : _outSlots;
             // от ОРИГИНАЛЬНОГО размера иконки: снаружи вдвое, в комплексе в полтора
-            float baseScale = walking ? 1.5f : 2f;
+            float baseScale = walking ? 1.5f : 1.7f;
 
             // сначала считаем, кто где хочет стоять
             int n = Mathf.Min(dots.Count, shown.Count);
@@ -925,7 +925,13 @@ namespace LCBridgeOverlay
                         var d = pj - pi;
                         float dist2 = d.magnitude;
                         if (dist2 >= MinSep || dist2 < 0.001f) continue;
-                        var push = d.normalized * ((MinSep - dist2) * 0.5f);
+                        // Расходятся ПО ДУГЕ навстречу друг другу: один по часовой,
+                        // другой против. Прямое расталкивание выглядело как рывок,
+                        // а так это читается как «разошлись, обойдя друг друга».
+                        var n2 = d.normalized;
+                        var tangent = new Vector2(-n2.y, n2.x);
+                        float need = (MinSep - dist2) * 0.5f;
+                        var push = n2 * (need * 0.45f) + tangent * (need * 0.85f);
                         want[i] -= push;
                         want[j] += push;
                     }
@@ -1051,6 +1057,17 @@ namespace LCBridgeOverlay
                 var solid = MobIconFor(raw, true);
                 if (solid != null && fill.sprite != solid) fill.sprite = solid;
 
+                // Прямоугольник заливки переустанавливаем КАЖДЫЙ кадр. Он задавался
+                // один раз при создании, и любое последующее изменение размера иконки
+                // оставляло его на прежнем месте — отсюда сдвиг влево-вверх.
+                var frt = (RectTransform)fill.transform;
+                frt.anchorMin = Vector2.zero; frt.anchorMax = Vector2.one;
+                frt.offsetMin = Vector2.zero; frt.offsetMax = Vector2.zero;
+                frt.pivot = new Vector2(0.5f, 0.5f);
+                frt.anchoredPosition = Vector2.zero;
+                frt.localScale = Vector3.one;
+                frt.localRotation = Quaternion.identity;
+
                 // из прозрачного плавно в цвет по всей дистанции, без порога
                 float k = Mathf.Clamp01(near);
                 k = k * k * (3f - 2f * k);
@@ -1140,12 +1157,14 @@ namespace LCBridgeOverlay
             }
 
             if (!icons && _fx != null)
-                _fx.Tick(dt, RoomTop, RoomBottom, CaveTop, CaveBottom);
+                _fx.Tick(dt, RoomTop, RoomBottom, CaveTop, CaveBottom,
+                         BuildX1, BuildX2, BuildRoofY);
         }
 
         // Границы зон на холсте — эффекты по ним ориентируются. Значения совпадают с
         // тем, что нарисовано; при своём макете правятся здесь же.
         private const float RoomTop = 158f, RoomBottom = 236f;
+        private const float BuildX1 = 192f, BuildX2 = 318f, BuildRoofY = 22f;
         private const float CaveTop = 250f, CaveBottom = 384f;
 
         /// <summary>Помехи от тумана для иконок монстров: 0 нет, 1 максимум.</summary>

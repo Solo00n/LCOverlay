@@ -1,5 +1,15 @@
 # Changelog — LCBridgeOverlay
 
+## 1.11.2
+- **Rain lands on the building** rather than falling through it: drops break on whatever surface is beneath them, the roof included.
+- **Lightning is actually visible** — thicker, in its own colour, held twice as long and blinking half as fast. It also writes a line to the log, so if it still goes unseen we will know whether it fired.
+- **Flood water sits at the surface and rises above it**, and nothing is painted inside the caves or rooms any more.
+- **Each weather has its own colour** (`ColorRain`, `ColorStorm`, `ColorFlood`, `ColorEclipse`, `ColorFog`, `ColorDust`, `ColorMeteor`) — a name, a hex value, or `Theme`.
+- **The eclipse is one disc inside the other.** The moon used to drift away sideways and upwards, leaving two circles apart; it now slides in horizontally and settles dead centre. Passing behind the building it is hidden by it instead of drawn over it.
+- **The vector fill stays put.** Its rectangle was set once when created and never again, so any later change of icon size left it behind — the drift up and to the left. It is re-fitted to the icon every frame.
+- **Icons that need to swap places arc around each other**, one each way, instead of shoving apart in a straight line.
+- Outside creatures are 1.7 times the original size.
+
 ## 1.11.1
 - **Icons stopped reloading themselves.** Aboard the ship they kept cycling through the packet and back into the icon every few seconds. The rail rebuilds whenever the roster changes, and a creature merely freezing or unfreezing counted as a change; on top of that every rebuild replayed the packet for creatures that were already there. Freezing no longer counts, and only creatures new to the rail get the packet.
 - **Creatures walking left to right are mirrored**, since the artwork faces left; those walking the other way are left alone.
