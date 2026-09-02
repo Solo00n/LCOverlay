@@ -1,5 +1,10 @@
 # Changelog — LCBridgeOverlay
 
+## 1.11.0
+- **Weather happens on the schematic instead of being labelled.** Rain falls and breaks on the ground, storms add lightning, the flood line rises and falls with the real water, an eclipsed sun crosses the sky as the day runs, fog drifts in bands and puts interference through the creature marks, and a meteor shower drops meteors that shatter on the surface. Fog raised as an event inside the facility does the same in there. The old corner symbols remain as `MapWeatherMode = Icons`.
+- **The fill on outline icons was misplaced and stepped.** It was being drawn over solid artwork as well, where it read as a shifted duplicate, and it followed the once-a-second distance directly, so it moved in visible steps. It applies only to the outline style now, is smoothed over time, and rises from fully transparent to full colour across the whole approach rather than switching at a threshold.
+- **Dark patches in the caves take the facility's own background** rather than vanishing into black.
+
 ## 1.10.5
 - **Combined weather shows every part of it.** Weather mods hand over strings like "Eclipsed + Stormy", and only the first match was drawn; all of them are now, stacked down the left edge, up to four at once.
 - Creatures outside are back to twice the original size, with the facility ones at one and a half.

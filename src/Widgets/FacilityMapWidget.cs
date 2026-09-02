@@ -38,6 +38,9 @@ namespace LCBridgeOverlay
         private readonly List<RectTransform> _inSlots = new List<RectTransform>();
         private readonly List<Vector4> _inPaths = new List<Vector4>();   // маршруты хождения
         private readonly List<Vector4> _outPaths = new List<Vector4>();  // и снаружи тоже
+        private readonly List<float> _nearSmooth = new List<float>();    // сглаженная близость
+        private string _wxKind = "?";   // что сейчас нарисовано
+        private string _wxRaw;          // последняя сырая строка погоды
         private readonly List<Image> _outDots = new List<Image>();
         private readonly List<Image> _inDots = new List<Image>();
 
@@ -909,7 +912,12 @@ namespace LCBridgeOverlay
 
                 string raw = shown[i];
                 float dist = DistOf(raw);
-                float near = dist >= 0f ? Mathf.InverseLerp(40f, 4f, dist) : 0f;
+                float nearTarget = dist >= 0f ? Mathf.InverseLerp(40f, 4f, dist) : 0f;
+                // дистанция приходит раз в секунду целым числом — без сглаживания
+                // заливка шла ступеньками
+                while (_nearSmooth.Count <= i) _nearSmooth.Add(0f);
+                _nearSmooth[i] = Mathf.MoveTowards(_nearSmooth[i], nearTarget, dt / 0.7f);
+                float near = _nearSmooth[i];
 
                 var spr = MobIconFor(raw);
                 if (spr != null && img.sprite != spr) img.sprite = spr;
@@ -923,6 +931,9 @@ namespace LCBridgeOverlay
                 float speed = 2f + 14f * near * near;
                 rt.localRotation = Quaternion.Euler(0f, 0f, Mathf.Sin((t + phase) * speed) * amp);
                 var jit = near > 0.01f ? NotifyWidget.PixelJitter(phase, 2.2f * near * near) : Vector2.zero;
+                // туман наводит помехи: иконку дёргает и подмигивает ей
+                float fog = FogNoise > 0f && (walking == FogInsideNow) ? FogNoise : 0f;
+                if (fog > 0f) jit += NotifyWidget.PixelJitter(phase + 7f, 3f * fog);
                 rt.anchoredPosition = want[i] + jit;
 
                 float sc = baseScale;
@@ -933,6 +944,8 @@ namespace LCBridgeOverlay
                 float a2 = 1f;
                 if (ConfigSettings.ProximityFade.Value && dist >= 0f)
                     a2 = Mathf.Lerp(0.28f, 1f, Mathf.InverseLerp(34f, 6f, dist));
+
+                if (fog > 0f && Mathf.PerlinNoise(t * 14f, phase) > 0.72f) a2 *= 0.45f;
 
                 var col = MobRailWidget.IconTint(S);
                 col.a = Mathf.MoveTowards(img.color.a, a2, dt * 4f);
@@ -974,10 +987,16 @@ namespace LCBridgeOverlay
             try
             {
                 if (host == null) return;
-                var solid = MobIconFor(raw, true);
-                Image fill = null;
-                if (host.transform.childCount > 0)
-                    fill = host.transform.GetChild(0).GetComponent<Image>();
+                Image fill = host.transform.childCount > 0
+                    ? host.transform.GetChild(0).GetComponent<Image>() : null;
+
+                // Заливка нужна только контурному стилю. У остальных иконка и так
+                // сплошная, и дубль поверх выглядел сдвигом — отсюда «съехала».
+                if (!MobRailWidget.TintedIconStylePublic())
+                {
+                    if (fill != null) fill.enabled = false;
+                    return;
+                }
 
                 if (fill == null)
                 {
@@ -986,17 +1005,23 @@ namespace LCBridgeOverlay
                     rt.SetParent(host.transform, false);
                     rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one;
                     rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+                    rt.localScale = Vector3.one;
+                    rt.localRotation = Quaternion.identity;
                     fill = go.GetComponent<Image>();
                     fill.raycastTarget = false;
-                    fill.preserveAspect = true;
+                    fill.preserveAspect = host.preserveAspect;
+                    fill.type = host.type;
                 }
 
+                var solid = MobIconFor(raw, true);
                 if (solid != null && fill.sprite != solid) fill.sprite = solid;
+
+                // из прозрачного плавно в цвет по всей дистанции, без порога
+                float k = Mathf.Clamp01(near);
+                k = k * k * (3f - 2f * k);
                 var c = host.color;
-                // порог начинается не с нуля: издалека заливки быть не должно вовсе
-                float k = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.35f, 0.95f, near));
                 fill.color = new Color(c.r, c.g, c.b, c.a * k);
-                fill.enabled = k > 0.01f;
+                fill.enabled = k > 0.004f;
             }
             catch { }
         }
@@ -1019,13 +1044,19 @@ namespace LCBridgeOverlay
         /// всегда. Анимационный режим этого не давал: затмение им показать было нечем,
         /// поэтому его и не было видно.
         /// </summary>
+        private MapWeatherFx _fx;
+
+        /// <summary>
+        /// Погода теперь ПРОИСХОДИТ на схеме, а не обозначается значком: дождь льёт
+        /// и разбивается о землю, гроза бьёт молнией, вода поднимается вместе с
+        /// настоящей, солнце с луной идут по небу, туман плывёт полосами и наводит
+        /// помехи. Значки остались как запасной режим (MapWeatherMode = Icons).
+        /// </summary>
         private void UpdateWeather(BridgePayload p, float dt)
         {
             string w = (p.weatherFull ?? "").ToLowerInvariant();
+            string ev = (p.brutalEvent ?? "").ToLowerInvariant();
 
-            // Погоды складываются: WeatherTweaks выдаёт строки вида
-            // "Eclipsed + Stormy", а иногда и из трёх-четырёх слагаемых. Раньше
-            // брали первое совпадение и остальные пропадали — теперь собираем все.
             var kinds = new List<string>();
             void Add(string k) { if (!kinds.Contains(k)) kinds.Add(k); }
             if (w.Contains("eclips") || w.Contains("затмен")) Add("eclipse");
@@ -1034,41 +1065,55 @@ namespace LCBridgeOverlay
             if (w.Contains("rain") || w.Contains("дожд")) Add("rain");
             if (w.Contains("fog") || w.Contains("туман")) Add("fog");
             if (w.Contains("dust") || w.Contains("пыл")) Add("dust");
+            // метеоритный дождь приходит ивентом, а не погодой
+            if (ev.Contains("meteor") || ev.Contains("метеор")) Add("meteor");
             if (kinds.Count == 0 && w.Length > 0 && w != "none" && w != "clear") Add("unknown");
 
-            bool schematic = (ConfigSettings.MapWeatherMode.Value ?? "Schematic")
-                             .Trim().ToLowerInvariant() != "effects";
+            // туман В КОМПЛЕКСЕ — это ивент, и полосы с помехами должны быть внутри
+            bool fogInside = ev.Contains("fog") || ev.Contains("туман");
+            if (fogInside) Add("fog");
 
-            string key = string.Join(",", kinds.ToArray());
+            string mode = (ConfigSettings.MapWeatherMode.Value ?? "Live").Trim().ToLowerInvariant();
+            bool icons = mode == "icons" || mode == "schematic";
+
+            string key = string.Join(",", kinds.ToArray()) + "|" + (icons ? "i" : "l") + (fogInside ? "F" : "");
             if (w != _wxRaw)
             {
                 _wxRaw = w;
                 Plugin.Log?.LogInfo($"[map] погода: \"{p.weatherFull}\" -> " +
-                                    (kinds.Count > 0 ? "значки " + key : "нечего рисовать"));
+                                    (kinds.Count > 0 ? string.Join(",", kinds.ToArray()) : "нечего рисовать"));
             }
 
-            if (key != _wxKind || schematic != _wxSchematic)
+            if (key != _wxKind)
             {
                 _wxKind = key;
-                _wxSchematic = schematic;
                 foreach (var b in _weatherBits) if (b != null) Destroy(b.gameObject);
                 _weatherBits.Clear();
 
-                if (schematic)
+                if (icons)
                 {
-                    // значки в столбик по левому краю: их может быть до четырёх
-                    for (int i = 0; i < kinds.Count; i++)
-                        DrawWeatherGlyph(kinds[i], 18f, 16f + i * 40f);
+                    _fx?.Rebuild(new List<string>(), false);
+                    for (int i = 0; i < kinds.Count; i++) DrawWeatherGlyph(kinds[i], 18f, 16f + i * 40f);
                 }
-                else if (kinds.Count > 0) BuildWeatherFx(kinds[0]);
+                else
+                {
+                    if (_fx == null) { _fx = new MapWeatherFx(); _fx.Init(_art, S, W, H, Ground); }
+                    _fx.Rebuild(kinds, fogInside);
+                }
             }
 
-            if (!schematic) AnimateWeatherFx();
+            if (!icons && _fx != null)
+                _fx.Tick(dt, RoomTop, RoomBottom, CaveTop, CaveBottom);
         }
 
-        private string _wxKind = "?";
-        private string _wxRaw;
-        private bool _wxSchematic = true;
+        // Границы зон на холсте — эффекты по ним ориентируются. Значения совпадают с
+        // тем, что нарисовано; при своём макете правятся здесь же.
+        private const float RoomTop = 158f, RoomBottom = 236f;
+        private const float CaveTop = 250f, CaveBottom = 384f;
+
+        /// <summary>Помехи от тумана для иконок монстров: 0 нет, 1 максимум.</summary>
+        private float FogNoise => _fx != null ? _fx.FogAmount : 0f;
+        private bool FogInsideNow => _fx != null && _fx.FogInside;
 
         /// <summary>Значок погоды — теми же линиями, что и вся схема.</summary>
         private void DrawWeatherGlyph(string kind, float gx, float gy)
