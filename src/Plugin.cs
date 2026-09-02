@@ -19,7 +19,7 @@ namespace LCBridgeOverlay
     {
         public const string GUID = "gdlp.lcbridgeoverlay";
         public const string NAME = "LCBridgeOverlay";
-        public const string VERSION = "1.9.6";
+        public const string VERSION = "1.10.0";
 
         public static Plugin Instance { get; private set; }
         public static ManualLogSource Log { get; private set; }
@@ -100,6 +100,8 @@ namespace LCBridgeOverlay
             {
                 Log.LogInfo("WebSocket-мост выключен (по умолчанию) — порты не открываются. Включается в конфиге: [WebSocket] Enabled.");
             }
+            // образец схемы локации рядом с конфигом — чтобы её можно было править
+            try { MapLayout.WriteTemplateIfMissing(); } catch { }
             EnsureTicker();
             Application.quitting += OnApplicationQuitting;
 

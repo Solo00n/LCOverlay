@@ -1,5 +1,10 @@
 # Changelog — LCBridgeOverlay
 
+## 1.10.0
+- **The schematic is now yours to draw.** It reads `gdlp.lcbridgeoverlay.map.txt` next to the config, and the mod writes the current drawing there on first run so there is something to start from. Move a line, resize a room, put the creatures somewhere else — reload the save and it is there, with no rebuild. If the file is missing or unreadable the built-in drawing is used, so nothing can break by editing it.
+- Every piece of the drawing is also published as a separate SVG, so it can be arranged in a vector editor instead of by numbers.
+- **Creature marks sit on the ground** rather than hovering above it, both outside and along the room floor.
+
 ## 1.9.6
 - **Duplicate creatures on the schematic.** It was drawing the small background wildlife the panel deliberately hides, so a second, near-identical bee sat beside the real one. The schematic now uses the same hide list as the panel.
 - **Creatures walk about inside the facility** instead of sitting in a row, each pacing its own stretch at its own speed, and their icons grow with numbers when the panel is set to do that.

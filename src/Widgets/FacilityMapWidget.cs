@@ -218,6 +218,17 @@ namespace LCBridgeOverlay
             _outSlots.Clear(); _inSlots.Clear(); _outDots.Clear(); _inDots.Clear();
             _elevCar = null;
 
+            // Если рядом с конфигом лежит файл схемы — рисуем по нему. Так макет
+            // можно править самому, не пересобирая мод.
+            var lay = MapLayout.Load();
+            if (lay != null && DrawFromLayout(lay))
+            {
+                _builtFor = interior ?? "";
+                try { _mgr?.AddPerspectiveToTree(_art); } catch { }
+                return;
+            }
+
+
             var frame = S.Frame;
             var dim = OverlayStyle.WithA(S.FrameDim, 0.6f);
             var scan = OverlayStyle.WithA(S.Frame, 0.10f);
@@ -323,15 +334,15 @@ namespace LCBridgeOverlay
             // ---------- места для монстров ----------
             for (int i = 0; i < 8; i++)                       // уличные — над землёй
             {
-                var sl = Slot(20f + i * 22f, 60f);
+                var sl = Slot(20f + i * 22f, 78f);   // на землю, а не в воздухе
                 _outSlots.Add(sl); _outDots.Add(Dot(sl));
             }
             // Внутри задаём не точки, а ОТРЕЗКИ, вдоль которых иконка ходит туда-сюда.
             _inPaths.Clear();
-            _inPaths.Add(new Vector4(rx + 26f, roomY + 40f, rx + 110f, roomY + 40f));
-            _inPaths.Add(new Vector4(rx + 130f, roomY + 56f, rx + 214f, roomY + 56f));
-            _inPaths.Add(new Vector4(rx + 40f, roomY + 62f, rx + 120f, roomY + 62f));
-            _inPaths.Add(new Vector4(rx + 150f, roomY + 36f, rx + 236f, roomY + 36f));
+            _inPaths.Add(new Vector4(rx + 26f, roomY + rh - 26f, rx + 110f, roomY + rh - 26f));
+            _inPaths.Add(new Vector4(rx + 130f, roomY + rh - 26f, rx + 214f, roomY + rh - 26f));
+            _inPaths.Add(new Vector4(rx + 40f, roomY + rh - 44f, rx + 120f, roomY + rh - 44f));
+            _inPaths.Add(new Vector4(rx + 150f, roomY + rh - 44f, rx + 236f, roomY + rh - 44f));
             _inPaths.Add(new Vector4(62f, 276f, 106f, 288f));
             _inPaths.Add(new Vector4(120f, 296f, 156f, 312f));
             _inPaths.Add(new Vector4(140f, 330f, 190f, 328f));
@@ -434,6 +445,135 @@ namespace LCBridgeOverlay
                 prev = pt;
             }
             Line(prev.x, prev.y, right[n - 1].x, right[n - 1].y, 2f, col, "Cave");
+        }
+
+        /// <summary>
+        /// Отрисовка схемы по текстовому описанию. Возвращает false, если в файле не
+        /// оказалось ничего осмысленного — тогда рисуется встроенная схема.
+        /// </summary>
+        private bool DrawFromLayout(MapLayout lay)
+        {
+            var frame = S.Frame;
+            var dim = OverlayStyle.WithA(S.FrameDim, 0.6f);
+            var scan = OverlayStyle.WithA(S.Frame, 0.10f);
+            var cave = OverlayStyle.WithA(S.Danger, 0.85f);
+            var lampOn = new Color(1f, 0.85f, 0.15f, 1f);
+
+            Color Pick(string a)
+            {
+                switch ((a ?? "frame").ToLowerInvariant())
+                {
+                    case "dim": return dim;
+                    case "cave": return cave;
+                    case "lamp": return lampOn;
+                    case "scan": return scan;
+                    default: return frame;
+                }
+            }
+
+            int drawn = 0;
+            _inPaths.Clear();
+
+            foreach (var c in lay.Cmds)
+            {
+                var n = c.N;
+                try
+                {
+                    switch (c.Op)
+                    {
+                        case "line":
+                            if (n.Length < 4) break;
+                            Line(n[0], n[1], n[2], n[3], n.Length > 4 ? n[4] : 2.5f, Pick(c.Arg));
+                            drawn++; break;
+
+                        case "box":
+                            if (n.Length < 4) break;
+                            Box(n[0], n[1], n[2], n[3], n.Length > 4 ? n[4] : 2.5f, Pick(c.Arg));
+                            drawn++; break;
+
+                        case "fill":
+                            if (n.Length < 4) break;
+                            Fill(n[0], n[1], n[2], n[3],
+                                 OverlayStyle.WithA(S.Frame, n.Length > 4 ? n[4] : 0.10f));
+                            drawn++; break;
+
+                        case "lamp":
+                        {
+                            if (n.Length < 3) break;
+                            float lx = n[0], ly = n[1], lw = n[2];
+                            Line(lx + 7f, ly + 2f, lx + 7f, ly + 13f, 1.5f, dim, "LampStem");
+                            Line(lx + lw - 7f, ly + 2f, lx + lw - 7f, ly + 13f, 1.5f, dim, "LampStem");
+                            _lampImgs.Add(Line(lx, ly + 14f, lx + lw, ly + 14f, 5f, lampOn, "Lamp"));
+                            drawn++; break;
+                        }
+
+                        case "rails":
+                        {
+                            if (n.Length < 3) break;
+                            float x1 = n[0], x2 = n[1], y = n[2];
+                            Line(x1, y, x2, y, 2f, dim, "Rail");
+                            Line(x1, y + 6f, x2, y + 6f, 2f, dim, "Rail");
+                            for (float x = x1 + 8f; x < x2 - 4f; x += 18f)
+                                Line(x, y - 2f, x, y + 8f, 1.5f, OverlayStyle.WithA(S.FrameDim, 0.4f), "Rail");
+                            drawn++; break;
+                        }
+
+                        case "railstop":
+                            if (n.Length < 2) break;
+                            Line(n[0], n[1] - 6f, n[0], n[1] + 10f, 2.5f, frame, "RailStop");
+                            drawn++; break;
+
+                        case "cable":
+                            if (n.Length < 3) break;
+                            var cab = Line(n[0], n[1], n[0], n[2], 1.5f, frame, "Cable");
+                            if (_elevCable1 == null) { _elevCable1 = cab; _elevCableTop = n[1]; }
+                            else if (_elevCable2 == null) _elevCable2 = cab;
+                            drawn++; break;
+
+                        case "elev":
+                            if (n.Length < 6) break;
+                            _elevTop = n[4];
+                            _elevBottom = n[5];
+                            _elevCar = MakeCar(n[0], n[1], n[2], n[3], frame, scan);
+                            drawn++; break;
+
+                        case "cave":
+                        {
+                            // числа до ';' — осевая, после — полуширины
+                            int half = n.Length / 3 * 2;      // на 2 координаты приходится 1 ширина
+                            int pts = Mathf.Max(2, half / 2);
+                            if (n.Length < pts * 2 + pts) break;
+                            var spine = new Vector2[pts];
+                            var wid = new float[pts];
+                            for (int i = 0; i < pts; i++) spine[i] = new Vector2(n[i * 2], n[i * 2 + 1]);
+                            for (int i = 0; i < pts; i++) wid[i] = n[pts * 2 + i];
+                            CaveOutline(spine, wid, cave);
+                            drawn++; break;
+                        }
+
+                        case "slotout":
+                        {
+                            if (n.Length < 2) break;
+                            var sl = Slot(n[0], n[1]);
+                            _outSlots.Add(sl); _outDots.Add(Dot(sl));
+                            drawn++; break;
+                        }
+
+                        case "slotin":
+                        {
+                            if (n.Length < 4) break;
+                            _inPaths.Add(new Vector4(n[0], n[1], n[2], n[3]));
+                            var sl = Slot(n[0], n[1]);
+                            _inSlots.Add(sl); _inDots.Add(Dot(sl));
+                            drawn++; break;
+                        }
+                    }
+                }
+                catch { }
+            }
+
+            if (drawn == 0) Plugin.Log?.LogWarning("[map] в файле схемы не нашлось ни одной команды.");
+            return drawn > 0;
         }
 
         // ---- лифт ----
