@@ -625,6 +625,18 @@ namespace LCBridgeOverlay
 
         private bool _mapShown;
 
+        // Режим уведомлений: плашка ивента не висит весь день, а всплывает дважды —
+        // в начале дня и при отлёте. Держим момент, до которого её видно.
+        private float _eventShowUntil = -999f;
+        private bool _wasLeavingForEvent;
+
+        /// <summary>Новый день — показать ивент на 10 секунд.</summary>
+        public void NotifyDayStarted()
+        {
+            _eventShowUntil = Time.unscaledTime + 10f;
+            _notify?.WakeUp();
+        }
+
         /// <summary>Показать/скрыть обычные блоки панели (когда их подменяет схема).</summary>
         private void SetPanelBlocks(bool on)
         {
@@ -985,6 +997,14 @@ namespace LCBridgeOverlay
         private void RefreshEventPlate(bool onMoon)
         {
             bool cfgOn = Gate.Events;
+            if (ConfigSettings.NotifyMode.Value)
+            {
+                // отлёт — показать на 5 секунд
+                bool leaving = ShipLeavingNow();
+                if (leaving && !_wasLeavingForEvent) _eventShowUntil = Time.unscaledTime + 5f;
+                _wasLeavingForEvent = leaving;
+                cfgOn = cfgOn && Time.unscaledTime < _eventShowUntil;
+            }
             bool show = cfgOn && onMoon && (_events.Count > 0 || BcmerEvents.BcmePresent());
             _eventPlate.SetVisible(show);
             if (!show) return;

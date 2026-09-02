@@ -50,6 +50,8 @@ namespace LCBridgeOverlay
         [HarmonyPostfix]
         public static void OnStartGame()
         {
+            try { OverlayManager.Instance?.NotifyDayStarted(); } catch { }
+
             // Новый день: если включено, забываем все сканы — монстров и ловушки
             // придётся просвечивать заново, и знать заранее, что на луне, нельзя.
             try

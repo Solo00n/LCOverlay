@@ -1,5 +1,12 @@
 # Changelog — LCBridgeOverlay
 
+## 1.9.6
+- **Duplicate creatures on the schematic.** It was drawing the small background wildlife the panel deliberately hides, so a second, near-identical bee sat beside the real one. The schematic now uses the same hide list as the panel.
+- **Creatures walk about inside the facility** instead of sitting in a row, each pacing its own stretch at its own speed, and their icons grow with numbers when the panel is set to do that.
+- **The cave walls only bulge outwards now.** The noise pushed them both ways, so lines wandered into the passage itself; the multiplier can no longer fall below the base width. The far end is closed with a rounded cap rather than a flat cut.
+- **The drawing follows the sketch**: a door on the left of the building, the cart beside it, a wide shaft on the right, a wider lift on visible cables, a stop block at the end of the rails, and the main room shortened from below so the entrance to the caves has room.
+- **In notification mode the event plate appears twice a day** — ten seconds as the day starts, five as the ship leaves — rather than sitting on screen throughout.
+
 ## 1.9.5
 - **The caves look hand-drawn now.** The passage is cut into many short links and each one is nudged aside by a fixed noise, with the two walls given different noise so they stop mirroring each other. They came out ruler-straight before because the outline followed the control points exactly. The water is gone.
 - **The corridor is open again.** The room's ceiling was drawn as one unbroken line straight across the passage, sealing it; it now has a gap where the corridor comes down.

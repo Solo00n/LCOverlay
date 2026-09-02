@@ -528,6 +528,10 @@ namespace LCBridgeOverlay
         // мелкая «фоновая» живность — не показываем (кроме турельных/slayer-версий)
         private static readonly string[] HideKeys = { "manticoil", "locust", "docile", "vain", "shroud" };
 
+        /// <summary>Скрываемая мелочь — нужно и схеме локации, иначе она
+        /// показывала бы локустов и манticoil, которых рейка прячет.</summary>
+        public static bool IsHiddenPublic(string raw) => Hidden(raw);
+
         private static bool Hidden(string name)
         {
             string raw = (name ?? "").ToLowerInvariant();

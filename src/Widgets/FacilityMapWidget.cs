@@ -36,6 +36,7 @@ namespace LCBridgeOverlay
         private readonly List<Image> _weatherBits = new List<Image>();
         private readonly List<RectTransform> _outSlots = new List<RectTransform>();
         private readonly List<RectTransform> _inSlots = new List<RectTransform>();
+        private readonly List<Vector4> _inPaths = new List<Vector4>();   // маршруты хождения
         private readonly List<Image> _outDots = new List<Image>();
         private readonly List<Image> _inDots = new List<Image>();
 
@@ -225,25 +226,36 @@ namespace LCBridgeOverlay
             // ---------- земля: кривая линия с резкими углами ----------
             var ground = new[]
             {
-                new Vector2(0f, 100f), new Vector2(38f, 94f), new Vector2(74f, 103f),
-                new Vector2(112f, 92f), new Vector2(150f, 99f), new Vector2(188f, 90f),
-                new Vector2(196f, 96f), new Vector2(W, 96f),
+                new Vector2(0f, 100f), new Vector2(36f, 93f), new Vector2(72f, 102f),
+                new Vector2(108f, 91f), new Vector2(146f, 99f), new Vector2(182f, 92f),
+                new Vector2(192f, 96f), new Vector2(W, 96f),
             };
             for (int i = 0; i < ground.Length - 1; i++)
                 Line(ground[i].x, ground[i].y, ground[i + 1].x, ground[i + 1].y, 2.5f, frame, "Ground");
 
-            // ---------- большое здание справа, на земле ----------
-            const float bx = 200f, by = 28f, bw = 118f, bh = 68f;
-            Box(bx, by, bw, bh, 2.5f, frame);
+            // ---------- здание на земле ----------
+            const float bx = 192f, by = 22f, bw = 126f, bh = 74f;
+            const float shaftL = bx + 84f, shaftR = bx + 118f;   // широкий проём шахты справа
+            Line(bx, by, bx + bw, by, 2.5f, frame);              // крыша
+            Line(bx, by, bx, by + bh, 2.5f, frame);              // левая стена
+            Line(bx + bw, by, bx + bw, by + bh, 2.5f, frame);    // правая стена
+            Line(bx, by + bh, shaftL, by + bh, 2.5f, frame);     // пол слева от проёма
+            Line(shaftR, by + bh, bx + bw, by + bh, 2.5f, frame);// и справа
             Fill(bx + 2f, by + 2f, bw - 4f, bh - 4f, scan);
 
-            // вагонетка внутри здания
-            const float cx = bx + 16f, cy = by + 46f;
-            Line(cx, cy, cx + 30f, cy, 2f, frame);                 // дно кузова
-            Line(cx, cy, cx + 4f, cy - 14f, 2f, frame);             // борта с развалом
-            Line(cx + 30f, cy, cx + 26f, cy - 14f, 2f, frame);
-            Line(cx + 4f, cy - 14f, cx + 26f, cy - 14f, 2f, frame);
-            for (int i = 0; i < 2; i++)                             // колёса
+            // дверь слева внутри здания
+            const float dx = bx + 14f, dy = by + 34f, dw = 26f, dh = 34f;
+            Box(dx, dy, dw, dh, 2f, frame);
+            Line(dx, dy + dh / 2f, dx + dw, dy + dh / 2f, 1.5f, dim);
+            Line(dx + dw / 2f, dy, dx + dw / 2f, dy + dh, 1.5f, dim);
+
+            // вагонетка посередине
+            const float cx = bx + 50f, cy = by + 60f;
+            Line(cx, cy, cx + 30f, cy, 2f, frame);
+            Line(cx, cy, cx + 4f, cy - 16f, 2f, frame);
+            Line(cx + 30f, cy, cx + 26f, cy - 16f, 2f, frame);
+            Line(cx + 4f, cy - 16f, cx + 26f, cy - 16f, 2f, frame);
+            for (int i = 0; i < 2; i++)
             {
                 float wx = cx + 8f + i * 14f;
                 Line(wx - 4f, cy + 5f, wx + 4f, cy + 5f, 2f, dim);
@@ -251,93 +263,84 @@ namespace LCBridgeOverlay
                 Line(wx + 4f, cy + 2f, wx + 4f, cy + 5f, 1.5f, dim);
             }
 
-            // дыра в полу здания — разрыв нижней грани
-            const float hx = bx + 74f, hw = 26f;
-            Line(bx, by + bh, hx, by + bh, 2.5f, frame);            // пол слева от дыры
-            Line(hx + hw, by + bh, bx + bw, by + bh, 2.5f, frame);  // и справа
+            // ---------- широкий коридор от здания вниз ----------
+            const float roomY = 158f;
+            Line(shaftL, by + bh, shaftL, roomY, 2.5f, frame, "Shaft");
+            Line(shaftR, by + bh, shaftR, roomY, 2.5f, frame, "Shaft");
+            Fill(shaftL + 2f, by + bh, shaftR - shaftL - 4f, roomY - (by + bh), scan);
 
-            // ---------- вертикальный коридор из дыры вниз ----------
-            const float roomY = 168f;
-            Line(hx, by + bh, hx, roomY, 2f, dim, "Shaft");
-            Line(hx + hw, by + bh, hx + hw, roomY, 2f, dim, "Shaft");
-
-            // ---------- главная комната комплекса ----------
-            const float rx = 34f, rw = 272f, rh = 96f;
-            // Потолок рисуем С РАЗРЫВОМ под коридором: сплошная линия перечёркивала
-            // проход, и коридор выглядел заглушенным.
-            Line(rx, roomY, hx, roomY, 2.5f, frame);
-            Line(hx + hw, roomY, rx + rw, roomY, 2.5f, frame);
+            // ---------- главная комната: короче снизу, чтобы поместился вход в шахту ----------
+            const float rx = 30f, rw = 288f, rh = 78f;
+            Line(rx, roomY, shaftL, roomY, 2.5f, frame);          // потолок с разрывом под коридором
+            Line(shaftR, roomY, rx + rw, roomY, 2.5f, frame);
             Line(rx, roomY + rh, rx + rw, roomY + rh, 2.5f, frame);
             Line(rx, roomY, rx, roomY + rh, 2.5f, frame);
             Line(rx + rw, roomY, rx + rw, roomY + rh, 2.5f, frame);
             Fill(rx + 2f, roomY + 2f, rw - 4f, rh - 4f, scan);
 
-            // ---------- лифт на тросах ----------
-            // Кабина висит заметно ниже потолка, иначе тросы были длиной в десяток
-            // пикселей и их попросту не было видно. Тянем их от пола здания, через
-            // весь коридор, — так они и читаются как тросы.
-            _elevTop = roomY + 30f;
+            // ---------- лифт: широкий, на тросах от пола здания ----------
+            _elevTop = roomY + 22f;
             _elevBottom = roomY + rh - 26f;
             _elevCableTop = by + bh;
-            _elevCable1 = Line(hx + 6f, _elevCableTop, hx + 6f, _elevTop, 1.5f, frame, "Cable");
-            _elevCable2 = Line(hx + hw - 6f, _elevCableTop, hx + hw - 6f, _elevTop, 1.5f, frame, "Cable");
-            _elevCar = MakeCar(hx - 3f, _elevTop, hw + 6f, 26f, frame, scan);
+            _elevCable1 = Line(shaftL + 7f, _elevCableTop, shaftL + 7f, _elevTop, 1.5f, frame, "Cable");
+            _elevCable2 = Line(shaftR - 7f, _elevCableTop, shaftR - 7f, _elevTop, 1.5f, frame, "Cable");
+            _elevCar = MakeCar(shaftL - 2f, _elevTop, (shaftR - shaftL) + 4f, 24f, frame, scan);
 
-            // ---------- рельсы по полу, НЕ заходя под лифт ----------
-            float railY = roomY + rh - 12f;
-            void Rails(float x1, float x2)
-            {
-                if (x2 - x1 < 16f) return;
-                Line(x1, railY, x2, railY, 2f, dim, "Rail");
-                Line(x1, railY + 6f, x2, railY + 6f, 2f, dim, "Rail");
-                for (float x = x1 + 8f; x < x2 - 4f; x += 18f)
-                    Line(x, railY - 2f, x, railY + 8f, 1.5f, OverlayStyle.WithA(S.FrameDim, 0.4f), "Rail");
-            }
-            Rails(rx + 10f, hx - 10f);
-            Rails(hx + hw + 10f, rx + rw - 10f);
+            // ---------- рельсы со стопором, не заходя под лифт ----------
+            float railY = roomY + rh - 11f;
+            float railEnd = shaftL - 14f;
+            Line(rx + 12f, railY, railEnd, railY, 2f, dim, "Rail");
+            Line(rx + 12f, railY + 6f, railEnd, railY + 6f, 2f, dim, "Rail");
+            for (float x = rx + 20f; x < railEnd - 4f; x += 18f)
+                Line(x, railY - 2f, x, railY + 8f, 1.5f, OverlayStyle.WithA(S.FrameDim, 0.4f), "Rail");
+            Line(railEnd, railY - 6f, railEnd, railY + 10f, 2.5f, frame, "RailStop");   // стопор
 
-            // ---------- люминесцентные лампы: ДВЕ ножки от потолка ----------
+            // ---------- люминесцентные лампы: две ножки каждая ----------
             var lampOn = new Color(1f, 0.85f, 0.15f, 1f);
             for (int i = 0; i < 3; i++)
             {
-                float lx = rx + 30f + i * 62f;
-                const float lw = 34f;
-                Line(lx + 7f, roomY + 2f, lx + 7f, roomY + 14f, 1.5f, dim, "LampStem");
-                Line(lx + lw - 7f, roomY + 2f, lx + lw - 7f, roomY + 14f, 1.5f, dim, "LampStem");
-                _lampImgs.Add(Line(lx, roomY + 15f, lx + lw, roomY + 15f, 5f, lampOn, "Lamp"));
+                float lx = rx + 28f + i * 66f;
+                const float lw = 36f;
+                Line(lx + 7f, roomY + 2f, lx + 7f, roomY + 13f, 1.5f, dim, "LampStem");
+                Line(lx + lw - 7f, roomY + 2f, lx + lw - 7f, roomY + 13f, 1.5f, dim, "LampStem");
+                _lampImgs.Add(Line(lx, roomY + 14f, lx + lw, roomY + 14f, 5f, lampOn, "Lamp"));
             }
 
-            // ---------- шахта: из ЛЕВОЙ стены вниз и вправо, к ПРАВОЙ стене ----------
+            // ---------- шахта: от ЛЕВОЙ стены комнаты вниз и вправо ----------
             var spine = new[]
             {
-                new Vector2(rx, roomY + 62f),
-                new Vector2(74f, 286f),
-                new Vector2(126f, 302f),
-                new Vector2(152f, 338f),           // большой зал
-                new Vector2(208f, 330f),
-                new Vector2(240f, 360f),
-                new Vector2(rx + rw, 362f),
+                new Vector2(rx, roomY + rh - 18f),   // выходит из левой стены у самого пола
+                new Vector2(76f, 282f),
+                new Vector2(132f, 296f),
+                new Vector2(160f, 330f),             // большой зал
+                new Vector2(216f, 322f),
+                new Vector2(252f, 352f),
+                new Vector2(298f, 356f),             // округлый тупик
             };
-            var widths = new[] { 17f, 16f, 18f, 34f, 19f, 17f, 16f };
+            var widths = new[] { 18f, 17f, 19f, 34f, 20f, 18f, 20f };
             CaveOutline(spine, widths, cave);
 
             // ---------- места для монстров ----------
-            for (int i = 0; i < 8; i++)                       // уличные — над землёй, слева
+            for (int i = 0; i < 8; i++)                       // уличные — над землёй
             {
-                var sl = Slot(20f + i * 23f, 62f);
+                var sl = Slot(20f + i * 22f, 60f);
                 _outSlots.Add(sl); _outDots.Add(Dot(sl));
             }
-            var inside = new[]
+            // Внутри задаём не точки, а ОТРЕЗКИ, вдоль которых иконка ходит туда-сюда.
+            _inPaths.Clear();
+            _inPaths.Add(new Vector4(rx + 26f, roomY + 40f, rx + 110f, roomY + 40f));
+            _inPaths.Add(new Vector4(rx + 130f, roomY + 56f, rx + 214f, roomY + 56f));
+            _inPaths.Add(new Vector4(rx + 40f, roomY + 62f, rx + 120f, roomY + 62f));
+            _inPaths.Add(new Vector4(rx + 150f, roomY + 36f, rx + 236f, roomY + 36f));
+            _inPaths.Add(new Vector4(62f, 276f, 106f, 288f));
+            _inPaths.Add(new Vector4(120f, 296f, 156f, 312f));
+            _inPaths.Add(new Vector4(140f, 330f, 190f, 328f));
+            _inPaths.Add(new Vector4(206f, 322f, 246f, 340f));
+            _inPaths.Add(new Vector4(250f, 352f, 288f, 356f));
+            _inPaths.Add(new Vector4(170f, 336f, 214f, 330f));
+            foreach (var seg in _inPaths)
             {
-                new Vector2(rx + 34f, roomY + 46f),  new Vector2(rx + 90f, roomY + 62f),
-                new Vector2(rx + 150f, roomY + 46f), new Vector2(rx + 214f, roomY + 62f),
-                new Vector2(74f, 286f),              new Vector2(126f, 300f),
-                new Vector2(150f, 330f),             new Vector2(206f, 330f),
-                new Vector2(238f, 358f),             new Vector2(288f, 360f),
-            };
-            foreach (var v in inside)
-            {
-                var sl = Slot(v.x, v.y);
+                var sl = Slot(seg.x, seg.y);
                 _inSlots.Add(sl); _inDots.Add(Dot(sl));
             }
 
@@ -392,14 +395,16 @@ namespace LCBridgeOverlay
                 }
                 var nrm = new Vector2(-dir.y, dir.x);
 
-                // шум разный для двух стенок, поэтому они не повторяют друг друга
-                float wl = wid[i] * (0.72f + 0.55f * Mathf.PerlinNoise(i * 0.55f, 3.1f));
-                float wr = wid[i] * (0.72f + 0.55f * Mathf.PerlinNoise(i * 0.55f, 9.7f));
-                // и лёгкое смещение вдоль оси — стенка перестаёт быть параллельной
-                var along = dir * (Mathf.PerlinNoise(i * 0.8f, 5.5f) - 0.5f) * 7f;
+                // Шум ТОЛЬКО НАРУЖУ: множитель всегда >= 1, поэтому стенка выпирает
+                // от оси и никогда не заходит внутрь тоннеля. Раньше он гулял в обе
+                // стороны, и линии залезали в просвет.
+                float wl = wid[i] * (1f + 0.42f * Mathf.PerlinNoise(i * 0.5f, 3.1f));
+                float wr = wid[i] * (1f + 0.42f * Mathf.PerlinNoise(i * 0.5f, 9.7f));
+                // сдвиг вдоль оси — чтобы стенки не были параллельны друг другу
+                var along = dir * (Mathf.PerlinNoise(i * 0.8f, 5.5f) - 0.5f) * 6f;
 
-                // концы не кривим: они должны точно упираться в стены комнаты
-                if (i == 0 || i == n - 1) { wl = wr = wid[i]; along = Vector2.zero; }
+                // у входа в комнату не кривим: там стык со стеной
+                if (i == 0) { wl = wr = wid[i]; along = Vector2.zero; }
 
                 left[i] = spine[i] + nrm * wl + along;
                 right[i] = spine[i] - nrm * wr + along;
@@ -410,8 +415,25 @@ namespace LCBridgeOverlay
                 Line(left[i].x, left[i].y, left[i + 1].x, left[i + 1].y, 2f, col, "Cave");
                 Line(right[i].x, right[i].y, right[i + 1].x, right[i + 1].y, 2f, col, "Cave");
             }
+            // вход в комнату — прямой торец
             Line(left[0].x, left[0].y, right[0].x, right[0].y, 2f, col, "Cave");
-            Line(left[n - 1].x, left[n - 1].y, right[n - 1].x, right[n - 1].y, 2f, col, "Cave");
+
+            // тупик — округлая шапка: обводим полукругом от левой стенки к правой
+            var endC = spine[n - 1];
+            var endDir = (spine[n - 1] - spine[n - 2]).normalized;
+            float endR = (left[n - 1] - endC).magnitude;
+            float a0 = Mathf.Atan2(left[n - 1].y - endC.y, left[n - 1].x - endC.x);
+            const int Arc = 7;
+            var prev = left[n - 1];
+            for (int k = 1; k <= Arc; k++)
+            {
+                float ang = a0 - Mathf.PI * k / Arc;   // полукруг через направление движения
+                var pt = endC + new Vector2(Mathf.Cos(ang), Mathf.Sin(ang)) * endR
+                              + endDir * (Mathf.Sin(Mathf.PI * k / Arc) * 5f);
+                Line(prev.x, prev.y, pt.x, pt.y, 2f, col, "Cave");
+                prev = pt;
+            }
+            Line(prev.x, prev.y, right[n - 1].x, right[n - 1].y, 2f, col, "Cave");
         }
 
         // ---- лифт ----
@@ -551,8 +573,8 @@ namespace LCBridgeOverlay
         /// <summary>Метки монстров по зонам: сверху уличные, ниже комплексные.</summary>
         private void UpdateDots(BridgePayload p)
         {
-            PlaceDots(_outDots, p.monstersOutside);
-            PlaceDots(_inDots, p.monstersInside);
+            PlaceDots(_outDots, p.monstersOutside, false);
+            PlaceDots(_inDots, p.monstersInside, true);
         }
 
         /// <summary>
@@ -560,14 +582,15 @@ namespace LCBridgeOverlay
         /// тают по дальности, покачиваются и нервно дрожат вблизи. Иначе схема
         /// показывала бы то, чего основной оверлей не показывает.
         /// </summary>
-        private void PlaceDots(List<Image> dots, string[] names)
+        private void PlaceDots(List<Image> dots, string[] names, bool walking)
         {
-            // отбираем то же, что показала бы рейка
+            // отбираем ровно то же, что показала бы рейка
             var shown = new List<string>();
             if (names != null)
                 foreach (var raw in names)
                 {
                     if (string.IsNullOrEmpty(raw)) continue;
+                    if (MobRailWidget.IsHiddenPublic(raw)) continue;   // мелочь вроде манticoil и локустов
                     if (Gate.RequireScan &&
                         raw.IndexOf("+Scanned", System.StringComparison.OrdinalIgnoreCase) < 0) continue;
                     shown.Add(raw);
@@ -598,23 +621,40 @@ namespace LCBridgeOverlay
                 float dist = DistOf(raw);
                 float near = dist >= 0f ? Mathf.InverseLerp(40f, 4f, dist) : 0f;
 
-                // покачивание + дрожь по близости — как у иконок в рейке
+                // ---- ходьба по своему отрезку ----
+                Vector2 walk = Vector2.zero;
+                if (walking && i < _inPaths.Count)
+                {
+                    var seg = _inPaths[i];
+                    // своя скорость и фаза, чтобы не маршировали в ногу
+                    float ph = Mathf.PingPong(t * (0.09f + (i % 4) * 0.025f) + i * 0.37f, 1f);
+                    var a = new Vector2(seg.x, seg.y);
+                    var b = new Vector2(seg.z, seg.w);
+                    var pos = Vector2.Lerp(a, b, Mathf.SmoothStep(0f, 1f, ph));
+                    var home = _inSlots[i].anchoredPosition;
+                    walk = new Vector2(pos.x, -pos.y) - home;
+                }
+
+                // покачивание и дрожь по близости — как у иконок в рейке
                 float phase = i * 1.7f;
                 float amp = 3f + 9f * near * near * near;
                 float speed = 2f + 14f * near * near;
                 rt.localRotation = Quaternion.Euler(0f, 0f, Mathf.Sin((t + phase) * speed) * amp);
                 var jit = near > 0.01f ? NotifyWidget.PixelJitter(phase, 2.2f * near * near) : Vector2.zero;
-                rt.anchoredPosition = jit;
-                rt.localScale = Vector3.one;
+                rt.anchoredPosition = walk + jit;
 
-                // прозрачность по дальности — тот же закон, что в рейке
-                float a = 1f;
+                // размер растёт от численности, если так настроена рейка
+                float sc = 1f;
+                if (ConfigSettings.ScaleMonstersByCount.Value)
+                    sc = Mathf.Min(1.6f, 1f + 0.16f * (CountOf(raw) - 1));
+                rt.localScale = new Vector3(sc, sc, 1f);
+
+                float a2 = 1f;
                 if (ConfigSettings.ProximityFade.Value && dist >= 0f)
-                    a = Mathf.Lerp(0.28f, 1f, Mathf.InverseLerp(34f, 6f, dist));
+                    a2 = Mathf.Lerp(0.28f, 1f, Mathf.InverseLerp(34f, 6f, dist));
 
-                bool tinted = MobRailWidget.TintedIconStylePublic();
-                var col = tinted ? S.Frame : Color.white;
-                col.a = Mathf.MoveTowards(img.color.a, a, dt * 4f);
+                var col = MobRailWidget.TintedIconStylePublic() ? S.Frame : Color.white;
+                col.a = Mathf.MoveTowards(img.color.a, a2, dt * 4f);
                 img.color = col;
             }
         }
@@ -627,6 +667,17 @@ namespace LCBridgeOverlay
                 return string.IsNullOrEmpty(key) ? NotifyWidget.Folder() : SpriteBank.Get(key);
             }
             catch { return NotifyWidget.Folder(); }
+        }
+
+        /// <summary>Сколько особей в записи ("Name x3 @20").</summary>
+        private static int CountOf(string raw)
+        {
+            try
+            {
+                var m = System.Text.RegularExpressions.Regex.Match(raw, @"\sx(\d+)");
+                return m.Success ? int.Parse(m.Groups[1].Value) : 1;
+            }
+            catch { return 1; }
         }
 
         /// <summary>Дистанция из строки монстра ("@42"), или -1.</summary>
