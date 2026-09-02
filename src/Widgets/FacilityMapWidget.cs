@@ -23,7 +23,7 @@ namespace LCBridgeOverlay
     internal class FacilityMapWidget : MonoBehaviour
     {
         // холст схемы: рисуем в этих координатах, потом всё масштабируется целиком
-        private const float W = 330f, H = 250f;
+        private const float W = 330f, H = 360f;
         private const float Ground = 96f;       // линия поверхности (сверху вниз)
 
         private OverlayManager _mgr;
@@ -40,7 +40,6 @@ namespace LCBridgeOverlay
         private readonly List<Image> _inDots = new List<Image>();
 
         private string _builtFor;               // для какого интерьера собрана схема
-        private float _wxMul = 1f;
         private bool _lightsOn = true;
         private float _lightPulse;
 
@@ -220,74 +219,87 @@ namespace LCBridgeOverlay
             var frame = S.Frame;
             var dim = OverlayStyle.WithA(S.FrameDim, 0.55f);
             var scan = OverlayStyle.WithA(S.Frame, 0.10f);   // сканлайн-блок фона
+            var water = OverlayStyle.WithA(new Color(0.35f, 0.72f, 1f), 0.55f);
 
             // ---------- поверхность ----------
-            Line(0f, Ground, W, Ground, 2f, frame, "Ground");
+            Line(0f, Ground, W, Ground, 2.5f, frame, "Ground");
 
             // корабль справа сверху
-            Box(232f, 18f, 92f, 62f, 2f, frame);
-            Fill(234f, 20f, 88f, 58f, scan);
+            Box(244f, 20f, 76f, 50f, 2f, frame);
+            Fill(246f, 22f, 72f, 46f, scan);
+            Line(258f, 70f, 258f, 82f, 2f, dim);          // опоры
+            Line(306f, 70f, 306f, 82f, 2f, dim);
 
-            // вход в комплекс — коробка на линии
-            Box(196f, 66f, 30f, 30f, 2f, frame);
-            Fill(198f, 68f, 26f, 26f, scan);
-            Line(204f, 78f, 218f, 78f, 2f, frame);   // дверь
+            // вход в комплекс
+            Box(150f, 68f, 34f, 28f, 2f, frame);
+            Fill(152f, 70f, 30f, 24f, scan);
+            Line(160f, 80f, 174f, 80f, 2f, frame);
 
-            // ---------- подземелье ----------
-            const float ix = 118f, iy = 132f, iw = 190f, ih = 86f;
-            Box(ix, iy, iw, ih, 2f, frame);
+            // ---------- зал с лифтом ----------
+            const float ix = 128f, iy = 124f, iw = 168f, ih = 74f;
+            Box(ix, iy, iw, ih, 2.5f, frame);
             Fill(ix + 2f, iy + 2f, iw - 4f, ih - 4f, scan);
 
-            // шахта лифта от корабля вниз в помещение
-            Line(262f, 24f, 262f, iy + 44f, 2f, frame);
-            Line(284f, 24f, 284f, iy + 44f, 2f, frame);
-            Box(258f, iy + 40f, 30f, 30f, 2f, frame);          // кабина
-            for (int i = 0; i < 4; i++)                        // штриховка кабины
-                Line(258f + i * 8f, iy + 70f, 268f + i * 8f, iy + 40f, 1f, dim);
+            // шахта лифта от входа вниз в зал
+            Line(158f, 96f, 158f, iy, 2f, dim);
+            Line(178f, 96f, 178f, iy, 2f, dim);
+            Box(156f, iy + 6f, 24f, 26f, 2f, frame);       // кабина
+            for (int i = 0; i < 3; i++)
+                Line(156f + i * 8f, iy + 32f, 164f + i * 8f, iy + 6f, 1f, dim);
 
-            // пол помещения — штриховка
-            for (int i = 0; i < 7; i++)
-                Line(ix + 12f + i * 22f, iy + ih, ix + 30f + i * 22f, iy + ih - 16f, 1f, dim);
-
-            // ---------- лампы ----------
-            // жёлтые всегда: это свет, а не элемент темы
+            // ---------- лампы в зале ----------
             var lampOn = new Color(1f, 0.85f, 0.15f, 1f);
             for (int i = 0; i < 3; i++)
-            {
-                var l = Line(ix + 22f + i * 58f, iy + 7f, ix + 62f + i * 58f, iy + 7f, 4f, lampOn, "Lamp");
-                _lampImgs.Add(l);
-            }
+                _lampImgs.Add(Line(ix + 46f + i * 42f, iy + 9f, ix + 76f + i * 42f, iy + 9f, 4.5f, lampOn, "Lamp"));
 
-            // ---------- пещеры ----------
-            var cave = OverlayStyle.WithA(S.Danger, 0.75f);
-            Poly(new[]
+            // ---------- пещеры: кишка вниз из НИЗА зала ----------
+            // Идут не сбоку, а прямо из-под комплекса и спускаются вниз, изредка
+            // расширяясь в затопленные карманы.
+            var spine = new[]
             {
-                new Vector2(16f, 176f), new Vector2(52f, 150f), new Vector2(96f, 158f),
-                new Vector2(118f, 150f), new Vector2(112f, 178f), new Vector2(150f, 186f),
-                new Vector2(196f, 176f), new Vector2(238f, 190f), new Vector2(232f, 222f),
-                new Vector2(178f, 234f), new Vector2(120f, 226f), new Vector2(64f, 238f),
-                new Vector2(22f, 220f), new Vector2(8f, 198f),
-            }, 2f, cave);
+                new Vector2(196f, ih + iy),  new Vector2(186f, 214f), new Vector2(206f, 236f),
+                new Vector2(178f, 258f),     new Vector2(120f, 268f), new Vector2(84f, 292f),
+                new Vector2(112f, 318f),     new Vector2(170f, 326f), new Vector2(214f, 348f),
+            };
+            var cave = OverlayStyle.WithA(S.Danger, 0.8f);
+            for (int i = 0; i < spine.Length - 1; i++)
+            {
+                var a = spine[i]; var b = spine[i + 1];
+                var n = new Vector2(-(b.y - a.y), b.x - a.x).normalized;
+                float wid = 15f + 7f * Mathf.Sin(i * 1.7f);       // «кишка» дышит по ширине
+                Line(a.x + n.x * wid, a.y + n.y * wid, b.x + n.x * wid, b.y + n.y * wid, 2f, cave);
+                Line(a.x - n.x * wid, a.y - n.y * wid, b.x - n.x * wid, b.y - n.y * wid, 2f, cave);
+            }
+            // дно тупика
+            Line(spine[spine.Length - 1].x - 15f, spine[spine.Length - 1].y,
+                 spine[spine.Length - 1].x + 15f, spine[spine.Length - 1].y, 2f, cave);
+
+            // затопленные карманы — горизонтальная гладь воды в двух низинах
+            foreach (var wpt in new[] { spine[4], spine[6] })
+            {
+                Fill(wpt.x - 22f, wpt.y - 4f, 44f, 9f, OverlayStyle.WithA(water, 0.22f));
+                Line(wpt.x - 22f, wpt.y, wpt.x + 22f, wpt.y, 2f, water, "Water");
+                Line(wpt.x - 14f, wpt.y + 5f, wpt.x + 16f, wpt.y + 5f, 1.5f, OverlayStyle.WithA(water, 0.5f), "Water");
+            }
 
             // ---------- места для монстров ----------
-            // уличные — над линией поверхности, ровным рядом
-            for (int i = 0; i < 10; i++)
+            for (int i = 0; i < 10; i++)                       // уличные — над линией
             {
-                var s = Slot(16f + i * 19f, Ground - 16f);
-                _outSlots.Add(s); _outDots.Add(Dot(s));
+                var sl = Slot(18f + i * 30f, Ground - 20f);
+                _outSlots.Add(sl); _outDots.Add(Dot(sl));
             }
-            // комплексные — часть в помещении, часть в пещерах
-            var inside = new[]
+            var inside = new[]                                // в зале и вдоль пещеры
             {
-                new Vector2(140f, 168f), new Vector2(170f, 156f), new Vector2(200f, 168f),
-                new Vector2(230f, 156f), new Vector2(96f, 196f),  new Vector2(140f, 208f),
-                new Vector2(184f, 200f), new Vector2(56f, 186f),  new Vector2(212f, 212f),
-                new Vector2(34f, 206f),
+                new Vector2(ix + 26f, iy + 52f),  new Vector2(ix + 66f, iy + 40f),
+                new Vector2(ix + 106f, iy + 52f), new Vector2(ix + 142f, iy + 38f),
+                new Vector2(190f, 214f),          new Vector2(196f, 244f),
+                new Vector2(140f, 266f),          new Vector2(94f, 296f),
+                new Vector2(138f, 320f),          new Vector2(196f, 342f),
             };
             foreach (var v in inside)
             {
-                var s = Slot(v.x, v.y);
-                _inSlots.Add(s); _inDots.Add(Dot(s));
+                var sl = Slot(v.x, v.y);
+                _inSlots.Add(sl); _inDots.Add(Dot(sl));
             }
 
             _builtFor = interior ?? "";
@@ -343,18 +355,33 @@ namespace LCBridgeOverlay
             }
         }
 
+        /// <summary>
+        /// Горит ли свет в комплексе. Главный источник — распределительный щит
+        /// (BreakerBox.isPowerOn): именно его рубильники игрок и щёлкает. Если щита
+        /// на карте нет, смотрим на сами лампы.
+        /// </summary>
         private static bool FacilityLightsOn()
         {
             try
             {
+                if (Time.unscaledTime >= _breakerNext)
+                {
+                    _breakerNext = Time.unscaledTime + 1f;
+                    _breaker = UnityEngine.Object.FindObjectOfType<BreakerBox>();
+                }
+                if (_breaker != null) return _breaker.isPowerOn;
+
                 var rm = RoundManager.Instance;
                 if (rm == null || rm.allPoweredLights == null || rm.allPoweredLights.Count == 0) return true;
                 foreach (var l in rm.allPoweredLights)
-                    if (l != null && l.enabled) return true;   // хоть одна горит — свет есть
+                    if (l != null && l.enabled) return true;
                 return false;
             }
             catch { return true; }
         }
+
+        private static BreakerBox _breaker;
+        private static float _breakerNext;
 
         /// <summary>Точки монстров по зонам: сверху уличные, ниже комплексные.</summary>
         private void UpdateDots(BridgePayload p)
@@ -398,68 +425,136 @@ namespace LCBridgeOverlay
         }
 
         /// <summary>
-        /// Погода — стилизованными линиями поверх схемы, в том же ключе, что и рисунок:
-        /// дождь и потоп косыми штрихами, туман горизонтальными полосами, затмение
-        /// приглушает всё, гроза изредка бьёт вспышкой.
+        /// Погода. По умолчанию рисуется СХЕМАТИЧНО — узнаваемым значком в левом
+        /// верхнем углу: затмение кольцом с короной, дождь тучей со штрихами, гроза
+        /// молнией, потоп волнами, туман полосами, пыль косыми штрихами. Так её видно
+        /// всегда. Анимационный режим этого не давал: затмение им показать было нечем,
+        /// поэтому его и не было видно.
         /// </summary>
         private void UpdateWeather(BridgePayload p, float dt)
         {
             string w = (p.weatherFull ?? "").ToLowerInvariant();
-            bool rain = w.Contains("rain") || w.Contains("дожд");
-            bool flood = w.Contains("flood") || w.Contains("потоп");
-            bool fog = w.Contains("fog") || w.Contains("туман");
-            bool storm = w.Contains("storm") || w.Contains("гроз");
-            bool eclipse = w.Contains("eclips") || w.Contains("затмен");
+            string kind =
+                (w.Contains("eclips") || w.Contains("затмен")) ? "eclipse" :
+                (w.Contains("flood") || w.Contains("потоп")) ? "flood" :
+                (w.Contains("storm") || w.Contains("гроз")) ? "storm" :
+                (w.Contains("rain") || w.Contains("дожд")) ? "rain" :
+                (w.Contains("fog") || w.Contains("туман")) ? "fog" :
+                (w.Contains("dust") || w.Contains("пыл")) ? "dust" : "";
 
-            int want = (rain || flood) ? 14 : fog ? 5 : 0;
-            while (_weatherBits.Count > want)
+            bool schematic = (ConfigSettings.MapWeatherMode.Value ?? "Schematic")
+                             .Trim().ToLowerInvariant() != "effects";
+
+            if (kind != _wxKind || schematic != _wxSchematic)
             {
-                int last = _weatherBits.Count - 1;
-                if (_weatherBits[last] != null) Destroy(_weatherBits[last].gameObject);
-                _weatherBits.RemoveAt(last);
+                _wxKind = kind;
+                _wxSchematic = schematic;
+                foreach (var b in _weatherBits) if (b != null) Destroy(b.gameObject);
+                _weatherBits.Clear();
+                if (kind.Length > 0)
+                {
+                    if (schematic) DrawWeatherGlyph(kind);
+                    else BuildWeatherFx(kind);
+                }
             }
-            while (_weatherBits.Count < want)
+
+            if (!schematic) AnimateWeatherFx();
+        }
+
+        private string _wxKind = "?";
+        private bool _wxSchematic = true;
+
+        /// <summary>Значок погоды — теми же линиями, что и вся схема.</summary>
+        private void DrawWeatherGlyph(string kind)
+        {
+            const float gx = 22f, gy = 22f;
+            var c = S.Frame;
+            var soft = OverlayStyle.WithA(S.Frame, 0.55f);
+
+            void L(float x1, float y1, float x2, float y2, float th, Color col)
+                => _weatherBits.Add(Line(gx + x1, gy + y1, gx + x2, gy + y2, th, col, "Wx"));
+
+            switch (kind)
             {
-                int i = _weatherBits.Count;
-                Image bit = fog
+                case "eclipse":
+                    for (int i = 0; i < 12; i++)
+                    {
+                        float a1 = i / 12f * Mathf.PI * 2f, a2 = (i + 1) / 12f * Mathf.PI * 2f;
+                        L(14f + Mathf.Cos(a1) * 13f, 14f + Mathf.Sin(a1) * 13f,
+                          14f + Mathf.Cos(a2) * 13f, 14f + Mathf.Sin(a2) * 13f, 2f, c);
+                        if (i % 3 == 0)
+                            L(14f + Mathf.Cos(a1) * 16f, 14f + Mathf.Sin(a1) * 16f,
+                              14f + Mathf.Cos(a1) * 22f, 14f + Mathf.Sin(a1) * 22f, 2f, soft);
+                    }
+                    break;
+
+                case "rain":
+                case "storm":
+                    L(2f, 14f, 26f, 14f, 2f, c);
+                    L(2f, 14f, 6f, 6f, 2f, c);
+                    L(6f, 6f, 15f, 3f, 2f, c);
+                    L(15f, 3f, 23f, 7f, 2f, c);
+                    L(23f, 7f, 26f, 14f, 2f, c);
+                    if (kind == "rain")
+                        for (int i = 0; i < 4; i++) L(5f + i * 6f, 18f, 2f + i * 6f, 27f, 2f, soft);
+                    else
+                    {
+                        L(15f, 17f, 10f, 25f, 2.5f, c);
+                        L(10f, 25f, 16f, 25f, 2.5f, c);
+                        L(16f, 25f, 10f, 34f, 2.5f, c);
+                    }
+                    break;
+
+                case "flood":
+                    for (int i = 0; i < 3; i++)
+                    {
+                        float y = 10f + i * 8f;
+                        L(0f, y, 7f, y - 3f, 2f, c);
+                        L(7f, y - 3f, 14f, y, 2f, c);
+                        L(14f, y, 21f, y - 3f, 2f, c);
+                        L(21f, y - 3f, 28f, y, 2f, c);
+                    }
+                    break;
+
+                case "fog":
+                    for (int i = 0; i < 4; i++)
+                        L(i % 2 == 0 ? 0f : 5f, 6f + i * 7f, i % 2 == 0 ? 24f : 30f, 6f + i * 7f, 2f, soft);
+                    break;
+
+                case "dust":
+                    for (int i = 0; i < 4; i++)
+                        L(i * 2f, 6f + i * 7f, 22f + i * 2f, 3f + i * 7f, 2f, soft);
+                    break;
+            }
+        }
+
+        // ---- анимационный режим, если игрок предпочёл его ----
+        private void BuildWeatherFx(string kind)
+        {
+            int n = (kind == "rain" || kind == "storm" || kind == "flood") ? 14 : kind == "fog" ? 5 : 0;
+            for (int i = 0; i < n; i++)
+                _weatherBits.Add(kind == "fog"
                     ? Line(8f, 40f + i * 12f, W - 8f, 40f + i * 12f, 2f, OverlayStyle.WithA(S.FrameDim, 0.3f), "Wx")
-                    : Line(0f, 0f, 6f, 14f, 1.5f, OverlayStyle.WithA(S.Frame, 0.5f), "Wx");
-                _weatherBits.Add(bit);
-            }
+                    : Line(0f, 0f, 6f, 14f, 1.5f, OverlayStyle.WithA(S.Frame, 0.5f), "Wx"));
+        }
 
+        private void AnimateWeatherFx()
+        {
             float t = Time.unscaledTime;
+            bool fog = _wxKind == "fog";
             for (int i = 0; i < _weatherBits.Count; i++)
             {
                 var b = _weatherBits[i];
                 if (b == null) continue;
                 if (fog)
                 {
-                    float a = 0.18f + 0.12f * Mathf.Sin(t * 0.7f + i);
-                    b.color = OverlayStyle.WithA(S.FrameDim, a);
+                    b.color = OverlayStyle.WithA(S.FrameDim, 0.18f + 0.12f * Mathf.Sin(t * 0.7f + i));
                     continue;
                 }
-                // капли падают сверху вниз и уходят под линию поверхности
                 var rt = (RectTransform)b.transform;
-                float span = flood ? H : Ground;
-                float y = Mathf.Repeat(t * (flood ? 150f : 220f) + i * 37f, span);
-                float x = 12f + (i * 53f) % (W - 24f);
-                rt.anchoredPosition = new Vector2(x, -y);
-                b.color = OverlayStyle.WithA(S.Frame, flood ? 0.55f : 0.45f);
-            }
-
-            // Затмение приглушает схему, гроза изредка подсвечивает. Трогаем ТОЛЬКО
-            // свои линии: общей прозрачностью владеет панель, и лезть в неё нельзя.
-            float mul = eclipse ? 0.62f : 1f;
-            if (storm && Mathf.PerlinNoise(t * 1.7f, 4.2f) > 0.86f) mul *= 1.6f;
-            if (Mathf.Abs(mul - _wxMul) > 0.01f)
-            {
-                _wxMul = mul;
-                foreach (var img in _art.GetComponentsInChildren<Image>(true))
-                {
-                    if (img == null) continue;
-                    var c = img.color;
-                    img.color = new Color(c.r, c.g, c.b, Mathf.Clamp01(c.a * mul));
-                }
+                float y = Mathf.Repeat(t * 220f + i * 37f, Ground);
+                rt.anchoredPosition = new Vector2(12f + (i * 53f) % (W - 24f), -y);
+                b.color = OverlayStyle.WithA(S.Frame, 0.45f);
             }
         }
     }

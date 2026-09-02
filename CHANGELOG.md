@@ -1,5 +1,11 @@
 # Changelog — LCBridgeOverlay
 
+## 1.9.2
+- **The old rows no longer show through the schematic.** They were being switched back on with every packet, so outside you saw the drawing and the whole panel underneath it. Alongside the schematic only the frame remains: corner brackets, the eye, the run timer and the event plate.
+- **The caves were redrawn.** They now leave the bottom of the facility and wind downwards like a gut, narrowing and widening as they go, with two low pockets standing in water.
+- **Weather is drawn as a symbol by default** in the corner of the schematic — a ringed corona for an eclipse, a cloud with strokes for rain, a bolt for a storm, waves for flooding, bands for fog, slants for dust. The old animated treatment had nothing to show for an eclipse at all, which is why it looked like nothing was happening; it is still available as `MapWeatherMode = Effects`.
+- **The lamps follow the breaker box**, since that is the switch players actually throw. Without one on the map they fall back to the lights themselves.
+
 ## 1.9.1
 - **The schematic now takes the panel's place instead of sitting beside it.** Step off the ship and the location, quota, day and ticker rows give way to the drawing; step back aboard and they return. It is built as a block of the panel itself rather than a separate layer, so it inherits the width, the tilt, the scale, the camera sway, the fade and the keystone perspective rather than reimplementing any of them, and it fills the panel edge to edge. Everything in it is drawn larger to match, and the moon name and loot line use the panel's own fonts.
 

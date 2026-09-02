@@ -56,6 +56,7 @@ namespace LCBridgeOverlay
         public static ConfigEntry<string> MonsterIconStyle;   // Render | Pixel | Vector | Symbol
         public static ConfigEntry<bool> ShowFacilityMap;      // схема локации на улице
         public static ConfigEntry<string> MapLightMode;       // Effects | Schematic
+        public static ConfigEntry<string> MapWeatherMode;     // Schematic | Effects
         public static ConfigEntry<bool> NotifyMode;           // панель спит и просыпается на новости
         public static ConfigEntry<float> NotifyHoldSeconds;   // сколько держать её разбуженной
         public static ConfigEntry<bool> TeamDeaths;           // считать смерти всей команды
@@ -236,6 +237,9 @@ namespace LCBridgeOverlay
 
             MapLightMode = cfg.Bind("Widgets", "MapLightMode", "Effects",
                 "Как схема показывает свет в комплексе: Effects — лампы мягко дышат, Schematic — просто горит или не горит.");
+
+            MapWeatherMode = cfg.Bind("Widgets", "MapWeatherMode", "Schematic",
+                "Как схема показывает погоду: Schematic - узнаваемый значок в углу (затмение, дождь, гроза, потоп, туман, пыль), Effects - анимация поверх схемы.");
 
             NotifyMode = cfg.Bind("Behavior", "NotifyMode", false,
                 "Режим уведомлений: панель не висит на экране постоянно, а спит невидимой и разгорается только когда что-то изменилось. Над ней появляется мельтешащая папка, она влетает в панель и растворяется, изменившиеся цифры коротко мерцают. Включение и выключение озвучены радар-бустером.");

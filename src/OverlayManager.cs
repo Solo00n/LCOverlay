@@ -414,7 +414,7 @@ namespace LCBridgeOverlay
             if (triples == _marksShown) return;
             _marksShown = triples;
 
-            _marksGo.SetActive(triples > 0);
+            _marksGo.SetActive(triples > 0 && !_mapShown);
             if (triples <= 0)
             {
                 for (int i = _marksGo.transform.childCount - 1; i >= 0; i--)
@@ -617,6 +617,7 @@ namespace LCBridgeOverlay
             {
                 _mapShown = want;
                 SetPanelBlocks(!want);
+                _dirty = true;          // пересобрать панель под новый состав
             }
             _map.Refresh(p, want);
             if (want) _map.ApplyFonts(_fontBody, _fontBig);
@@ -627,12 +628,16 @@ namespace LCBridgeOverlay
         /// <summary>Показать/скрыть обычные блоки панели (когда их подменяет схема).</summary>
         private void SetPanelBlocks(bool on)
         {
+            // Со схемой остаётся только рамка оверлея: уголки, глаз, таймер и плашка
+            // ивента. Всё остальное — локация, квота, день/смерти, бегущая строка —
+            // либо уже есть на схеме, либо мешает.
             void Set(GameObject g) { if (g != null && g.activeSelf != on) g.SetActive(on); }
             Set(_locationGo);
             Set(_quotaGo);
             Set(_dayDeathsGo);
             Set(_tickerGo);
             Set(_headerDivider);
+            Set(_marksGo);
         }
 
         private static float EaseOutCubic(float t) => 1f - Mathf.Pow(1f - t, 3f);
@@ -854,9 +859,12 @@ namespace LCBridgeOverlay
             _headerGo.SetActive(showPanel || ConfigSettings.ShowTimer.Value);
             _headerDivider.SetActive(showPanel);
             _timerText.transform.parent.gameObject.SetActive(ConfigSettings.ShowTimer.Value);
-            _locationGo.SetActive(ConfigSettings.ShowLocation.Value);
-            _quotaGo.SetActive(ConfigSettings.ShowQuota.Value);
-            _dayDeathsGo.SetActive(ConfigSettings.ShowDayDeaths.Value);
+            // Пока показана схема, обычные блоки не возвращаем: Refresh() зовётся на
+            // каждый пакет и раньше включал их обратно сразу после того, как схема их
+            // скрыла — из-за этого на улице было видно и то, и другое.
+            _locationGo.SetActive(!_mapShown && ConfigSettings.ShowLocation.Value);
+            _quotaGo.SetActive(!_mapShown && ConfigSettings.ShowQuota.Value);
+            _dayDeathsGo.SetActive(!_mapShown && ConfigSettings.ShowDayDeaths.Value);
             if (!ConfigSettings.ShowVictoryBanner.Value) _victory.Hide();
 
             // глаз-индикатор сверху: связь есть — свои цвета (рисунок), нет связи — притушен серым
@@ -1001,7 +1009,7 @@ namespace LCBridgeOverlay
         private void RefreshTicker(BridgePayload p, bool connected, string moon, int qi, int day, int deaths)
         {
             bool on = ConfigSettings.ShowTicker.Value;
-            _tickerGo.SetActive(on);
+            _tickerGo.SetActive(on && !_mapShown);
             if (!on) return;
 
             string wx = p != null && !string.IsNullOrEmpty(p.weatherFull) ? p.weatherFull : "-";
