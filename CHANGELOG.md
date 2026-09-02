@@ -1,5 +1,10 @@
 # Changelog — LCBridgeOverlay
 
+## 1.12.3
+- **The body fill trailed behind its outline.** It copied the icon's position before that position had been set for the frame, so it was always one step late — obvious outside, where creatures cover the most ground, and enough to read as a second creature standing beside the first. That is also where the pair of gunkfish came from. It is now moved after the icon, and hidden along with it.
+- **Deviants show as their own version again**, drawn upside down as the panel draws them. They were being folded in with the ordinary creature of the same species and vanishing.
+- **The dropship is the overlay's colour and a sensible size** rather than red and outsized — it is part of the scenery, not something hunting you.
+
 ## 1.12.2
 - **The dropship has its proper artwork** now, cut from its white background and carried in the mod like the creature icons, so the Pixel, Vector and Symbol styles apply to it as well. Dropping a `dropship.png` into `lcbridgeoverlay-map/` still overrides it.
 

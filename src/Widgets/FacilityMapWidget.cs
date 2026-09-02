@@ -898,7 +898,10 @@ namespace LCBridgeOverlay
                     if (Gate.RequireScan &&
                         raw.IndexOf("+Scanned", System.StringComparison.OrdinalIgnoreCase) < 0) continue;
 
-                    string key = MobRailWidget.IconKeyPublic(raw) ?? raw;
+                    // Девиант — ОТДЕЛЬНАЯ версия монстра, как в основном оверлее:
+                    // если валить его в одну кучу с обычным, инверснутый пропадал.
+                    string key = (MobRailWidget.IconKeyPublic(raw) ?? raw)
+                               + (raw.IndexOf("+Deviant", System.StringComparison.OrdinalIgnoreCase) >= 0 ? "#d" : "");
                     int at = seen.IndexOf(key);
                     if (at >= 0)
                     {
@@ -983,6 +986,8 @@ namespace LCBridgeOverlay
                     c0.a = Mathf.MoveTowards(c0.a, 0f, dt * 4f);
                     img.color = c0;
                     if (c0.a <= 0.01f) rt.localScale = Vector3.zero;
+                    var gone = walking ? _inFill : _outFill;
+                    if (i < gone.Count && gone[i] != null) gone[i].enabled = false;
                     continue;
                 }
 
@@ -997,9 +1002,6 @@ namespace LCBridgeOverlay
 
                 var spr = MobIconFor(raw);
                 if (spr != null && img.sprite != spr) img.sprite = spr;
-
-                var fills = walking ? _inFill : _outFill;
-                UpdateFillMark(i < fills.Count ? fills[i] : null, rt, raw, near);
 
                 float phase = i * 1.7f;
                 float amp = 3f + 9f * near * near * near;
@@ -1023,7 +1025,10 @@ namespace LCBridgeOverlay
                 float sc = baseScale;
                 if (ConfigSettings.ScaleMonstersByCount.Value)
                     sc *= Mathf.Min(1.6f, 1f + 0.16f * (CountOf(raw) - 1));
-                rt.localScale = new Vector3(sc * (i < _face.Count ? _face[i] : 1f), sc, 1f);
+                // девианта рисуем вверх ногами — тем же приёмом, что и рейка
+                float flipY = (ConfigSettings.DeviantFlipIcon.Value &&
+                               raw.IndexOf("+Deviant", System.StringComparison.OrdinalIgnoreCase) >= 0) ? -1f : 1f;
+                rt.localScale = new Vector3(sc * (i < _face.Count ? _face[i] : 1f), sc * flipY, 1f);
 
                 float a2 = 1f;
                 if (ConfigSettings.ProximityFade.Value && dist >= 0f)
@@ -1034,6 +1039,12 @@ namespace LCBridgeOverlay
                 var col = MobRailWidget.IconTint(S);
                 col.a = Mathf.MoveTowards(img.color.a, a2, dt * 4f);
                 img.color = col;
+
+                // Заливку двигаем ПОСЛЕ иконки. Раньше она копировала положение до
+                // того, как оно выставлено, и отставала на кадр — на улице, где шаг
+                // широкий, это читалось как сдвинутый силуэт и как «вторая рыба».
+                var fills = walking ? _inFill : _outFill;
+                UpdateFillMark(i < fills.Count ? fills[i] : null, rt, raw, near);
             }
         }
 
@@ -1185,8 +1196,9 @@ namespace LCBridgeOverlay
                 var rt = (RectTransform)_shipSprite.transform;
                 rt.anchoredPosition = new Vector2(ShipX, -(y - 26f));
                 _shipSprite.enabled = true;
-                _shipSprite.color = MobRailWidget.TintedIconStylePublic()
-                                    ? MobRailWidget.IconTint(S) : Color.white;
+                // доставщик — часть постройки, а не угроза: красим его цветом темы,
+                // а не тем, каким помечены монстры
+                _shipSprite.color = MobRailWidget.TintedIconStylePublic() ? S.Frame : Color.white;
                 foreach (var g in _ship) if (g != null) g.enabled = false;
             }
             else DrawShipLines(ShipX, y, col);
@@ -1216,7 +1228,7 @@ namespace LCBridgeOverlay
                     rt.SetParent(_art, false);
                     rt.anchorMin = rt.anchorMax = new Vector2(0f, 1f);
                     rt.pivot = new Vector2(0.5f, 1f);
-                    rt.sizeDelta = new Vector2(44f, 62f);
+                    rt.sizeDelta = new Vector2(26f, 36f);
                     _shipSprite = go.GetComponent<Image>();
                     _shipSprite.sprite = spr;
                     _shipSprite.preserveAspect = true;
