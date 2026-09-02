@@ -815,7 +815,7 @@ namespace LCBridgeOverlay
                              $"{Localization.T("hives")} {p.beehiveCount}";
 
             UpdateElevator(dt);
-            UpdateDropship(dt);
+            UpdateDropship(dt, p != null && !p.onMoon);
             UpdateLights(dt);
             UpdateDots(p);
             UpdateWeather(p, dt);
@@ -1110,14 +1110,33 @@ namespace LCBridgeOverlay
 
         // ---- доставщик из магазина ----
         private readonly List<Image> _ship = new List<Image>();
-        private float _shipT = -1f;      // 0 подлетает … 1 улетел, -1 нет его
+        private Image _shipSprite;                 // если игрок положил свою картинку
+        private readonly List<Image> _flame = new List<Image>();
+        private float _shipT = -1f;                // 0 садится … 1 улетел, -1 его нет
         private bool _shipWasHere;
 
+        private static ItemDropship _shipObj;
+        private static float _shipNext;
+
+        // Садится СЛЕВА, на траву, а не над кораблём: там пусто и он никому не мешает.
+        private const float ShipX = 62f, ShipGroundY = 96f;
+
+        /// <summary>Путь к своей картинке доставщика, если её положили рядом со слоями.</summary>
+        private static string ShipImagePath
+        {
+            get
+            {
+                try { return System.IO.Path.Combine(MapImages.Dir, "dropship.png"); }
+                catch { return null; }
+            }
+        }
+
         /// <summary>
-        /// Корабль-доставщик. Прилетает справа, зависает над кораблём игроков, стоит
-        /// пока выгружает, потом уходит вверх. Собран из линий, как и вся схема.
+        /// Доставщик садится и взлетает КАК РАКЕТА: идёт вертикально, под ним горит
+        /// пламя. Пока разгружается — стоит на земле без огня. Улетает, когда
+        /// доставка закончена или когда корабль игроков покидает луну.
         /// </summary>
-        private void UpdateDropship(float dt)
+        private void UpdateDropship(float dt, bool shipLeaving)
         {
             bool here = false, landed = false;
             try
@@ -1130,74 +1149,154 @@ namespace LCBridgeOverlay
                 if (_shipObj != null) { here = _shipObj.deliveringOrder; landed = _shipObj.shipLanded; }
             }
             catch { }
+            if (shipLeaving) here = false;          // корабль улетает — и этот тоже
 
             if (here && !_shipWasHere)
             {
                 _shipT = 0f;
-                Plugin.Log?.LogInfo("[map] доставщик в пути");
+                Plugin.Log?.LogInfo("[map] доставщик садится");
             }
             _shipWasHere = here;
 
-            if (_shipT < 0f && !here)
+            if (_shipT < 0f)
             {
-                foreach (var g in _ship) if (g != null) g.enabled = false;
+                Hide();
                 return;
             }
 
-            if (_ship.Count == 0) BuildDropship();
+            EnsureShipParts();
 
-            // подлёт → стоянка (пока выгружает) → уход
-            if (here) _shipT = landed ? 0.5f : Mathf.MoveTowards(_shipT, 0.45f, dt / 6f);
+            if (here) _shipT = landed ? 0.5f : Mathf.MoveTowards(_shipT, 0.5f, dt / 4f);
             else
             {
-                _shipT = Mathf.MoveTowards(_shipT, 1f, dt / 5f);
-                if (_shipT >= 1f) { _shipT = -1f; foreach (var g in _ship) if (g != null) g.enabled = false; return; }
+                _shipT = Mathf.MoveTowards(_shipT, 1f, dt / 4f);
+                if (_shipT >= 1f) { _shipT = -1f; Hide(); return; }
             }
 
+            // высота: сверху вниз на посадке, снизу вверх на взлёте
             float k = _shipT;
-            float x = k < 0.5f ? Mathf.Lerp(W + 60f, ShipX, k / 0.5f) : ShipX;
-            float y = k < 0.5f ? Mathf.Lerp(10f, ShipY, k / 0.5f)
-                               : Mathf.Lerp(ShipY, -70f, (k - 0.5f) / 0.5f);
+            float y = k < 0.5f ? Mathf.Lerp(-90f, ShipGroundY, k / 0.5f)
+                               : Mathf.Lerp(ShipGroundY, -110f, (k - 0.5f) / 0.5f);
+            bool burning = k < 0.48f || k > 0.52f;   // на стоянке двигатели молчат
 
-            var col = OverlayStyle.WithA(S.Frame, k > 0.9f ? Mathf.InverseLerp(1f, 0.9f, k) : 1f);
-            PlaceDropship(x, y, col);
-        }
-
-        private static ItemDropship _shipObj;
-        private static float _shipNext;
-        private const float ShipX = 250f, ShipY = 46f;
-
-        private void BuildDropship()
-        {
-            var c = S.Frame;
-            for (int i = 0; i < 9; i++) _ship.Add(Line(0f, 0f, 1f, 1f, 2f, c));
-        }
-
-        /// <summary>Силуэт доставщика: корпус, нос, сопла и трос с ящиком.</summary>
-        private void PlaceDropship(float x, float y, Color col)
-        {
-            if (_ship.Count < 9) return;
-            void Seg(int i, float x1, float y1, float x2, float y2, float th)
+            var col = OverlayStyle.WithA(S.Frame, 1f);
+            if (_shipSprite != null)
             {
-                var rt = (RectTransform)_ship[i].transform;
+                var rt = (RectTransform)_shipSprite.transform;
+                rt.anchoredPosition = new Vector2(ShipX, -(y - 26f));
+                _shipSprite.enabled = true;
+                _shipSprite.color = MobRailWidget.TintedIconStylePublic()
+                                    ? MobRailWidget.IconTint(S) : Color.white;
+                foreach (var g in _ship) if (g != null) g.enabled = false;
+            }
+            else DrawShipLines(ShipX, y, col);
+
+            DrawFlame(ShipX, y, burning);
+        }
+
+        private void Hide()
+        {
+            foreach (var g in _ship) if (g != null) g.enabled = false;
+            foreach (var g in _flame) if (g != null) g.enabled = false;
+            if (_shipSprite != null) _shipSprite.enabled = false;
+        }
+
+        private void EnsureShipParts()
+        {
+            if (_shipSprite == null && _ship.Count == 0)
+            {
+                // своя картинка важнее нарисованного силуэта
+                var spr = SpriteBank.FromFile(ShipImagePath, "dropship");
+                if (spr != null)
+                {
+                    var go = new GameObject("Dropship", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+                    var rt = (RectTransform)go.transform;
+                    rt.SetParent(_art, false);
+                    rt.anchorMin = rt.anchorMax = new Vector2(0f, 1f);
+                    rt.pivot = new Vector2(0.5f, 1f);
+                    rt.sizeDelta = new Vector2(46f, 56f);
+                    _shipSprite = go.GetComponent<Image>();
+                    _shipSprite.sprite = spr;
+                    _shipSprite.preserveAspect = true;
+                    _shipSprite.raycastTarget = false;
+                    Plugin.Log?.LogInfo("[map] доставщик: своя картинка из lcbridgeoverlay-map/dropship.png");
+                }
+                else
+                    for (int i = 0; i < 16; i++) _ship.Add(Line(0f, 0f, 1f, 1f, 2f, S.Frame));
+            }
+            if (_flame.Count == 0)
+                for (int i = 0; i < 7; i++) _flame.Add(Line(0f, 0f, 1f, 1f, 2f, new Color(1f, 0.6f, 0.15f, 1f)));
+        }
+
+        /// <summary>
+        /// Силуэт капсулы по присланному образцу: корпус с плечиками, юбка с
+        /// опорами внизу, два ряда люков и вертикальный шов.
+        /// </summary>
+        private void DrawShipLines(float x, float y, Color col)
+        {
+            int n = 0;
+            void Seg(float x1, float y1, float x2, float y2, float th)
+            {
+                if (n >= _ship.Count) return;
+                var img = _ship[n++];
+                var rt = (RectTransform)img.transform;
                 var d = new Vector2(x2 - x1, -(y2 - y1));
                 rt.anchoredPosition = new Vector2(x + x1, -(y + y1));
                 rt.sizeDelta = new Vector2(Mathf.Max(0.5f, d.magnitude), th);
                 rt.localRotation = Quaternion.Euler(0f, 0f, Mathf.Atan2(d.y, d.x) * Mathf.Rad2Deg);
-                _ship[i].enabled = true;
-                _ship[i].color = col;
+                img.enabled = true;
+                img.color = col;
             }
 
-            Seg(0, -22f, 0f, 22f, 0f, 2.5f);        // днище
-            Seg(1, -22f, 0f, -16f, -10f, 2.5f);     // корма
-            Seg(2, 22f, 0f, 14f, -10f, 2.5f);       // нос
-            Seg(3, -16f, -10f, 14f, -10f, 2.5f);    // крыша
-            Seg(4, -14f, 0f, -14f, 5f, 2f);         // сопла
-            Seg(5, 12f, 0f, 12f, 5f, 2f);
-            Seg(6, 0f, 0f, 0f, 14f, 1.5f);          // трос
-            Seg(7, -6f, 14f, 6f, 14f, 2f);          // ящик
-            Seg(8, -6f, 14f, -6f, 21f, 2f);
+            // корпус
+            Seg(-13f, -52f, 13f, -52f, 2.5f);        // крышка
+            Seg(-15f, -48f, -15f, -14f, 2.5f);       // борта
+            Seg(15f, -48f, 15f, -14f, 2.5f);
+            Seg(-13f, -52f, -15f, -48f, 2f);         // плечики
+            Seg(13f, -52f, 15f, -48f, 2f);
+            // юбка
+            Seg(-15f, -14f, -25f, 0f, 2.5f);
+            Seg(15f, -14f, 25f, 0f, 2.5f);
+            Seg(-25f, 0f, 25f, 0f, 2.5f);
+            // опоры
+            Seg(-19f, 0f, -22f, 7f, 2f);
+            Seg(19f, 0f, 22f, 7f, 2f);
+            // шов и люки
+            Seg(0f, -50f, 0f, -14f, 1.5f);
+            Seg(-11f, -44f, -3f, -44f, 1.5f);
+            Seg(-11f, -44f, -11f, -34f, 1.5f);
+            Seg(3f, -44f, 11f, -44f, 1.5f);
+            Seg(-11f, -30f, -3f, -30f, 1.5f);
+            Seg(3f, -30f, 11f, -30f, 1.5f);
+
+            for (int i = n; i < _ship.Count; i++) _ship[i].enabled = false;
         }
+
+        /// <summary>Пламя под соплами: несколько дрожащих языков.</summary>
+        private void DrawFlame(float x, float y, bool on)
+        {
+            float t = Time.unscaledTime;
+            for (int i = 0; i < _flame.Count; i++)
+            {
+                var img = _flame[i];
+                if (img == null) continue;
+                if (!on) { img.enabled = false; continue; }
+
+                float fx = -12f + i * 4f;
+                float len = 10f + 9f * Mathf.PerlinNoise(t * 9f + i, 0f);
+                var rt = (RectTransform)img.transform;
+                var d = new Vector2(Mathf.Sin(t * 7f + i) * 2f, -len);
+                rt.anchoredPosition = new Vector2(x + fx, -(y + 2f));
+                rt.sizeDelta = new Vector2(len, 2.5f);
+                rt.localRotation = Quaternion.Euler(0f, 0f, Mathf.Atan2(d.y, d.x) * Mathf.Rad2Deg);
+                img.enabled = true;
+                // от белого у сопла к оранжевому на конце
+                img.color = Color.Lerp(new Color(1f, 0.95f, 0.6f, 0.95f),
+                                       new Color(1f, 0.45f, 0.1f, 0.5f),
+                                       Mathf.Abs(i - 3f) / 3f);
+            }
+        }
+
 
         /// <summary>Дистанция из строки монстра ("@42"), или -1.</summary>
         private static float DistOf(string raw)

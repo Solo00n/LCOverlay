@@ -124,6 +124,11 @@ namespace LCBridgeOverlay
 
 Места монстров задаются не картинкой, а строками slotout/slotin в файле
 gdlp.lcbridgeoverlay.map.txt (он лежит уровнем выше, рядом с конфигом).
+
+ДОСТАВЩИК
+  Положи сюда dropship.png — и мод возьмёт его вместо нарисованного силуэта.
+  Белый фон убирается сам. Стиль (Pixel, Vector, Symbol) применяется тот же,
+  что и к иконкам монстров. Файл называется строго dropship.png.
 ", System.Text.Encoding.UTF8);
             }
             catch { }

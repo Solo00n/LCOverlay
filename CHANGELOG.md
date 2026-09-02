@@ -1,5 +1,9 @@
 # Changelog — LCBridgeOverlay
 
+## 1.12.1
+- **The dropship comes down like a rocket.** It descends onto the open grass at the left of the drawing with its engines burning, cuts them while it sits unloading, and lifts off on them again when it is done — or the moment the crew's own ship leaves the moon.
+- **You can give it your own picture.** Drop a `dropship.png` into `lcbridgeoverlay-map/` and it is used in place of the drawn one, with a white background removed automatically and the same Pixel, Vector or Symbol treatment the creature icons get.
+
 ## 1.12.0
 - **Creature phase changes show on the schematic.** A grown maneater, an angry jester, a roused hoarding bug — none of them changed, because the schematic stripped the state off the name before choosing a picture. It picks the same variants the panel does now.
 - **The fill sits square on its icon.** It was a child of the icon with its own anchoring, and any mismatch read as a sideways drift. Both are now made by the same code as neighbours in one slot, and the fill simply copies the icon's transform.

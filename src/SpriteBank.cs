@@ -168,6 +168,68 @@ namespace LCBridgeOverlay
         }
 
         // мягкая клякса крови; красим ТОЛЬКО там, где исходник непрозрачен
+        /// <summary>
+        /// Спрайт из файла на диске — чтобы свою картинку можно было принести, не
+        /// пересобирая мод. Стиль (пиксель, контур, силуэт) применяется тот же, что
+        /// и к встроенным иконкам.
+        /// </summary>
+        public static Sprite FromFile(string path, string key, bool solid = false)
+        {
+            if (string.IsNullOrEmpty(path)) return null;
+            string ck = (solid ? "extS:" : "ext:") + key +
+                        ":" + (ConfigSettings.MonsterIconStyle.Value ?? "Render");
+            if (_styled.TryGetValue(ck, out var got)) return got;
+
+            Sprite made = null;
+            try
+            {
+                if (System.IO.File.Exists(path))
+                {
+                    var tex = new Texture2D(2, 2, TextureFormat.RGBA32, false);
+                    if (ImageConversion.LoadImage(tex, System.IO.File.ReadAllBytes(path)))
+                    {
+                        KeyOutWhite(tex);      // фон у присланных картинок обычно белый
+                        string st = (ConfigSettings.MonsterIconStyle.Value ?? "Render").Trim().ToLowerInvariant();
+                        if (solid) made = Silhouette(tex);
+                        else if (st == "pixel") made = Pixelate(tex, 26);
+                        else if (st == "vector") made = Outline(tex);
+                        else if (st == "symbol") made = Silhouette(tex);
+                        else
+                        {
+                            tex.filterMode = FilterMode.Bilinear;
+                            tex.Apply(false, false);
+                            made = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height),
+                                                 new Vector2(0.5f, 0.5f), 100f, 0, SpriteMeshType.FullRect);
+                        }
+                    }
+                }
+            }
+            catch { }
+            _styled[ck] = made;
+            return made;
+        }
+
+        /// <summary>
+        /// Убрать белый фон. Картинки из интернета приходят на белом, а на схеме
+        /// нужен прозрачный — иначе вокруг корабля висел бы белый прямоугольник.
+        /// </summary>
+        private static void KeyOutWhite(Texture2D tex)
+        {
+            try
+            {
+                var px = tex.GetPixels32();
+                for (int i = 0; i < px.Length; i++)
+                {
+                    var c = px[i];
+                    if (c.a == 0) continue;
+                    if (c.r > 235 && c.g > 235 && c.b > 235) px[i] = new Color32(0, 0, 0, 0);
+                }
+                tex.SetPixels32(px);
+                tex.Apply(false, false);
+            }
+            catch { }
+        }
+
         // ================= стили иконок =================
         // Все три выводятся из исходной картинки. Так набор не надо рисовать трижды,
         // он не расходится между стилями и автоматически покрывает новых монстров.
