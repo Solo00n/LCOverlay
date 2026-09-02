@@ -72,6 +72,7 @@ namespace LCBridgeOverlay
         public static ConfigEntry<float> VariantCycleSeconds; // иначе версии плавно сменяют друг друга
         public static ConfigEntry<bool> DamageFlash;          // вспышка иконки при уроне
         public static ConfigEntry<bool> ShowEndOfDayCountdown;// таймер конца дня
+        public static ConfigEntry<string> CountdownColor;    // цвет цифр отсчёта
         public static ConfigEntry<bool> ShowLootMultiplier;   // суммарный множитель стоимости лута
         public static ConfigEntry<bool> ShowApparatusIcon;    // иконка лампы (аппарата) у интерьера
         public static ConfigEntry<bool> DeviantFlipIcon;      // девиантов рисовать вверх ногами
@@ -215,6 +216,9 @@ namespace LCBridgeOverlay
                 "Инверснутые монстры (мод DeviantEnemies) показываются перевёрнутой вверх ногами иконкой.");
             JesterWindUpShake = cfg.Bind("Behavior", "JesterWindUpShake", true,
                 "Пока джестер заводится, его иконка трясётся всё сильнее — и в момент хлопка сменяется на иконку 2-й фазы.");
+
+            CountdownColor = cfg.Bind("Widgets", "CountdownColor", "Red",
+                "Цвет цифр отсчёта конца дня: Red, Blue, White или Theme (из темы оверлея).");
 
             ProximityShake = cfg.Bind("Behavior", "ProximityShake", true,
                 "Чем ближе монстр, тем сильнее дрожит его иконка: издалека — еле заметное покачивание, вплотную — нервная тряска.");

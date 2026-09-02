@@ -39,6 +39,7 @@ namespace LCBridgeOverlay
         private readonly List<Vector4> _inPaths = new List<Vector4>();   // маршруты хождения
         private readonly List<Vector4> _outPaths = new List<Vector4>();  // и снаружи тоже
         private readonly List<float> _nearSmooth = new List<float>();    // сглаженная близость
+        private readonly List<float> _face = new List<float>();          // куда смотрит иконка
         private string _wxKind = "?";   // что сейчас нарисовано
         private string _wxRaw;          // последняя сырая строка погоды
         private readonly List<Image> _outDots = new List<Image>();
@@ -233,6 +234,7 @@ namespace LCBridgeOverlay
                 var slotsLay = MapLayout.Load();
                 if (slotsLay != null) AddSlotsFromLayout(slotsLay);
                 if (_inDots.Count == 0 && _outDots.Count == 0) DefaultSlots();
+                SortInsidePathsByFloor();
                 _builtFor = interior ?? "";
                 try { _mgr?.AddPerspectiveToTree(_art); } catch { }
                 return;
@@ -526,6 +528,31 @@ namespace LCBridgeOverlay
                     _inSlots.Add(sl); _inDots.Add(Dot(sl));
                 }
             }
+        }
+
+        /// <summary>
+        /// Маршруты внутри упорядочиваем СНИЗУ ВВЕРХ: монстры приходят в порядке
+        /// обнаружения, и первым просканированным логично ходить у самого пола,
+        /// а не под потолком.
+        /// </summary>
+        private void SortInsidePathsByFloor()
+        {
+            var order = new List<int>();
+            for (int i = 0; i < _inPaths.Count; i++) order.Add(i);
+            order.Sort((a, b) => _inPaths[b].y.CompareTo(_inPaths[a].y));   // больше Y = ниже
+
+            var np = new List<Vector4>();
+            var ns = new List<RectTransform>();
+            var nd = new List<Image>();
+            foreach (var i in order)
+            {
+                np.Add(_inPaths[i]);
+                if (i < _inSlots.Count) ns.Add(_inSlots[i]);
+                if (i < _inDots.Count) nd.Add(_inDots[i]);
+            }
+            _inPaths.Clear(); _inPaths.AddRange(np);
+            _inSlots.Clear(); _inSlots.AddRange(ns);
+            _inDots.Clear(); _inDots.AddRange(nd);
         }
 
         /// <summary>Запасные места, если их нигде не задали.</summary>
@@ -861,6 +888,8 @@ namespace LCBridgeOverlay
             // сначала считаем, кто где хочет стоять
             int n = Mathf.Min(dots.Count, shown.Count);
             var want = new Vector2[dots.Count];
+            _face.Clear();
+            for (int q = 0; q < dots.Count; q++) _face.Add(1f);
             for (int i = 0; i < n; i++)
             {
                 Vector2 off = Vector2.zero;
@@ -873,6 +902,12 @@ namespace LCBridgeOverlay
                     var b = new Vector2(seg.z, seg.w);
                     var pos = Vector2.Lerp(a, b, Mathf.SmoothStep(0f, 1f, ph));
                     off = new Vector2(pos.x, -pos.y) - slots[i].anchoredPosition;
+
+                    // Картинки нарисованы смотрящими влево, поэтому отражаем только
+                    // тех, кто идёт слева направо.
+                    float ahead = Mathf.PingPong(t * sp + i * 0.41f + 0.03f, 1f);
+                    bool goingRight = (ahead > ph) == (b.x >= a.x);
+                    _face[i] = goingRight ? -1f : 1f;
                 }
                 want[i] = off + new Vector2(0f, IconLift);
             }
@@ -939,7 +974,7 @@ namespace LCBridgeOverlay
                 float sc = baseScale;
                 if (ConfigSettings.ScaleMonstersByCount.Value)
                     sc *= Mathf.Min(1.6f, 1f + 0.16f * (CountOf(raw) - 1));
-                rt.localScale = new Vector3(sc, sc, 1f);   // без зеркала: спрайты смотрят по-разному
+                rt.localScale = new Vector3(sc * (i < _face.Count ? _face[i] : 1f), sc, 1f);
 
                 float a2 = 1f;
                 if (ConfigSettings.ProximityFade.Value && dist >= 0f)
@@ -1074,7 +1109,9 @@ namespace LCBridgeOverlay
             if (fogInside) Add("fog");
 
             string mode = (ConfigSettings.MapWeatherMode.Value ?? "Live").Trim().ToLowerInvariant();
-            bool icons = mode == "icons" || mode == "schematic";
+            // «Schematic» — прежнее значение настройки; иначе у всех, кто
+            // настраивался раньше, так и остались бы значки вместо анимации
+            bool icons = mode == "icons";
 
             string key = string.Join(",", kinds.ToArray()) + "|" + (icons ? "i" : "l") + (fogInside ? "F" : "");
             if (w != _wxRaw)

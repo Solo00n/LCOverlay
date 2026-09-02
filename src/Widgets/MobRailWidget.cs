@@ -80,6 +80,7 @@ namespace LCBridgeOverlay
         private readonly Dictionary<string, float> _distByGroup = new Dictionary<string, float>();
         // иконка по ключу группы — чтобы запустить вспышку урона без пересборки рейки
         private readonly Dictionary<string, SwayItem> _byGroup = new Dictionary<string, SwayItem>();
+        private readonly HashSet<string> _seenGroups = new HashSet<string>();
         // дистанция по КОНКРЕТНОЙ версии монстра (нужно, чтобы выбрать «ту, что рядом»)
         private readonly Dictionary<string, float> _distByVariant = new Dictionary<string, float>();
         // джестер: 0..1 — насколько он «завёлся» (тряска нарастает к хлопку)
@@ -440,6 +441,12 @@ namespace LCBridgeOverlay
             s = Regex.Replace(s, @"\s*@\d+\s*$", "");
             s = Regex.Replace(s, @"\+hurt", "", RegexOptions.IgnoreCase);
             s = Regex.Replace(s, @"\+w\d", "", RegexOptions.IgnoreCase);   // уровень завода джестера
+            // «застыл» переключается постоянно, а иконку не меняет: держать его
+            // в сигнатуре означало пересобирать рейку каждую пару секунд
+            s = Regex.Replace(s, @"\+frozen", "", RegexOptions.IgnoreCase);
+            // «застыл» переключается постоянно, а иконку не меняет: держать его
+            // в сигнатуре означало пересобирать рейку каждую пару секунд
+            s = Regex.Replace(s, @"\+frozen", "", RegexOptions.IgnoreCase);
             return s;
         }
 
@@ -741,6 +748,16 @@ namespace LCBridgeOverlay
 
         private void RebuildRail(RectTransform rail, string[] list, bool growLeft)
         {
+            // Кто уже был на рейке до пересборки. Пересборка случается и от смены
+            // состояния монстра, и тогда заново проигрывать «папку» нельзя — со
+            // стороны это выглядело как постоянная перезагрузка иконок.
+
+            // Кто уже был на рейке до пересборки. Пересборка случается и от смены
+            // состояния монстра, и тогда заново проигрывать «папку» нельзя — со
+            // стороны это выглядело как постоянная перезагрузка иконок.
+            _seenGroups.Clear();
+            foreach (var kv in _byGroup) _seenGroups.Add(kv.Key ?? "");
+
             ClearRail(rail);
             // эмиттеры стрельбы для ЭТОЙ рейки пересобираем вместе с иконками
             var firingList = growLeft ? _firingLeft : _firingRight;
@@ -970,7 +987,8 @@ namespace LCBridgeOverlay
 
             // Режим уведомлений: монстра только что обнаружили — сначала на его месте
             // мельтешит «папка», и лишь потом она сменяется настоящей иконкой.
-            if (ConfigSettings.NotifyMode.Value && NotifyWidget.Folder() != null)
+            if (ConfigSettings.NotifyMode.Value && NotifyWidget.Folder() != null
+                && !_seenGroups.Contains(groupKey ?? ""))
             {
                 item.RealIcon = img.sprite;
                 item.PacketT = 0f;

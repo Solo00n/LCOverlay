@@ -1,5 +1,12 @@
 # Changelog — LCBridgeOverlay
 
+## 1.11.1
+- **Icons stopped reloading themselves.** Aboard the ship they kept cycling through the packet and back into the icon every few seconds. The rail rebuilds whenever the roster changes, and a creature merely freezing or unfreezing counted as a change; on top of that every rebuild replayed the packet for creatures that were already there. Freezing no longer counts, and only creatures new to the rail get the packet.
+- **Creatures walking left to right are mirrored**, since the artwork faces left; those walking the other way are left alone.
+- **The animated weather is on by default.** Anyone who had set the old `Schematic` value was still getting corner symbols; only an explicit `Icons` asks for those now.
+- **The first creatures found inside walk nearest the floor** — the routes are ordered bottom upwards rather than in the order they happen to be written.
+- **The countdown's colour is configurable** (`CountdownColor`), red by default.
+
 ## 1.11.0
 - **Weather happens on the schematic instead of being labelled.** Rain falls and breaks on the ground, storms add lightning, the flood line rises and falls with the real water, an eclipsed sun crosses the sky as the day runs, fog drifts in bands and puts interference through the creature marks, and a meteor shower drops meteors that shatter on the surface. Fog raised as an event inside the facility does the same in there. The old corner symbols remain as `MapWeatherMode = Icons`.
 - **The fill on outline icons was misplaced and stepped.** It was being drawn over solid artwork as well, where it read as a shifted duplicate, and it followed the once-a-second distance directly, so it moved in visible steps. It applies only to the outline style now, is smoothed over time, and rises from fully transparent to full colour across the whole approach rather than switching at a threshold.

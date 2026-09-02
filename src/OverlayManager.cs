@@ -692,6 +692,18 @@ namespace LCBridgeOverlay
             foreach (var g in _panelFrameGos) Set(g);   // уголки и мерцающие пиксели
         }
 
+        /// <summary>Цвет цифр отсчёта — по настройке, красный по умолчанию.</summary>
+        private Color CountdownTint()
+        {
+            switch ((ConfigSettings.CountdownColor.Value ?? "Red").Trim().ToLowerInvariant())
+            {
+                case "blue": return new Color(0.42f, 0.55f, 1f, 1f);
+                case "white": return Color.white;
+                case "theme": return S.Frame;
+                default: return new Color(1f, 0.28f, 0.25f, 1f);
+            }
+        }
+
         private static float EaseOutCubic(float t) => 1f - Mathf.Pow(1f - t, 3f);
 
         // ---- 2.12: состояние отсчёта конца дня ----
@@ -771,8 +783,7 @@ namespace LCBridgeOverlay
                 float alpha = k < hold ? 1f : Mathf.Clamp01(1f - Mathf.Pow(back, 0.8f));
 
                 d.Rt.localScale = new Vector3(scale, scale, 1f);
-                // цвет — из темы оверлея, а не белый
-                var tc = S.Frame; tc.a = alpha;
+                var tc = CountdownTint(); tc.a = alpha;
                 d.Text.color = tc;
             }
 
