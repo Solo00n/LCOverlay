@@ -1843,7 +1843,9 @@ namespace LCBridgeOverlay
         // ==================== рамки ====================
 
         /// <summary>Рамка панели: пиксельные уголки+пиксели (Legacy) или синие скобки (Game).</summary>
-        private void BuildFrame(GameObject rootGo) => AddStyleFrame(rootGo, true);
+        // У ОСНОВНОГО блока уголков больше нет: со схемой на улице они только
+        // дробили картинку. Уголки остались там, где они и нужны, — у плашки ивента.
+        private void BuildFrame(GameObject rootGo) => AddPixbits(rootGo, true);
 
         /// <summary>Тот же стиль рамки для любого блока (панель и плашка ивента).</summary>
         private void AddStyleFrame(GameObject host, bool full)

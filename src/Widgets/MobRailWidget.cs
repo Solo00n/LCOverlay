@@ -509,6 +509,8 @@ namespace LCBridgeOverlay
         }
 
         /// <summary>Стиль иконок, который надо красить в цвет темы (контур и силуэт).</summary>
+        public static bool TintedIconStylePublic() => TintedIconStyle();
+
         private static bool TintedIconStyle()
         {
             string st = (ConfigSettings.MonsterIconStyle.Value ?? "").Trim().ToLowerInvariant();

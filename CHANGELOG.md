@@ -1,5 +1,11 @@
 # Changelog — LCBridgeOverlay
 
+## 1.9.3
+- **The schematic was redrawn to read as a place.** The ground is a crooked line with hard angles; a large building stands on it to the right holding a mine cart and a hole in its floor; a vertical corridor drops from that hole into the main room, where the lift hangs on its cables. Rails run along the room's floor and strip lights hang from the ceiling on short stems, touching nothing else. The shaft leaves the room's left wall and winds down and across, opening into one large flooded chamber before it ends against the right wall.
+- **The lift rides with the real one**, following the mineshaft elevator up and down, its cables paying out behind it.
+- **Creature marks now obey the same rules as the panel's icons.** They were plain dots that ignored everything: no scan requirement, no fading with distance, no movement, and far too small. They are now the size of real icons, hidden until scanned when the mode calls for it, faded by distance, and they sway and grow jittery as something closes in.
+- **The main block lost its corner brackets**; they remain on the event plate, where they still frame something.
+
 ## 1.9.2
 - **The old rows no longer show through the schematic.** They were being switched back on with every packet, so outside you saw the drawing and the whole panel underneath it. Alongside the schematic only the frame remains: corner brackets, the eye, the run timer and the event plate.
 - **The caves were redrawn.** They now leave the bottom of the facility and wind downwards like a gut, narrowing and widening as they go, with two low pockets standing in water.

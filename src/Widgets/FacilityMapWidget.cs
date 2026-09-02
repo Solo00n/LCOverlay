@@ -23,7 +23,7 @@ namespace LCBridgeOverlay
     internal class FacilityMapWidget : MonoBehaviour
     {
         // холст схемы: рисуем в этих координатах, потом всё масштабируется целиком
-        private const float W = 330f, H = 360f;
+        private const float W = 330f, H = 400f;
         private const float Ground = 96f;       // линия поверхности (сверху вниз)
 
         private OverlayManager _mgr;
@@ -183,7 +183,7 @@ namespace LCBridgeOverlay
             rt.anchorMin = rt.anchorMax = new Vector2(0f, 1f);
             rt.pivot = new Vector2(0.5f, 0.5f);
             rt.anchoredPosition = new Vector2(x, -y);
-            rt.sizeDelta = new Vector2(11f, 11f);
+            rt.sizeDelta = new Vector2(30f, 30f);
             return rt;
         }
 
@@ -194,7 +194,7 @@ namespace LCBridgeOverlay
             rt.SetParent(slot, false);
             rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
             rt.pivot = new Vector2(0.5f, 0.5f);
-            rt.sizeDelta = new Vector2(11f, 11f);
+            rt.sizeDelta = new Vector2(30f, 30f);
             var img = go.GetComponent<Image>();
             img.sprite = NotifyWidget.Folder();   // пока не пришла иконка — «пакет данных»
             img.raycastTarget = false;
@@ -215,86 +215,122 @@ namespace LCBridgeOverlay
             for (int i = _art.childCount - 1; i >= 0; i--) Destroy(_art.GetChild(i).gameObject);
             _lampImgs.Clear(); _weatherBits.Clear();
             _outSlots.Clear(); _inSlots.Clear(); _outDots.Clear(); _inDots.Clear();
+            _elevCar = null;
 
             var frame = S.Frame;
-            var dim = OverlayStyle.WithA(S.FrameDim, 0.55f);
-            var scan = OverlayStyle.WithA(S.Frame, 0.10f);   // сканлайн-блок фона
-            var water = OverlayStyle.WithA(new Color(0.35f, 0.72f, 1f), 0.55f);
+            var dim = OverlayStyle.WithA(S.FrameDim, 0.6f);
+            var scan = OverlayStyle.WithA(S.Frame, 0.10f);
+            var water = new Color(0.35f, 0.72f, 1f, 0.6f);
+            var cave = OverlayStyle.WithA(S.Danger, 0.85f);
 
-            // ---------- поверхность ----------
-            Line(0f, Ground, W, Ground, 2.5f, frame, "Ground");
+            // ---------- земля: кривая линия с резкими углами ----------
+            var ground = new[]
+            {
+                new Vector2(0f, 100f), new Vector2(38f, 94f), new Vector2(74f, 103f),
+                new Vector2(112f, 92f), new Vector2(150f, 99f), new Vector2(188f, 90f),
+                new Vector2(196f, 96f), new Vector2(W, 96f),
+            };
+            for (int i = 0; i < ground.Length - 1; i++)
+                Line(ground[i].x, ground[i].y, ground[i + 1].x, ground[i + 1].y, 2.5f, frame, "Ground");
 
-            // корабль справа сверху
-            Box(244f, 20f, 76f, 50f, 2f, frame);
-            Fill(246f, 22f, 72f, 46f, scan);
-            Line(258f, 70f, 258f, 82f, 2f, dim);          // опоры
-            Line(306f, 70f, 306f, 82f, 2f, dim);
+            // ---------- большое здание справа, на земле ----------
+            const float bx = 200f, by = 28f, bw = 118f, bh = 68f;
+            Box(bx, by, bw, bh, 2.5f, frame);
+            Fill(bx + 2f, by + 2f, bw - 4f, bh - 4f, scan);
 
-            // вход в комплекс
-            Box(150f, 68f, 34f, 28f, 2f, frame);
-            Fill(152f, 70f, 30f, 24f, scan);
-            Line(160f, 80f, 174f, 80f, 2f, frame);
+            // вагонетка внутри здания
+            const float cx = bx + 16f, cy = by + 46f;
+            Line(cx, cy, cx + 30f, cy, 2f, frame);                 // дно кузова
+            Line(cx, cy, cx + 4f, cy - 14f, 2f, frame);             // борта с развалом
+            Line(cx + 30f, cy, cx + 26f, cy - 14f, 2f, frame);
+            Line(cx + 4f, cy - 14f, cx + 26f, cy - 14f, 2f, frame);
+            for (int i = 0; i < 2; i++)                             // колёса
+            {
+                float wx = cx + 8f + i * 14f;
+                Line(wx - 4f, cy + 5f, wx + 4f, cy + 5f, 2f, dim);
+                Line(wx - 4f, cy + 2f, wx - 4f, cy + 5f, 1.5f, dim);
+                Line(wx + 4f, cy + 2f, wx + 4f, cy + 5f, 1.5f, dim);
+            }
 
-            // ---------- зал с лифтом ----------
-            const float ix = 128f, iy = 124f, iw = 168f, ih = 74f;
-            Box(ix, iy, iw, ih, 2.5f, frame);
-            Fill(ix + 2f, iy + 2f, iw - 4f, ih - 4f, scan);
+            // дыра в полу здания — разрыв нижней грани
+            const float hx = bx + 74f, hw = 26f;
+            Line(bx, by + bh, hx, by + bh, 2.5f, frame);            // пол слева от дыры
+            Line(hx + hw, by + bh, bx + bw, by + bh, 2.5f, frame);  // и справа
 
-            // шахта лифта от входа вниз в зал
-            Line(158f, 96f, 158f, iy, 2f, dim);
-            Line(178f, 96f, 178f, iy, 2f, dim);
-            Box(156f, iy + 6f, 24f, 26f, 2f, frame);       // кабина
-            for (int i = 0; i < 3; i++)
-                Line(156f + i * 8f, iy + 32f, 164f + i * 8f, iy + 6f, 1f, dim);
+            // ---------- вертикальный коридор из дыры вниз ----------
+            const float roomY = 168f;
+            Line(hx, by + bh, hx, roomY, 2f, dim, "Shaft");
+            Line(hx + hw, by + bh, hx + hw, roomY, 2f, dim, "Shaft");
 
-            // ---------- лампы в зале ----------
+            // ---------- главная комната комплекса ----------
+            const float rx = 34f, rw = 272f, rh = 96f;
+            Box(rx, roomY, rw, rh, 2.5f, frame);
+            Fill(rx + 2f, roomY + 2f, rw - 4f, rh - 4f, scan);
+
+            // лифт на тросах: приехал из коридора
+            _elevTop = roomY + 10f;
+            _elevBottom = roomY + rh - 30f;
+            Line(hx + 5f, roomY, hx + 5f, roomY + 8f, 1.5f, dim, "Cable");
+            Line(hx + hw - 5f, roomY, hx + hw - 5f, roomY + 8f, 1.5f, dim, "Cable");
+            _elevCable1 = Line(hx + 5f, roomY, hx + 5f, _elevTop, 1.5f, dim, "Cable");
+            _elevCable2 = Line(hx + hw - 5f, roomY, hx + hw - 5f, _elevTop, 1.5f, dim, "Cable");
+            _elevCar = MakeCar(hx - 2f, _elevTop, hw + 4f, 24f, frame, scan);
+
+            // рельсы по полу комнаты
+            float railY = roomY + rh - 12f;
+            Line(rx + 10f, railY, rx + rw - 10f, railY, 2f, dim, "Rail");
+            Line(rx + 10f, railY + 6f, rx + rw - 10f, railY + 6f, 2f, dim, "Rail");
+            for (float x = rx + 18f; x < rx + rw - 14f; x += 18f)
+                Line(x, railY - 2f, x, railY + 8f, 1.5f, OverlayStyle.WithA(S.FrameDim, 0.4f), "Rail");
+
+            // люминесцентные лампы: короткая ножка от ПОТОЛКА и трубка, больше ничего не касается
             var lampOn = new Color(1f, 0.85f, 0.15f, 1f);
             for (int i = 0; i < 3; i++)
-                _lampImgs.Add(Line(ix + 46f + i * 42f, iy + 9f, ix + 76f + i * 42f, iy + 9f, 4.5f, lampOn, "Lamp"));
+            {
+                float lx = rx + 44f + i * 74f;
+                Line(lx + 16f, roomY + 2f, lx + 16f, roomY + 12f, 1.5f, dim, "LampStem");
+                _lampImgs.Add(Line(lx, roomY + 13f, lx + 32f, roomY + 13f, 5f, lampOn, "Lamp"));
+            }
 
-            // ---------- пещеры: кишка вниз из НИЗА зала ----------
-            // Идут не сбоку, а прямо из-под комплекса и спускаются вниз, изредка
-            // расширяясь в затопленные карманы.
+            // ---------- шахта: из ЛЕВОЙ стены вниз и вправо, к ПРАВОЙ стене ----------
             var spine = new[]
             {
-                new Vector2(196f, ih + iy),  new Vector2(186f, 214f), new Vector2(206f, 236f),
-                new Vector2(178f, 258f),     new Vector2(120f, 268f), new Vector2(84f, 292f),
-                new Vector2(112f, 318f),     new Vector2(170f, 326f), new Vector2(214f, 348f),
+                new Vector2(rx, roomY + 62f),      // выход из левой стены комнаты
+                new Vector2(58f, 300f), new Vector2(104f, 286f), new Vector2(96f, 322f),
+                new Vector2(150f, 336f),           // сюда придётся большой зал
+                new Vector2(210f, 328f), new Vector2(196f, 360f), new Vector2(252f, 372f),
+                new Vector2(rx + rw, 366f),        // упирается в правую стену
             };
-            var cave = OverlayStyle.WithA(S.Danger, 0.8f);
             for (int i = 0; i < spine.Length - 1; i++)
             {
                 var a = spine[i]; var b = spine[i + 1];
                 var n = new Vector2(-(b.y - a.y), b.x - a.x).normalized;
-                float wid = 15f + 7f * Mathf.Sin(i * 1.7f);       // «кишка» дышит по ширине
+                float wid = (i == 4) ? 30f : 11f + 4f * Mathf.Sin(i * 1.9f);   // 4-й участок — большой зал
                 Line(a.x + n.x * wid, a.y + n.y * wid, b.x + n.x * wid, b.y + n.y * wid, 2f, cave);
                 Line(a.x - n.x * wid, a.y - n.y * wid, b.x - n.x * wid, b.y - n.y * wid, 2f, cave);
             }
-            // дно тупика
-            Line(spine[spine.Length - 1].x - 15f, spine[spine.Length - 1].y,
-                 spine[spine.Length - 1].x + 15f, spine[spine.Length - 1].y, 2f, cave);
+            Line(spine[spine.Length - 1].x, spine[spine.Length - 1].y - 12f,
+                 spine[spine.Length - 1].x, spine[spine.Length - 1].y + 12f, 2f, cave);
 
-            // затопленные карманы — горизонтальная гладь воды в двух низинах
-            foreach (var wpt in new[] { spine[4], spine[6] })
-            {
-                Fill(wpt.x - 22f, wpt.y - 4f, 44f, 9f, OverlayStyle.WithA(water, 0.22f));
-                Line(wpt.x - 22f, wpt.y, wpt.x + 22f, wpt.y, 2f, water, "Water");
-                Line(wpt.x - 14f, wpt.y + 5f, wpt.x + 16f, wpt.y + 5f, 1.5f, OverlayStyle.WithA(water, 0.5f), "Water");
-            }
+            // затопленная низина в большом зале
+            var low = spine[4];
+            Fill(low.x - 30f, low.y - 2f, 60f, 12f, OverlayStyle.WithA(water, 0.2f));
+            Line(low.x - 30f, low.y + 2f, low.x + 30f, low.y + 2f, 2f, water, "Water");
+            Line(low.x - 20f, low.y + 8f, low.x + 22f, low.y + 8f, 1.5f, OverlayStyle.WithA(water, 0.5f), "Water");
 
             // ---------- места для монстров ----------
-            for (int i = 0; i < 10; i++)                       // уличные — над линией
+            for (int i = 0; i < 8; i++)                       // уличные — над землёй, слева
             {
-                var sl = Slot(18f + i * 30f, Ground - 20f);
+                var sl = Slot(20f + i * 23f, 62f);
                 _outSlots.Add(sl); _outDots.Add(Dot(sl));
             }
-            var inside = new[]                                // в зале и вдоль пещеры
+            var inside = new[]
             {
-                new Vector2(ix + 26f, iy + 52f),  new Vector2(ix + 66f, iy + 40f),
-                new Vector2(ix + 106f, iy + 52f), new Vector2(ix + 142f, iy + 38f),
-                new Vector2(190f, 214f),          new Vector2(196f, 244f),
-                new Vector2(140f, 266f),          new Vector2(94f, 296f),
-                new Vector2(138f, 320f),          new Vector2(196f, 342f),
+                new Vector2(rx + 34f, roomY + 46f),  new Vector2(rx + 90f, roomY + 62f),
+                new Vector2(rx + 150f, roomY + 46f), new Vector2(rx + 214f, roomY + 62f),
+                new Vector2(66f, 296f),              new Vector2(102f, 306f),
+                new Vector2(150f, 332f),             new Vector2(206f, 336f),
+                new Vector2(232f, 366f),             new Vector2(286f, 362f),
             };
             foreach (var v in inside)
             {
@@ -303,11 +339,68 @@ namespace LCBridgeOverlay
             }
 
             _builtFor = interior ?? "";
-
-            // Перспективу вешаем ЗДЕСЬ, а не при создании виджета: линии и метки
-            // рождаются только сейчас, и на пустой блок вешать было нечего.
             try { _mgr?.AddPerspectiveToTree(_art); } catch { }
         }
+
+        // ---- лифт ----
+        private RectTransform _elevCar;
+        private Image _elevCable1, _elevCable2;
+        private float _elevTop, _elevBottom, _elevPos;
+
+        /// <summary>Кабина лифта: рамка с диагональной штриховкой.</summary>
+        private RectTransform MakeCar(float x, float y, float w, float h, Color col, Color scan)
+        {
+            var go = new GameObject("Elevator", typeof(RectTransform));
+            var rt = (RectTransform)go.transform;
+            rt.SetParent(_art, false);
+            rt.anchorMin = rt.anchorMax = new Vector2(0f, 1f);
+            rt.pivot = new Vector2(0f, 1f);
+            rt.anchoredPosition = new Vector2(x, -y);
+            rt.sizeDelta = new Vector2(w, h);
+
+            var save = _art;
+            _art = rt;                       // рисуем содержимое кабины в её системе
+            Fill(0f, 0f, w, h, scan);
+            Line(0f, 0f, w, 0f, 2f, col); Line(0f, h, w, h, 2f, col);
+            Line(0f, 0f, 0f, h, 2f, col);   Line(w, 0f, w, h, 2f, col);
+            for (int i = 0; i < 3; i++) Line(4f + i * 9f, h - 3f, 12f + i * 9f, 3f, 1.5f, OverlayStyle.WithA(col, 0.5f));
+            _art = save;
+            return rt;
+        }
+
+        /// <summary>Кабина едет вместе с настоящей: вниз, когда та внизу.</summary>
+        private void UpdateElevator(float dt)
+        {
+            if (_elevCar == null) return;
+            bool atBottom = false;
+            try
+            {
+                if (Time.unscaledTime >= _elevNext)
+                {
+                    _elevNext = Time.unscaledTime + 1f;
+                    _elevCtl = UnityEngine.Object.FindObjectOfType<MineshaftElevatorController>();
+                }
+                if (_elevCtl != null) atBottom = _elevCtl.elevatorIsAtBottom;
+            }
+            catch { }
+
+            float target = atBottom ? 1f : 0f;
+            _elevPos = Mathf.MoveTowards(_elevPos, target, dt / 3f);   // ход примерно как у настоящего
+            float y = Mathf.Lerp(_elevTop, _elevBottom, _elevPos);
+            _elevCar.anchoredPosition = new Vector2(_elevCar.anchoredPosition.x, -y);
+
+            // тросы тянутся за кабиной
+            foreach (var c in new[] { _elevCable1, _elevCable2 })
+            {
+                if (c == null) continue;
+                var rt = (RectTransform)c.transform;
+                float top = -rt.anchoredPosition.y;
+                rt.sizeDelta = new Vector2(Mathf.Max(1f, y - top), rt.sizeDelta.y);
+            }
+        }
+
+        private static MineshaftElevatorController _elevCtl;
+        private static float _elevNext;
 
         // ================= жизнь =================
 
@@ -328,6 +421,7 @@ namespace LCBridgeOverlay
                              $"{Localization.T("out")} {p.itemsOutside}   " +
                              $"{Localization.T("hives")} {p.beehiveCount}";
 
+            UpdateElevator(dt);
             UpdateLights(dt);
             UpdateDots(p);
             UpdateWeather(p, dt);
@@ -383,34 +477,74 @@ namespace LCBridgeOverlay
         private static BreakerBox _breaker;
         private static float _breakerNext;
 
-        /// <summary>Точки монстров по зонам: сверху уличные, ниже комплексные.</summary>
+        /// <summary>Метки монстров по зонам: сверху уличные, ниже комплексные.</summary>
         private void UpdateDots(BridgePayload p)
         {
             PlaceDots(_outDots, p.monstersOutside);
             PlaceDots(_inDots, p.monstersInside);
         }
 
+        /// <summary>
+        /// Метки живут по тем же правилам, что и иконки в рейке: скрываются без скана,
+        /// тают по дальности, покачиваются и нервно дрожат вблизи. Иначе схема
+        /// показывала бы то, чего основной оверлей не показывает.
+        /// </summary>
         private void PlaceDots(List<Image> dots, string[] names)
         {
-            int n = names != null ? names.Length : 0;
+            // отбираем то же, что показала бы рейка
+            var shown = new List<string>();
+            if (names != null)
+                foreach (var raw in names)
+                {
+                    if (string.IsNullOrEmpty(raw)) continue;
+                    if (Gate.RequireScan &&
+                        raw.IndexOf("+Scanned", System.StringComparison.OrdinalIgnoreCase) < 0) continue;
+                    shown.Add(raw);
+                }
+
+            float dt = Time.unscaledDeltaTime;
+            float t = Time.unscaledTime;
+
             for (int i = 0; i < dots.Count; i++)
             {
                 var img = dots[i];
                 if (img == null) continue;
-                if (i >= n)
+                var rt = (RectTransform)img.transform;
+
+                if (i >= shown.Count)
                 {
-                    var c0 = img.color; c0.a = Mathf.MoveTowards(c0.a, 0f, Time.unscaledDeltaTime * 4f);
+                    var c0 = img.color;
+                    c0.a = Mathf.MoveTowards(c0.a, 0f, dt * 4f);
                     img.color = c0;
+                    if (c0.a <= 0.01f) rt.localScale = Vector3.zero;
                     continue;
                 }
 
-                string raw = names[i] ?? "";
+                string raw = shown[i];
                 var spr = MobIconFor(raw);
                 if (spr != null && img.sprite != spr) img.sprite = spr;
 
-                var c = S.Frame;
-                c.a = Mathf.MoveTowards(img.color.a, 1f, Time.unscaledDeltaTime * 4f);
-                img.color = c;
+                float dist = DistOf(raw);
+                float near = dist >= 0f ? Mathf.InverseLerp(40f, 4f, dist) : 0f;
+
+                // покачивание + дрожь по близости — как у иконок в рейке
+                float phase = i * 1.7f;
+                float amp = 3f + 9f * near * near * near;
+                float speed = 2f + 14f * near * near;
+                rt.localRotation = Quaternion.Euler(0f, 0f, Mathf.Sin((t + phase) * speed) * amp);
+                var jit = near > 0.01f ? NotifyWidget.PixelJitter(phase, 2.2f * near * near) : Vector2.zero;
+                rt.anchoredPosition = jit;
+                rt.localScale = Vector3.one;
+
+                // прозрачность по дальности — тот же закон, что в рейке
+                float a = 1f;
+                if (ConfigSettings.ProximityFade.Value && dist >= 0f)
+                    a = Mathf.Lerp(0.28f, 1f, Mathf.InverseLerp(34f, 6f, dist));
+
+                bool tinted = MobRailWidget.TintedIconStylePublic();
+                var col = tinted ? S.Frame : Color.white;
+                col.a = Mathf.MoveTowards(img.color.a, a, dt * 4f);
+                img.color = col;
             }
         }
 
@@ -422,6 +556,17 @@ namespace LCBridgeOverlay
                 return string.IsNullOrEmpty(key) ? NotifyWidget.Folder() : SpriteBank.Get(key);
             }
             catch { return NotifyWidget.Folder(); }
+        }
+
+        /// <summary>Дистанция из строки монстра ("@42"), или -1.</summary>
+        private static float DistOf(string raw)
+        {
+            try
+            {
+                var m = System.Text.RegularExpressions.Regex.Match(raw, @"@(\d+)");
+                return m.Success ? float.Parse(m.Groups[1].Value) : -1f;
+            }
+            catch { return -1f; }
         }
 
         /// <summary>
