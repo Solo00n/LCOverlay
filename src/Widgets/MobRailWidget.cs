@@ -576,13 +576,47 @@ namespace LCBridgeOverlay
         }
 
         /// <summary>Ключ иконки по сырой строке монстра — нужен схеме локации.</summary>
+        /// <summary>
+        /// Ключ иконки по сырой строке монстра — нужен схеме локации.
+        ///
+        /// ВАЖНО: состояния тут НЕ выбрасываются вслепую. Часть из них меняет саму
+        /// картинку (людоед вырос, джестер завёлся, жук разозлился), и раньше схема
+        /// их срезала до выбора иконки — поэтому фазы на ней не менялись вовсе.
+        /// </summary>
+        /// <summary>
+        /// Ключ иконки по сырой строке монстра — нужен схеме локации.
+        ///
+        /// ВАЖНО: состояния тут НЕ выбрасываются вслепую. Часть из них меняет саму
+        /// картинку (людоед вырос, джестер завёлся, жук разозлился), и раньше схема
+        /// их срезала до выбора иконки — поэтому фазы на ней не менялись вовсе.
+        /// </summary>
         public static string IconKeyPublic(string raw)
         {
             if (string.IsNullOrEmpty(raw)) return null;
+            string low = raw.ToLowerInvariant();
+
             string baseName = Regex.Replace(raw,
                 @"\+turret|\+slayer|\+aggro|\+angry|\+adult|\+attack|\+ceiling|\+frozen|\+scanned|\+firing|\+hurt|\+deviant|\+w\d|\s*@\d+",
                 "", RegexOptions.IgnoreCase).Trim();
-            return IconFor(Canon(baseName));
+
+            string groupKey = Norm(Canon(baseName));
+            bool turret = low.Contains("+turret");
+            bool manti = groupKey.Contains("manticoil");
+            if (turret) return manti ? "mantitoil" : "toilhead";
+
+            string icon = IconFor(Canon(baseName));
+            if (string.IsNullOrEmpty(icon)) return icon;
+
+            // те же подмены, что и в рейке
+            string want = null;
+            if (icon == "snareflea") want = low.Contains("+ceiling") ? "snareflea_ceiling" : null;
+            else if (icon == "jester") want = low.Contains("+angry") ? "jester_angry" : null;
+            else if (icon == "nutcracker") want = low.Contains("+attack") ? "nutcracker_attack" : null;
+            else if (icon == "hoardingbug") want = low.Contains("+aggro") ? "hoardingbug_aggro" : null;
+            else if (icon == "maneater") want = low.Contains("+adult") ? "maneater_adult" : null;
+
+            if (want != null && SpriteBank.Get(want) != null) return want;
+            return icon;
         }
 
         // имя из игры (enemyType.enemyName) → ключ иконки в res/mobs

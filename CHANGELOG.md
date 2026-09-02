@@ -1,5 +1,13 @@
 # Changelog — LCBridgeOverlay
 
+## 1.12.0
+- **Creature phase changes show on the schematic.** A grown maneater, an angry jester, a roused hoarding bug — none of them changed, because the schematic stripped the state off the name before choosing a picture. It picks the same variants the panel does now.
+- **The fill sits square on its icon.** It was a child of the icon with its own anchoring, and any mismatch read as a sideways drift. Both are now made by the same code as neighbours in one slot, and the fill simply copies the icon's transform.
+- **A resting creature carries a translucent dark red**, deepening into full colour as it approaches.
+- **A creature that comes close is filled even when others of its kind are far.** Entries of one species are collapsed to a single mark, and the distance came from whichever happened to be first — so a dog at your heels showed its distant cousin's range.
+- **The delivery dropship flies in.** It comes from the right, hangs over the ship while unloading, and lifts away when it is done.
+- **Creatures slide across from the ship's side rails onto the schematic** when you step outside, instead of blinking into place.
+
 ## 1.11.2
 - **Rain lands on the building** rather than falling through it: drops break on whatever surface is beneath them, the roof included.
 - **Lightning is actually visible** — thicker, in its own colour, held twice as long and blinking half as fast. It also writes a line to the log, so if it still goes unseen we will know whether it fired.

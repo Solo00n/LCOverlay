@@ -40,10 +40,13 @@ namespace LCBridgeOverlay
         private readonly List<Vector4> _outPaths = new List<Vector4>();  // и снаружи тоже
         private readonly List<float> _nearSmooth = new List<float>();    // сглаженная близость
         private readonly List<float> _face = new List<float>();          // куда смотрит иконка
+        private float _arrive = 1f;   // 0 метки ещё летят с краёв, 1 на местах
         private string _wxKind = "?";   // что сейчас нарисовано
         private string _wxRaw;          // последняя сырая строка погоды
         private readonly List<Image> _outDots = new List<Image>();
+        private readonly List<Image> _outFill = new List<Image>();   // заливка-сосед
         private readonly List<Image> _inDots = new List<Image>();
+        private readonly List<Image> _inFill = new List<Image>();
 
         private string _builtFor;               // для какого интерьера собрана схема
         private bool _lightsOn = true;
@@ -195,14 +198,25 @@ namespace LCBridgeOverlay
 
         private Image Dot(RectTransform slot)
         {
-            var go = new GameObject("Dot", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+            var img = MakeMark(slot, "Dot");
+            img.sprite = NotifyWidget.Folder();
+            return img;
+        }
+
+        /// <summary>
+        /// Метка на схеме. И контур, и заливка создаются ЭТИМ ЖЕ методом и живут
+        /// соседями в одном слоте: раньше заливка была ребёнком иконки со своими
+        /// якорями, и любое несовпадение настроек читалось как сдвиг вбок.
+        /// </summary>
+        private Image MakeMark(RectTransform slot, string name)
+        {
+            var go = new GameObject(name, typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
             var rt = (RectTransform)go.transform;
             rt.SetParent(slot, false);
             rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
             rt.pivot = new Vector2(0.5f, 0.5f);
             rt.sizeDelta = new Vector2(30f, 30f);
             var img = go.GetComponent<Image>();
-            img.sprite = NotifyWidget.Folder();   // пока не пришла иконка — «пакет данных»
             img.raycastTarget = false;
             img.preserveAspect = true;
             img.color = new Color(1f, 1f, 1f, 0f);
@@ -221,6 +235,7 @@ namespace LCBridgeOverlay
             for (int i = _art.childCount - 1; i >= 0; i--) Destroy(_art.GetChild(i).gameObject);
             _lampImgs.Clear(); _weatherBits.Clear();
             _outSlots.Clear(); _inSlots.Clear(); _outDots.Clear(); _inDots.Clear();
+            _outFill.Clear(); _inFill.Clear();
             _inPaths.Clear(); _outPaths.Clear();
             _elevCar = null;
 
@@ -354,7 +369,7 @@ namespace LCBridgeOverlay
             for (int i = 0; i < 8; i++)                       // уличные — над землёй
             {
                 var sl = Slot(20f + i * 22f, 78f);   // на землю, а не в воздухе
-                _outSlots.Add(sl); _outDots.Add(Dot(sl));
+                _outSlots.Add(sl); _outFill.Add(MakeMark(sl, "Fill")); _outDots.Add(Dot(sl));
             }
             // Внутри задаём не точки, а ОТРЕЗКИ, вдоль которых иконка ходит туда-сюда.
             _inPaths.Clear();
@@ -371,7 +386,7 @@ namespace LCBridgeOverlay
             foreach (var seg in _inPaths)
             {
                 var sl = Slot(seg.x, seg.y);
-                _inSlots.Add(sl); _inDots.Add(Dot(sl));
+                _inSlots.Add(sl); _inFill.Add(MakeMark(sl, "Fill")); _inDots.Add(Dot(sl));
             }
 
             _builtFor = interior ?? "";
@@ -519,13 +534,13 @@ namespace LCBridgeOverlay
                         : new Vector4(n[0] - 26f, n[1], n[0] + 26f, n[1]);
                     _outPaths.Add(seg);
                     var sl = Slot(seg.x, seg.y);
-                    _outSlots.Add(sl); _outDots.Add(Dot(sl));
+                    _outSlots.Add(sl); _outFill.Add(MakeMark(sl, "Fill")); _outDots.Add(Dot(sl));
                 }
                 else if (c.Op == "slotin" && n.Length >= 4)
                 {
                     _inPaths.Add(new Vector4(n[0], n[1], n[2], n[3]));
                     var sl = Slot(n[0], n[1]);
-                    _inSlots.Add(sl); _inDots.Add(Dot(sl));
+                    _inSlots.Add(sl); _inFill.Add(MakeMark(sl, "Fill")); _inDots.Add(Dot(sl));
                 }
             }
         }
@@ -544,15 +559,18 @@ namespace LCBridgeOverlay
             var np = new List<Vector4>();
             var ns = new List<RectTransform>();
             var nd = new List<Image>();
+            var nf = new List<Image>();
             foreach (var i in order)
             {
                 np.Add(_inPaths[i]);
                 if (i < _inSlots.Count) ns.Add(_inSlots[i]);
                 if (i < _inDots.Count) nd.Add(_inDots[i]);
+                if (i < _inFill.Count) nf.Add(_inFill[i]);
             }
             _inPaths.Clear(); _inPaths.AddRange(np);
             _inSlots.Clear(); _inSlots.AddRange(ns);
             _inDots.Clear(); _inDots.AddRange(nd);
+            _inFill.Clear(); _inFill.AddRange(nf);
         }
 
         /// <summary>Запасные места, если их нигде не задали.</summary>
@@ -563,7 +581,7 @@ namespace LCBridgeOverlay
                 float x = 20f + i * 22f;
                 _outPaths.Add(new Vector4(x - 20f, 78f, x + 20f, 78f));
                 var sl = Slot(x - 20f, 78f);
-                _outSlots.Add(sl); _outDots.Add(Dot(sl));
+                _outSlots.Add(sl); _outFill.Add(MakeMark(sl, "Fill")); _outDots.Add(Dot(sl));
             }
             _inPaths.Clear();
             var paths = new[]
@@ -578,7 +596,7 @@ namespace LCBridgeOverlay
             {
                 _inPaths.Add(seg);
                 var sl = Slot(seg.x, seg.y);
-                _inSlots.Add(sl); _inDots.Add(Dot(sl));
+                _inSlots.Add(sl); _inFill.Add(MakeMark(sl, "Fill")); _inDots.Add(Dot(sl));
             }
         }
 
@@ -690,7 +708,7 @@ namespace LCBridgeOverlay
                         {
                             if (n.Length < 2) break;
                             var sl = Slot(n[0], n[1]);
-                            _outSlots.Add(sl); _outDots.Add(Dot(sl));
+                            _outSlots.Add(sl); _outFill.Add(MakeMark(sl, "Fill")); _outDots.Add(Dot(sl));
                             drawn++; break;
                         }
 
@@ -699,7 +717,7 @@ namespace LCBridgeOverlay
                             if (n.Length < 4) break;
                             _inPaths.Add(new Vector4(n[0], n[1], n[2], n[3]));
                             var sl = Slot(n[0], n[1]);
-                            _inSlots.Add(sl); _inDots.Add(Dot(sl));
+                            _inSlots.Add(sl); _inFill.Add(MakeMark(sl, "Fill")); _inDots.Add(Dot(sl));
                             drawn++; break;
                         }
                     }
@@ -776,7 +794,14 @@ namespace LCBridgeOverlay
         {
             if (_root == null) return;
 
-            if (_root.gameObject.activeSelf != wantVisible) _root.gameObject.SetActive(wantVisible);
+            // Появление схемы: метки не возникают на местах, а СЪЕЗЖАЮТСЯ с краёв —
+            // оттуда, где только что были боковые рейки корабля.
+            if (_root.gameObject.activeSelf != wantVisible)
+            {
+                _root.gameObject.SetActive(wantVisible);
+                if (wantVisible) _arrive = 0f;
+            }
+            if (_arrive < 1f) _arrive = Mathf.MoveTowards(_arrive, 1f, Time.unscaledDeltaTime / 0.9f);
             if (!wantVisible || p == null) return;
 
             float dt = Time.unscaledDeltaTime;
@@ -790,6 +815,7 @@ namespace LCBridgeOverlay
                              $"{Localization.T("hives")} {p.beehiveCount}";
 
             UpdateElevator(dt);
+            UpdateDropship(dt);
             UpdateLights(dt);
             UpdateDots(p);
             UpdateWeather(p, dt);
@@ -873,7 +899,16 @@ namespace LCBridgeOverlay
                         raw.IndexOf("+Scanned", System.StringComparison.OrdinalIgnoreCase) < 0) continue;
 
                     string key = MobRailWidget.IconKeyPublic(raw) ?? raw;
-                    if (seen.Contains(key)) continue;
+                    int at = seen.IndexOf(key);
+                    if (at >= 0)
+                    {
+                        // Тот же вид уже есть — оставляем БЛИЖАЙШУЮ особь. Иначе
+                        // подошедшая вплотную собака не закрашивалась: дистанция
+                        // бралась от её дальнего сородича.
+                        float dn = DistOf(raw), dp = DistOf(shown[at]);
+                        if (dn >= 0f && (dp < 0f || dn < dp)) shown[at] = raw;
+                        continue;
+                    }
                     seen.Add(key);
                     shown.Add(raw);
                 }
@@ -963,9 +998,8 @@ namespace LCBridgeOverlay
                 var spr = MobIconFor(raw);
                 if (spr != null && img.sprite != spr) img.sprite = spr;
 
-                // заливка ПОСТЕПЕННО проступает с приближением: отдельный силуэт
-                // поверх контура, его прозрачность и есть «насколько близко».
-                UpdateSolidOverlay(img, raw, near);
+                var fills = walking ? _inFill : _outFill;
+                UpdateFillMark(i < fills.Count ? fills[i] : null, rt, raw, near);
 
                 float phase = i * 1.7f;
                 float amp = 3f + 9f * near * near * near;
@@ -975,7 +1009,16 @@ namespace LCBridgeOverlay
                 // туман наводит помехи: иконку дёргает и подмигивает ей
                 float fog = FogNoise > 0f && (walking == FogInsideNow) ? FogNoise : 0f;
                 if (fog > 0f) jit += NotifyWidget.PixelJitter(phase + 7f, 3f * fog);
-                rt.anchoredPosition = want[i] + jit;
+                var target = want[i] + jit;
+                if (_arrive < 1f)
+                {
+                    // прилетают со своей стороны: уличные слева, комплексные справа
+                    float e = 1f - Mathf.Pow(1f - _arrive, 3f);
+                    float fromX = walking ? (W - slots[i].anchoredPosition.x) + 90f
+                                          : -slots[i].anchoredPosition.x - 90f;
+                    target += new Vector2(fromX * (1f - e), 0f);
+                }
+                rt.anchoredPosition = target;
 
                 float sc = baseScale;
                 if (ConfigSettings.ScaleMonstersByCount.Value)
@@ -1023,59 +1066,137 @@ namespace LCBridgeOverlay
         /// Силуэт поверх контурной иконки. Чем ближе монстр, тем он плотнее —
         /// раньше подмена шла одним кадром на пороге, и это выглядело как рывок.
         /// </summary>
-        private static void UpdateSolidOverlay(Image host, string raw, float near)
+        /// <summary>
+        /// Заливка силуэта. Живёт СОСЕДОМ иконки в том же слоте и повторяет её
+        /// положение один в один — так исключён любой сдвиг.
+        ///
+        /// В покое силуэт виден тёмно-красным полупрозрачным, и чем ближе монстр,
+        /// тем плотнее и ярче он становится.
+        /// </summary>
+        private void UpdateFillMark(Image fill, RectTransform iconRt, string raw, float near)
         {
             try
             {
-                if (host == null) return;
-                Image fill = host.transform.childCount > 0
-                    ? host.transform.GetChild(0).GetComponent<Image>() : null;
+                if (fill == null || iconRt == null) return;
 
-                // Заливка нужна только контурному стилю. У остальных иконка и так
-                // сплошная, и дубль поверх выглядел сдвигом — отсюда «съехала».
                 if (!MobRailWidget.TintedIconStylePublic())
                 {
-                    if (fill != null) fill.enabled = false;
+                    if (fill.enabled) fill.enabled = false;
                     return;
-                }
-
-                if (fill == null)
-                {
-                    var go = new GameObject("Solid", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
-                    var rt = (RectTransform)go.transform;
-                    rt.SetParent(host.transform, false);
-                    rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one;
-                    rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
-                    rt.localScale = Vector3.one;
-                    rt.localRotation = Quaternion.identity;
-                    fill = go.GetComponent<Image>();
-                    fill.raycastTarget = false;
-                    fill.preserveAspect = host.preserveAspect;
-                    fill.type = host.type;
                 }
 
                 var solid = MobIconFor(raw, true);
                 if (solid != null && fill.sprite != solid) fill.sprite = solid;
 
-                // Прямоугольник заливки переустанавливаем КАЖДЫЙ кадр. Он задавался
-                // один раз при создании, и любое последующее изменение размера иконки
-                // оставляло его на прежнем месте — отсюда сдвиг влево-вверх.
                 var frt = (RectTransform)fill.transform;
-                frt.anchorMin = Vector2.zero; frt.anchorMax = Vector2.one;
-                frt.offsetMin = Vector2.zero; frt.offsetMax = Vector2.zero;
-                frt.pivot = new Vector2(0.5f, 0.5f);
-                frt.anchoredPosition = Vector2.zero;
-                frt.localScale = Vector3.one;
-                frt.localRotation = Quaternion.identity;
+                frt.anchoredPosition = iconRt.anchoredPosition;
+                frt.localScale = iconRt.localScale;
+                frt.localRotation = iconRt.localRotation;
+                frt.sizeDelta = iconRt.sizeDelta;
+                frt.SetSiblingIndex(0);
 
-                // из прозрачного плавно в цвет по всей дистанции, без порога
                 float k = Mathf.Clamp01(near);
                 k = k * k * (3f - 2f * k);
-                var c = host.color;
-                fill.color = new Color(c.r, c.g, c.b, c.a * k);
-                fill.enabled = k > 0.004f;
+                var rest = new Color(0.45f, 0.10f, 0.10f, 1f);
+                var hot = MobRailWidget.IconTint(S);
+                var col = Color.Lerp(rest, hot, k);
+                var host = iconRt.GetComponent<Image>();
+                col.a = Mathf.Lerp(0.32f, 0.95f, k) * (host != null ? host.color.a : 1f);
+                fill.color = col;
+                fill.enabled = col.a > 0.01f;
             }
             catch { }
+        }
+
+        // ---- доставщик из магазина ----
+        private readonly List<Image> _ship = new List<Image>();
+        private float _shipT = -1f;      // 0 подлетает … 1 улетел, -1 нет его
+        private bool _shipWasHere;
+
+        /// <summary>
+        /// Корабль-доставщик. Прилетает справа, зависает над кораблём игроков, стоит
+        /// пока выгружает, потом уходит вверх. Собран из линий, как и вся схема.
+        /// </summary>
+        private void UpdateDropship(float dt)
+        {
+            bool here = false, landed = false;
+            try
+            {
+                if (Time.unscaledTime >= _shipNext)
+                {
+                    _shipNext = Time.unscaledTime + 1f;
+                    _shipObj = UnityEngine.Object.FindObjectOfType<ItemDropship>();
+                }
+                if (_shipObj != null) { here = _shipObj.deliveringOrder; landed = _shipObj.shipLanded; }
+            }
+            catch { }
+
+            if (here && !_shipWasHere)
+            {
+                _shipT = 0f;
+                Plugin.Log?.LogInfo("[map] доставщик в пути");
+            }
+            _shipWasHere = here;
+
+            if (_shipT < 0f && !here)
+            {
+                foreach (var g in _ship) if (g != null) g.enabled = false;
+                return;
+            }
+
+            if (_ship.Count == 0) BuildDropship();
+
+            // подлёт → стоянка (пока выгружает) → уход
+            if (here) _shipT = landed ? 0.5f : Mathf.MoveTowards(_shipT, 0.45f, dt / 6f);
+            else
+            {
+                _shipT = Mathf.MoveTowards(_shipT, 1f, dt / 5f);
+                if (_shipT >= 1f) { _shipT = -1f; foreach (var g in _ship) if (g != null) g.enabled = false; return; }
+            }
+
+            float k = _shipT;
+            float x = k < 0.5f ? Mathf.Lerp(W + 60f, ShipX, k / 0.5f) : ShipX;
+            float y = k < 0.5f ? Mathf.Lerp(10f, ShipY, k / 0.5f)
+                               : Mathf.Lerp(ShipY, -70f, (k - 0.5f) / 0.5f);
+
+            var col = OverlayStyle.WithA(S.Frame, k > 0.9f ? Mathf.InverseLerp(1f, 0.9f, k) : 1f);
+            PlaceDropship(x, y, col);
+        }
+
+        private static ItemDropship _shipObj;
+        private static float _shipNext;
+        private const float ShipX = 250f, ShipY = 46f;
+
+        private void BuildDropship()
+        {
+            var c = S.Frame;
+            for (int i = 0; i < 9; i++) _ship.Add(Line(0f, 0f, 1f, 1f, 2f, c));
+        }
+
+        /// <summary>Силуэт доставщика: корпус, нос, сопла и трос с ящиком.</summary>
+        private void PlaceDropship(float x, float y, Color col)
+        {
+            if (_ship.Count < 9) return;
+            void Seg(int i, float x1, float y1, float x2, float y2, float th)
+            {
+                var rt = (RectTransform)_ship[i].transform;
+                var d = new Vector2(x2 - x1, -(y2 - y1));
+                rt.anchoredPosition = new Vector2(x + x1, -(y + y1));
+                rt.sizeDelta = new Vector2(Mathf.Max(0.5f, d.magnitude), th);
+                rt.localRotation = Quaternion.Euler(0f, 0f, Mathf.Atan2(d.y, d.x) * Mathf.Rad2Deg);
+                _ship[i].enabled = true;
+                _ship[i].color = col;
+            }
+
+            Seg(0, -22f, 0f, 22f, 0f, 2.5f);        // днище
+            Seg(1, -22f, 0f, -16f, -10f, 2.5f);     // корма
+            Seg(2, 22f, 0f, 14f, -10f, 2.5f);       // нос
+            Seg(3, -16f, -10f, 14f, -10f, 2.5f);    // крыша
+            Seg(4, -14f, 0f, -14f, 5f, 2f);         // сопла
+            Seg(5, 12f, 0f, 12f, 5f, 2f);
+            Seg(6, 0f, 0f, 0f, 14f, 1.5f);          // трос
+            Seg(7, -6f, 14f, 6f, 14f, 2f);          // ящик
+            Seg(8, -6f, 14f, -6f, 21f, 2f);
         }
 
         /// <summary>Дистанция из строки монстра ("@42"), или -1.</summary>
