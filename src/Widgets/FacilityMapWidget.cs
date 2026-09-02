@@ -47,6 +47,8 @@ namespace LCBridgeOverlay
         private readonly List<Image> _outFill = new List<Image>();   // заливка-сосед
         private readonly List<Image> _inDots = new List<Image>();
         private readonly List<Image> _inFill = new List<Image>();
+        private readonly List<RectTransform> _trapSlots = new List<RectTransform>();
+        private readonly List<Image> _trapDots = new List<Image>();
 
         private string _builtFor;               // для какого интерьера собрана схема
         private bool _lightsOn = true;
@@ -236,6 +238,7 @@ namespace LCBridgeOverlay
             _lampImgs.Clear(); _weatherBits.Clear();
             _outSlots.Clear(); _inSlots.Clear(); _outDots.Clear(); _inDots.Clear();
             _outFill.Clear(); _inFill.Clear();
+            _trapSlots.Clear(); _trapDots.Clear();
             _inPaths.Clear(); _outPaths.Clear();
             _elevCar = null;
 
@@ -250,6 +253,7 @@ namespace LCBridgeOverlay
                 if (slotsLay != null) AddSlotsFromLayout(slotsLay);
                 if (_inDots.Count == 0 && _outDots.Count == 0) DefaultSlots();
                 SortInsidePathsByFloor();
+                BuildTrapSlots();
                 _builtFor = interior ?? "";
                 try { _mgr?.AddPerspectiveToTree(_art); } catch { }
                 return;
@@ -818,6 +822,7 @@ namespace LCBridgeOverlay
             UpdateDropship(dt, p != null && !p.onMoon);
             UpdateLights(dt);
             UpdateDots(p);
+            UpdateTraps(Gate.Traps ? p.traps : null);
             UpdateWeather(p, dt);
         }
 
@@ -1311,6 +1316,84 @@ namespace LCBridgeOverlay
             }
         }
 
+
+        // Ловушки стоят в правом верхнем углу ЗДАНИЯ: это не обитатели уровня, им
+        // незачем ходить по схеме, и в углу они не спорят за место с монстрами.
+        private const float TrapX = 246f, TrapY = 32f, TrapStep = 26f;
+
+        private void BuildTrapSlots()
+        {
+            for (int i = 0; i < 6; i++)
+            {
+                float x = TrapX + (i % 3) * TrapStep;
+                float y = TrapY + (i / 3) * TrapStep;
+                var sl = Slot(x, y);
+                _trapSlots.Add(sl);
+                _trapDots.Add(MakeMark(sl, "Trap"));
+            }
+        }
+
+        /// <summary>
+        /// Ловушки на схеме. Живут по тем же правилам, что и в панели: скрываются
+        /// без скана, тают по дальности, растут от количества.
+        /// </summary>
+        private void UpdateTraps(string[] traps)
+        {
+            var shown = new List<string>();
+            var seen = new List<string>();
+            if (traps != null)
+                foreach (var raw in traps)
+                {
+                    if (string.IsNullOrEmpty(raw)) continue;
+                    string key = MobRailWidget.TrapIconPublic(raw);
+                    if (string.IsNullOrEmpty(key)) continue;
+                    int at = seen.IndexOf(key);
+                    if (at >= 0)
+                    {
+                        float dn = DistOf(raw), dp = DistOf(shown[at]);
+                        if (dn >= 0f && (dp < 0f || dn < dp)) shown[at] = raw;
+                        continue;
+                    }
+                    seen.Add(key);
+                    shown.Add(raw);
+                }
+
+            float dt = Time.unscaledDeltaTime;
+            for (int i = 0; i < _trapDots.Count; i++)
+            {
+                var img = _trapDots[i];
+                if (img == null) continue;
+                var rt = (RectTransform)img.transform;
+
+                if (i >= shown.Count)
+                {
+                    var c0 = img.color;
+                    c0.a = Mathf.MoveTowards(c0.a, 0f, dt * 4f);
+                    img.color = c0;
+                    if (c0.a <= 0.01f) rt.localScale = Vector3.zero;
+                    continue;
+                }
+
+                string raw = shown[i];
+                var spr = SpriteBank.Get(seen[i]);
+                if (spr != null && img.sprite != spr) img.sprite = spr;
+
+                float dist = DistOf(raw);
+                float sc = 1f;
+                if (ConfigSettings.ScaleMonstersByCount.Value)
+                    sc = Mathf.Min(1.6f, 1f + 0.16f * (CountOf(raw) - 1));
+                rt.localScale = new Vector3(sc, sc, 1f);
+                rt.anchoredPosition = Vector2.zero;
+
+                float a = 1f;
+                if (ConfigSettings.ProximityFade.Value && dist >= 0f)
+                    a = Mathf.Lerp(0.28f, 1f, Mathf.InverseLerp(34f, 6f, dist));
+
+                var col = MobRailWidget.IconTint(S);
+                col.a = Mathf.MoveTowards(img.color.a, a, dt * 4f);
+                img.color = col;
+            }
+        }
 
         /// <summary>Дистанция из строки монстра ("@42"), или -1.</summary>
         private static float DistOf(string raw)

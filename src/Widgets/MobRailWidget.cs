@@ -472,6 +472,9 @@ namespace LCBridgeOverlay
             }
         }
 
+        /// <summary>Ключ иконки ловушки — нужен и схеме локации.</summary>
+        public static string TrapIconPublic(string name) => TrapIcon(name);
+
         // имя ловушки → ключ иконки
         private static string TrapIcon(string name)
         {

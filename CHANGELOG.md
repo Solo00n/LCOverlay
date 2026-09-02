@@ -1,5 +1,8 @@
 # Changelog — LCBridgeOverlay
 
+## 1.13.0
+- **Traps appear on the schematic**, gathered in the top-right corner inside the building. They keep the panel's rules — hidden until scanned where that is required, faded by distance, growing with numbers — but they do not wander: they are fixtures, and in the corner they stay clear of the creatures.
+
 ## 1.12.3
 - **The body fill trailed behind its outline.** It copied the icon's position before that position had been set for the frame, so it was always one step late — obvious outside, where creatures cover the most ground, and enough to read as a second creature standing beside the first. That is also where the pair of gunkfish came from. It is now moved after the icon, and hidden along with it.
 - **Deviants show as their own version again**, drawn upside down as the panel draws them. They were being folded in with the ordinary creature of the same species and vanishing.
