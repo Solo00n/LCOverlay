@@ -293,30 +293,27 @@ namespace LCBridgeOverlay
             }
 
             // ---------- шахта: из ЛЕВОЙ стены вниз и вправо, к ПРАВОЙ стене ----------
+            // Рисуем ЗАМКНУТЫМ контуром. Раньше каждый участок обводился своей парой
+            // стенок, и на изгибах они не стыковались — получалась мешанина отрезков
+            // вместо тоннеля.
             var spine = new[]
             {
                 new Vector2(rx, roomY + 62f),      // выход из левой стены комнаты
-                new Vector2(58f, 300f), new Vector2(104f, 286f), new Vector2(96f, 322f),
-                new Vector2(150f, 336f),           // сюда придётся большой зал
-                new Vector2(210f, 328f), new Vector2(196f, 360f), new Vector2(252f, 372f),
-                new Vector2(rx + rw, 366f),        // упирается в правую стену
+                new Vector2(74f, 286f),
+                new Vector2(126f, 300f),
+                new Vector2(150f, 336f),           // большой зал
+                new Vector2(206f, 330f),
+                new Vector2(238f, 358f),
+                new Vector2(rx + rw, 360f),        // упирается в правую стену
             };
-            for (int i = 0; i < spine.Length - 1; i++)
-            {
-                var a = spine[i]; var b = spine[i + 1];
-                var n = new Vector2(-(b.y - a.y), b.x - a.x).normalized;
-                float wid = (i == 4) ? 30f : 11f + 4f * Mathf.Sin(i * 1.9f);   // 4-й участок — большой зал
-                Line(a.x + n.x * wid, a.y + n.y * wid, b.x + n.x * wid, b.y + n.y * wid, 2f, cave);
-                Line(a.x - n.x * wid, a.y - n.y * wid, b.x - n.x * wid, b.y - n.y * wid, 2f, cave);
-            }
-            Line(spine[spine.Length - 1].x, spine[spine.Length - 1].y - 12f,
-                 spine[spine.Length - 1].x, spine[spine.Length - 1].y + 12f, 2f, cave);
+            var widths = new[] { 16f, 15f, 17f, 34f, 18f, 16f, 15f };
+            CaveOutline(spine, widths, cave);
 
             // затопленная низина в большом зале
-            var low = spine[4];
-            Fill(low.x - 30f, low.y - 2f, 60f, 12f, OverlayStyle.WithA(water, 0.2f));
-            Line(low.x - 30f, low.y + 2f, low.x + 30f, low.y + 2f, 2f, water, "Water");
-            Line(low.x - 20f, low.y + 8f, low.x + 22f, low.y + 8f, 1.5f, OverlayStyle.WithA(water, 0.5f), "Water");
+            var low = spine[3];
+            Fill(low.x - 30f, low.y + 6f, 60f, 16f, OverlayStyle.WithA(water, 0.20f));
+            Line(low.x - 30f, low.y + 8f, low.x + 30f, low.y + 8f, 2f, water, "Water");
+            Line(low.x - 20f, low.y + 15f, low.x + 22f, low.y + 15f, 1.5f, OverlayStyle.WithA(water, 0.5f), "Water");
 
             // ---------- места для монстров ----------
             for (int i = 0; i < 8; i++)                       // уличные — над землёй, слева
@@ -328,9 +325,9 @@ namespace LCBridgeOverlay
             {
                 new Vector2(rx + 34f, roomY + 46f),  new Vector2(rx + 90f, roomY + 62f),
                 new Vector2(rx + 150f, roomY + 46f), new Vector2(rx + 214f, roomY + 62f),
-                new Vector2(66f, 296f),              new Vector2(102f, 306f),
-                new Vector2(150f, 332f),             new Vector2(206f, 336f),
-                new Vector2(232f, 366f),             new Vector2(286f, 362f),
+                new Vector2(74f, 286f),              new Vector2(126f, 300f),
+                new Vector2(150f, 330f),             new Vector2(206f, 330f),
+                new Vector2(238f, 358f),             new Vector2(288f, 360f),
             };
             foreach (var v in inside)
             {
@@ -340,6 +337,52 @@ namespace LCBridgeOverlay
 
             _builtFor = interior ?? "";
             try { _mgr?.AddPerspectiveToTree(_art); } catch { }
+        }
+
+        /// <summary>
+        /// Обводка тоннеля одним замкнутым контуром.
+        ///
+        /// Ключевой момент — стык на изгибе: нормаль в вершине берём как СРЕДНЮЮ от
+        /// двух соседних участков, иначе стенки соседних отрезков расходятся и рисунок
+        /// рассыпается на палки. Обходим левую сторону вперёд, торцуем, возвращаемся
+        /// правой — получается единый контур переменной ширины.
+        /// </summary>
+        private void CaveOutline(Vector2[] spine, float[] widths, Color col)
+        {
+            int n = spine.Length;
+            if (n < 2) return;
+
+            var left = new Vector2[n];
+            var right = new Vector2[n];
+
+            for (int i = 0; i < n; i++)
+            {
+                Vector2 dir;
+                if (i == 0) dir = (spine[1] - spine[0]).normalized;
+                else if (i == n - 1) dir = (spine[n - 1] - spine[n - 2]).normalized;
+                else
+                {
+                    // средняя от входящего и исходящего направления — это и есть
+                    // «ус» сглаженного стыка
+                    var a = (spine[i] - spine[i - 1]).normalized;
+                    var b = (spine[i + 1] - spine[i]).normalized;
+                    dir = (a + b).normalized;
+                    if (dir.sqrMagnitude < 0.0001f) dir = b;
+                }
+                var nrm = new Vector2(-dir.y, dir.x);
+                float w = widths != null && i < widths.Length ? widths[i] : 14f;
+                left[i] = spine[i] + nrm * w;
+                right[i] = spine[i] - nrm * w;
+            }
+
+            for (int i = 0; i < n - 1; i++)
+            {
+                Line(left[i].x, left[i].y, left[i + 1].x, left[i + 1].y, 2f, col, "Cave");
+                Line(right[i].x, right[i].y, right[i + 1].x, right[i + 1].y, 2f, col, "Cave");
+            }
+            // торцы: у входа в комнату и у дальней стены
+            Line(left[0].x, left[0].y, right[0].x, right[0].y, 2f, col, "Cave");
+            Line(left[n - 1].x, left[n - 1].y, right[n - 1].x, right[n - 1].y, 2f, col, "Cave");
         }
 
         // ---- лифт ----

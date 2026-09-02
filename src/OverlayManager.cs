@@ -638,6 +638,7 @@ namespace LCBridgeOverlay
             Set(_tickerGo);
             Set(_headerDivider);
             Set(_marksGo);
+            foreach (var g in _panelFrameGos) Set(g);   // уголки и мерцающие пиксели
         }
 
         private static float EaseOutCubic(float t) => 1f - Mathf.Pow(1f - t, 3f);
@@ -965,7 +966,10 @@ namespace LCBridgeOverlay
 
             // ---- монстры (иконки по бортам) + ловушки снизу ----
             bool showMon = Gate.Monsters;
-            _mobRail.SetMobs(showMon ? p?.monstersOutside : null, showMon ? p?.monstersInside : null);
+            // Со схемой боковые рейки не нужны: монстры уже показаны на ней, а по краям
+            // они бы дублировали то же самое и лезли в глаза.
+            bool railOn = showMon && !_mapShown;
+            _mobRail.SetMobs(railOn ? p?.monstersOutside : null, railOn ? p?.monstersInside : null);
             var traps = Gate.Traps ? p?.traps : null;
             _mobRail.SetTraps(traps);
             _trapFire.Firing = Gate.Traps && traps != null && traps.Length > 0 &&
@@ -1843,9 +1847,20 @@ namespace LCBridgeOverlay
         // ==================== рамки ====================
 
         /// <summary>Рамка панели: пиксельные уголки+пиксели (Legacy) или синие скобки (Game).</summary>
-        // У ОСНОВНОГО блока уголков больше нет: со схемой на улице они только
-        // дробили картинку. Уголки остались там, где они и нужны, — у плашки ивента.
-        private void BuildFrame(GameObject rootGo) => AddPixbits(rootGo, true);
+        /// <summary>
+        /// Рамка панели. На корабле она нужна, а на улице, где панель занимает схема,
+        /// и уголки, и мерцающие пиксели только дробят рисунок — поэтому весь их набор
+        /// запоминаем и гасим целиком (см. SetPanelBlocks).
+        /// </summary>
+        private void BuildFrame(GameObject rootGo)
+        {
+            int before = rootGo.transform.childCount;
+            AddStyleFrame(rootGo, true);
+            for (int i = before; i < rootGo.transform.childCount; i++)
+                _panelFrameGos.Add(rootGo.transform.GetChild(i).gameObject);
+        }
+
+        private readonly List<GameObject> _panelFrameGos = new List<GameObject>();
 
         /// <summary>Тот же стиль рамки для любого блока (панель и плашка ивента).</summary>
         private void AddStyleFrame(GameObject host, bool full)

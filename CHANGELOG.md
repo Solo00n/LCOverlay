@@ -1,5 +1,10 @@
 # Changelog — LCBridgeOverlay
 
+## 1.9.4
+- **The frame is back aboard the ship** and gone outside. Last version removed the corners everywhere; now the whole set — corners and the blinking pixels alike — is present on the ship and hidden while the schematic has the panel.
+- **The side rails of creature icons are hidden with the schematic.** They were repeating what the drawing already showed, on both edges of the screen.
+- **The caves are drawn properly.** Each stretch used to be outlined by its own pair of walls, and at every bend those walls missed each other, which is why it came out as a scatter of sticks rather than a tunnel. It is one closed outline now, with the wall direction at each bend averaged from the two stretches meeting there, so the passage runs continuously from the room's left wall down to the right one, widening through the flooded chamber on the way.
+
 ## 1.9.3
 - **The schematic was redrawn to read as a place.** The ground is a crooked line with hard angles; a large building stands on it to the right holding a mine cart and a hole in its floor; a vertical corridor drops from that hole into the main room, where the lift hangs on its cables. Rails run along the room's floor and strip lights hang from the ceiling on short stems, touching nothing else. The shaft leaves the room's left wall and winds down and across, opening into one large flooded chamber before it ends against the right wall.
 - **The lift rides with the real one**, following the mineshaft elevator up and down, its cables paying out behind it.
