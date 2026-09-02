@@ -14,7 +14,45 @@ namespace LCBridgeOverlay
     {
         private static readonly Dictionary<string, Sprite> _cache = new Dictionary<string, Sprite>();
 
+        /// <summary>
+        /// Иконка в выбранном игроком стиле. Все стили выводятся из одной и той же
+        /// картинки, поэтому набор не надо рисовать трижды и он не расходится.
+        /// </summary>
         public static Sprite Get(string key)
+        {
+            if (string.IsNullOrEmpty(key)) return null;
+
+            string style = (ConfigSettings.MonsterIconStyle.Value ?? "Render").Trim().ToLowerInvariant();
+            if (style == "render" || style.Length == 0) return GetRaw(key);
+
+            string ck = style + ":" + key;
+            if (_styled.TryGetValue(ck, out var got)) return got;
+
+            Sprite made = null;
+            try
+            {
+                var src = GetRaw(key);
+                if (src != null && src.texture != null)
+                {
+                    switch (style)
+                    {
+                        case "pixel":  made = Pixelate(src.texture, 26); break;   // 8-битный вид
+                        case "vector": made = Outline(src.texture); break;        // контур, линейная графика
+                        case "symbol": made = Silhouette(src.texture); break;     // сплошной символ
+                        default:       made = null; break;
+                    }
+                }
+            }
+            catch { }
+            if (made == null) made = GetRaw(key);
+            _styled[ck] = made;
+            return made;
+        }
+
+        private static readonly Dictionary<string, Sprite> _styled = new Dictionary<string, Sprite>();
+
+        /// <summary>Исходная картинка из ресурсов, без стилизации.</summary>
+        public static Sprite GetRaw(string key)
         {
             if (string.IsNullOrEmpty(key)) return null;
             if (_cache.TryGetValue(key, out var cached)) return cached;
@@ -65,7 +103,7 @@ namespace LCBridgeOverlay
             Sprite result = null;
             try
             {
-                var base_ = Get(key);
+                var base_ = GetRaw(key);
                 if (base_ != null && base_.texture != null)
                 {
                     var src = base_.texture;
@@ -130,6 +168,112 @@ namespace LCBridgeOverlay
         }
 
         // мягкая клякса крови; красим ТОЛЬКО там, где исходник непрозрачен
+        // ================= стили иконок =================
+        // Все три выводятся из исходной картинки. Так набор не надо рисовать трижды,
+        // он не расходится между стилями и автоматически покрывает новых монстров.
+
+        private static Sprite Wrap(Texture2D t, FilterMode fm)
+        {
+            t.filterMode = fm;
+            t.wrapMode = TextureWrapMode.Clamp;
+            t.Apply(false, false);
+            return Sprite.Create(t, new Rect(0f, 0f, t.width, t.height), new Vector2(0.5f, 0.5f), 100f, 0,
+                                 SpriteMeshType.FullRect);
+        }
+
+        /// <summary>
+        /// 8-битный вид: уменьшаем до нескольких десятков пикселей по большей стороне
+        /// и ставим точечную фильтрацию. Цвета квантуем по 5 уровней на канал —
+        /// без этого получалась бы просто мелкая, но всё ещё «фотографическая» картинка.
+        /// </summary>
+        private static Sprite Pixelate(Texture2D src, int maxSide)
+        {
+            int w = src.width, h = src.height;
+            float k = (float)maxSide / Mathf.Max(w, h);
+            int nw = Mathf.Max(4, Mathf.RoundToInt(w * k));
+            int nh = Mathf.Max(4, Mathf.RoundToInt(h * k));
+
+            var srcPx = src.GetPixels32();
+            var dst = new Texture2D(nw, nh, TextureFormat.RGBA32, false);
+            var outPx = new Color32[nw * nh];
+
+            int bx = Mathf.Max(1, w / nw), by = Mathf.Max(1, h / nh);
+            for (int y = 0; y < nh; y++)
+            {
+                for (int x = 0; x < nw; x++)
+                {
+                    // усредняем блок исходника — иначе на тонких деталях каша
+                    int r = 0, g = 0, b = 0, a = 0, n = 0;
+                    int x0 = x * w / nw, y0 = y * h / nh;
+                    for (int yy = y0; yy < Mathf.Min(y0 + by, h); yy++)
+                        for (int xx = x0; xx < Mathf.Min(x0 + bx, w); xx++)
+                        {
+                            var c = srcPx[yy * w + xx];
+                            if (c.a < 8) { n++; continue; }      // прозрачное не тянет цвет вниз
+                            r += c.r; g += c.g; b += c.b; a += c.a; n++;
+                        }
+                    if (n == 0) { outPx[y * nw + x] = new Color32(0, 0, 0, 0); continue; }
+                    byte aa = (byte)(a / n);
+                    if (aa < 40) { outPx[y * nw + x] = new Color32(0, 0, 0, 0); continue; }
+                    int cnt = Mathf.Max(1, n);
+                    outPx[y * nw + x] = new Color32(Q(r / cnt), Q(g / cnt), Q(b / cnt), 255);
+                }
+            }
+            dst.SetPixels32(outPx);
+            return Wrap(dst, FilterMode.Point);
+        }
+
+        /// <summary>Квантование канала до 5 ступеней — узнаваемая палитра старых игр.</summary>
+        private static byte Q(int v) => (byte)Mathf.Clamp(Mathf.RoundToInt(v / 51f) * 51, 0, 255);
+
+        /// <summary>
+        /// Линейная графика: берём границу силуэта (пиксель непрозрачный, а сосед нет)
+        /// и рисуем только её. Получается чистый контур, который красится в цвет темы.
+        /// </summary>
+        private static Sprite Outline(Texture2D src)
+        {
+            int w = src.width, h = src.height;
+            var px = src.GetPixels32();
+            var outPx = new Color32[w * h];
+            var clear = new Color32(0, 0, 0, 0);
+            var line = new Color32(255, 255, 255, 255);
+
+            bool Solid(int x, int y) =>
+                x >= 0 && y >= 0 && x < w && y < h && px[y * w + x].a > 90;
+
+            int th = Mathf.Max(1, Mathf.RoundToInt(Mathf.Max(w, h) / 110f));  // толщина под размер
+            for (int y = 0; y < h; y++)
+                for (int x = 0; x < w; x++)
+                {
+                    if (!Solid(x, y)) { outPx[y * w + x] = clear; continue; }
+                    bool edge = false;
+                    for (int d = 1; d <= th && !edge; d++)
+                        edge = !Solid(x - d, y) || !Solid(x + d, y) || !Solid(x, y - d) || !Solid(x, y + d);
+                    outPx[y * w + x] = edge ? line : clear;
+                }
+
+            var dst = new Texture2D(w, h, TextureFormat.RGBA32, false);
+            dst.SetPixels32(outPx);
+            return Wrap(dst, FilterMode.Bilinear);
+        }
+
+        /// <summary>
+        /// Символ: сплошной силуэт белым. Цвет ему даёт сам оверлей через Image.color,
+        /// поэтому знак всегда в тон теме.
+        /// </summary>
+        private static Sprite Silhouette(Texture2D src)
+        {
+            int w = src.width, h = src.height;
+            var px = src.GetPixels32();
+            var outPx = new Color32[w * h];
+            for (int i = 0; i < px.Length; i++)
+                outPx[i] = px[i].a > 90 ? new Color32(255, 255, 255, 255) : new Color32(0, 0, 0, 0);
+
+            var dst = new Texture2D(w, h, TextureFormat.RGBA32, false);
+            dst.SetPixels32(outPx);
+            return Wrap(dst, FilterMode.Bilinear);
+        }
+
         private static void Splat(Color32[] px, int w, int h, float cx, float cy, float r, float squash)
         {
             int x0 = Mathf.Max(0, Mathf.FloorToInt(cx - r)), x1 = Mathf.Min(w - 1, Mathf.CeilToInt(cx + r));

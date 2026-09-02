@@ -1,5 +1,14 @@
 # Changelog — LCBridgeOverlay
 
+## 1.9.0
+- **A schematic of the location, for when you are outside** (`ShowFacilityMap`). Rather than the full panel getting in the way while you move, a small drawing shows the surface, the entrance, the shaft down, the rooms and the caves. Creatures sit as marks in their own zones — above the ground line outside, below it inside — the moon's name stands over it and the loot inside, outside and in hives reads underneath. It is drawn from lines rather than an image, so it stays crisp at any size and keeps a transparent background; room interiors are filled with the overlay's own scanline blocks.
+- **The lamps follow the real lights.** They are yellow because they are light, not decoration, and they go out when the facility does. `MapLightMode` chooses whether that reads as a soft pulse or a plain on/off.
+- **Weather is drawn in the same language as the map** — slanted strokes for rain and flooding, drifting bands for fog, a dimming for an eclipse, an occasional flash in a storm.
+- **Three more looks for creature icons** (`MonsterIconStyle`): `Pixel` for an eight-bit reading, `Vector` for a clean outline, `Symbol` for a solid silhouette in the theme's colour. All three are derived from the existing artwork, so they cover every creature and cannot drift apart from each other.
+- **The countdown reads properly now.** Digits arrive already large, hold for an instant, then drop away into the distance and vanish quickly, and they take the overlay's colour instead of white.
+- **The overlay can remember which creatures live on which moon** (`RememberSeenMonsters`, off by default). Scan something on a moon and it will be there waiting the next time you land. Note this is the opposite of `ResetScansEachDay`, which exists to stop you knowing in advance.
+- **The signal translator can carry the overlay's data** (`RequireSignalTranslator`). Turn it on and sharing between players only works while one is aboard, which finally gives the item a reason to be bought.
+
 ## 1.8.4
 - **Scanning works alongside Good Item Scan.** That mod replaces the game's scanner outright — it empties the vanilla node list and keeps its own — so watching the vanilla one could never have seen anything, which is why the previous two fixes changed nothing. Both sources are read now, so scanning registers whether or not it is installed.
 - **In scan mode the overlay reacts to finding a creature, not to it spawning.** The data packet lists every creature on the level, so the panel was waking for things the player had not yet seen. Only scanned ones count now. Traps are unaffected, since those are already filtered before they reach the packet.

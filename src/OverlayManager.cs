@@ -49,6 +49,7 @@ namespace LCBridgeOverlay
         private TextMeshProUGUI _timerText;
         private EyeWidget _topEye;     // глаз-индикатор связи сверху (закрывается при уходе с корабля)
         private NotifyWidget _notify;  // режим уведомлений: панель спит и просыпается на новости
+        private FacilityMapWidget _map; // схема локации для улицы
         private string _sigQuota, _sigMon, _sigTrap, _sigEvent, _sigMoon;
         private int _sigDeaths = int.MinValue, _sigDay = int.MinValue, _sigLoot = int.MinValue;
         private int _sigScrap = int.MinValue, _sigAlive = int.MinValue;
@@ -182,6 +183,7 @@ namespace LCBridgeOverlay
 
             UpdateVisibility(Time.unscaledDeltaTime);
             UpdateEndOfDay();      // независимо от панели: цифры по центру экрана
+            UpdateFacilityMap();   // и схема локации — тоже сама по себе
             PositionTrapRail();
 
             // таймер обновляем КАЖДЫЙ кадр — с миллисекундами
@@ -597,6 +599,20 @@ namespace LCBridgeOverlay
             }
         }
 
+        /// <summary>
+        /// Схема локации показывается, пока игрок ВНЕ корабля на луне: там полная
+        /// панель мешает смотреть под ноги, а короткой сводки хватает.
+        /// </summary>
+        private void UpdateFacilityMap()
+        {
+            if (_map == null) return;
+            var p = DataParser.Current;
+            bool want = ConfigSettings.ShowFacilityMap.Value &&
+                        ConfigSettings.Enabled.Value &&
+                        p != null && p.onMoon && !p.onShip && !p.loading;
+            _map.Refresh(p, want);
+        }
+
         private static float EaseOutCubic(float t) => 1f - Mathf.Pow(1f - t, 3f);
 
         // ---- 2.12: состояние отсчёта конца дня ----
@@ -665,10 +681,20 @@ namespace LCBridgeOverlay
                 }
                 anyAlive = true;
                 float k = d.Life;
-                float scale = Mathf.Lerp(0.5f, 2.4f, k);           // летит на зрителя
-                float alpha = Mathf.Clamp01(1f - Mathf.Pow(k, 1.5f)); // и тает по мере приближения
+
+                // Цифра появляется СРАЗУ КРУПНОЙ, мгновение стоит, а потом быстро
+                // уходит вглубь и там же гаснет. Раньше она, наоборот, вырастала из
+                // мелкой и летела на зрителя — читалось медленно и мелко.
+                const float hold = 0.18f;          // доля жизни, что цифра стоит крупной
+                float back = Mathf.Clamp01((k - hold) / (1f - hold));
+                float ease = back * back;          // уход ускоряется
+                float scale = Mathf.Lerp(3.6f, 0.45f, ease);
+                float alpha = k < hold ? 1f : Mathf.Clamp01(1f - Mathf.Pow(back, 0.8f));
+
                 d.Rt.localScale = new Vector3(scale, scale, 1f);
-                var c = d.Text.color; c.a = alpha; d.Text.color = c;
+                // цвет — из темы оверлея, а не белый
+                var tc = S.Frame; tc.a = alpha;
+                d.Text.color = tc;
             }
 
             if (!anyAlive && _endOfDayGo.activeSelf && (shown < 1 || shown > 10))
@@ -1388,6 +1414,11 @@ namespace LCBridgeOverlay
 
             _notify = _root.gameObject.AddComponent<NotifyWidget>();
             _notify.Init(S);
+
+            // схема локации живёт на КАНВАСЕ, а не внутри панели: она не должна
+            // ни съезжать вместе с ней, ни гаснуть в режиме уведомлений
+            _map = _root.parent.gameObject.AddComponent<FacilityMapWidget>();
+            _map.Init(this, (RectTransform)_root.parent, S);
             var spacerR = NewUI("SpacerR", _headerGo.transform);
             Flexible(spacerR, 1f);
 
@@ -1580,7 +1611,7 @@ namespace LCBridgeOverlay
             public float Life;   // 0..1 по ходу полёта, <0 — свободна
         }
         private const int EodPoolSize = 4;
-        private const float EodFlyTime = 3.0f;   // сколько РЕАЛЬНЫХ секунд живёт одна цифра
+        private const float EodFlyTime = 1.25f;  // сколько РЕАЛЬНЫХ секунд живёт одна цифра
         private readonly List<EodDigit> _eodPool = new List<EodDigit>();
 
         /// <summary>Запустить новую летящую цифру.</summary>

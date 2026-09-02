@@ -349,6 +349,28 @@ namespace LCBridgeOverlay
             return -1f;
         }
 
+        // ---------- сигнальный транслятор ----------
+        private static float _sigNext;
+        private static bool _sigPresent;
+
+        /// <summary>
+        /// Куплен ли сигнальный транслятор. Ищем раз в пару секунд: FindObjectOfType
+        /// недёшев, а покупка происходит не каждый кадр.
+        /// </summary>
+        public static bool SignalTranslatorOnShip()
+        {
+            try
+            {
+                if (Time.unscaledTime >= _sigNext)
+                {
+                    _sigNext = Time.unscaledTime + 2f;
+                    _sigPresent = UnityEngine.Object.FindObjectOfType<SignalTranslator>() != null;
+                }
+                return _sigPresent;
+            }
+            catch { return false; }
+        }
+
         /// <summary>Ищет СТАТИЧЕСКОЕ float-поле в указанных классах сборки мода.</summary>
         private static FieldInfo FindStaticFloatFieldInAssembly(string asmContains, string[] typeNames, string[] fieldNames)
         {

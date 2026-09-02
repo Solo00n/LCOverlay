@@ -134,6 +134,8 @@ namespace LCBridgeOverlay
                     if (_scanned.Add(ai.GetInstanceID()))
                     {
                         ScanRegistry.MarkLocal(ai);
+                        // и в память по планетам: на этой луне такой вид уже встречался
+                        try { SeenRegistry.Remember(ai.enemyType != null ? ai.enemyType.enemyName : null); } catch { }
                         Plugin.Log?.LogInfo($"[scan] отсканирован {ai.GetType().Name} (\"{node.headerText}\").");
                     }
                     continue;
@@ -375,7 +377,10 @@ namespace LCBridgeOverlay
                     // «забывать каждый день» — там прошлые открытия не в счёт),
                     // либо это наш скан, либо кто-то из лобби уже отсканировал
                     bool byBestiary = !Gate.ResetScansDaily && IsScannedByBestiary(ai);
-                    if (byBestiary || _scanned.Contains(ai.GetInstanceID()) || ScanRegistry.HasFor(ai))
+                    // память по планетам: этот вид тут уже видели раньше
+                    bool byMemory = false;
+                    try { byMemory = SeenRegistry.Knows(ai.enemyType != null ? ai.enemyType.enemyName : null); } catch { }
+                    if (byBestiary || byMemory || _scanned.Contains(ai.GetInstanceID()) || ScanRegistry.HasFor(ai))
                         tok += "+Scanned";
                     if (tok.Length > 0) _tokens[ai.GetInstanceID()] = tok;
                 }

@@ -52,6 +52,7 @@ namespace LCBridgeOverlay
             public bool RequireScan;   // хост может ПРИНУДИТЕЛЬНО требовать скан
             public bool ResetScans;    // и требовать пересканировать всё каждый день
             public bool ShareScans;    // и разрешать/запрещать обмен сканами
+            public bool NeedSignal;    // и требовать для обмена сигнальный транслятор
             public float DoorRadius;
 
             public static HostPolicy FromLocalConfig()
@@ -70,6 +71,7 @@ namespace LCBridgeOverlay
                     RequireScan = ConfigSettings.RequireScanToShow.Value,
                     ResetScans = ConfigSettings.ResetScansEachDay.Value,
                     ShareScans = ConfigSettings.ShareScans.Value,
+                    NeedSignal = ConfigSettings.RequireSignalTranslator.Value,
                     DoorRadius = ConfigSettings.DoorRadarRadius.Value,
                 };
             }
@@ -95,6 +97,7 @@ namespace LCBridgeOverlay
                 if (Interior) b |= 1 << 9;
                 if (ResetScans) b |= 1 << 10;
                 if (ShareScans) b |= 1 << 11;
+                if (NeedSignal) b |= 1 << 12;
                 return b;
             }
 
@@ -114,6 +117,7 @@ namespace LCBridgeOverlay
                     Interior = (b & (1 << 9)) != 0,
                     ResetScans = (b & (1 << 10)) != 0,
                     ShareScans = (b & (1 << 11)) != 0,
+                    NeedSignal = (b & (1 << 12)) != 0,
                     DoorRadius = radius,
                 };
             }
@@ -570,11 +574,28 @@ namespace LCBridgeOverlay
         /// <summary>Требование скана: хост может включить его принудительно.</summary>
         public static bool RequireScan => ConfigSettings.RequireScanToShow.Value || P.RequireScan;
 
-        /// <summary>Делиться ли сканами с отрядом — тоже решает хост.</summary>
-        public static bool ShareScans =>
+        /// <summary>
+        /// Делиться ли сканами с отрядом. Решает хост, а если он потребовал
+        /// сигнальный транслятор — обмен работает лишь пока тот на корабле.
+        /// </summary>
+        public static bool ShareScans
+        {
+            get
+            {
+                bool allowed = OverlayNet.State == OverlayNet.Link.Granted
+                    ? P.ShareScans
+                    : ConfigSettings.ShareScans.Value;
+                if (!allowed) return false;
+                if (SignalNeeded && !GameExtras.SignalTranslatorOnShip()) return false;
+                return true;
+            }
+        }
+
+        /// <summary>Требует ли лобби сигнальный транслятор для обмена.</summary>
+        public static bool SignalNeeded =>
             OverlayNet.State == OverlayNet.Link.Granted
-                ? P.ShareScans
-                : ConfigSettings.ShareScans.Value;
+                ? P.NeedSignal
+                : ConfigSettings.RequireSignalTranslator.Value;
 
         /// <summary>Забывать сканы каждый день — решает хост, чтобы лобби не разъезжалось.</summary>
         public static bool ResetScansDaily =>

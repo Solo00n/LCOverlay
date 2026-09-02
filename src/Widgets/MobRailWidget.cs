@@ -508,6 +508,13 @@ namespace LCBridgeOverlay
             public readonly List<Desc> Variants = new List<Desc>();
         }
 
+        /// <summary>Стиль иконок, который надо красить в цвет темы (контур и силуэт).</summary>
+        private static bool TintedIconStyle()
+        {
+            string st = (ConfigSettings.MonsterIconStyle.Value ?? "").Trim().ToLowerInvariant();
+            return st == "vector" || st == "symbol";
+        }
+
         private static string Norm(string s)
         {
             var sb = new StringBuilder();
@@ -538,6 +545,16 @@ namespace LCBridgeOverlay
             if (n.Contains("toil") || n.Contains("spring") || n.Contains("coil")) return "Coil-Head";
             if (n.Contains("hoard") || n.Contains("kamikaz")) return "Hoarding bug";
             return name;
+        }
+
+        /// <summary>Ключ иконки по сырой строке монстра — нужен схеме локации.</summary>
+        public static string IconKeyPublic(string raw)
+        {
+            if (string.IsNullOrEmpty(raw)) return null;
+            string baseName = Regex.Replace(raw,
+                @"\+turret|\+slayer|\+aggro|\+angry|\+adult|\+attack|\+ceiling|\+frozen|\+scanned|\+firing|\+hurt|\+deviant|\+w\d|\s*@\d+",
+                "", RegexOptions.IgnoreCase).Trim();
+            return IconFor(Canon(baseName));
         }
 
         // имя из игры (enemyType.enemyName) → ключ иконки в res/mobs
@@ -921,7 +938,9 @@ namespace LCBridgeOverlay
                 Amp = amp,
                 Scale = scale,
                 Appear = 0f,
-                BaseColor = Color.white,
+                // Vector/Symbol — белые маски: цвет им даёт тема, иначе они были бы
+                // просто белыми пятнами и не читались бы как часть оверлея
+                BaseColor = TintedIconStyle() && _mgr != null ? _mgr.Style.Frame : Color.white,
                 HurtFlash = hurt ? 1f : 0f,
                 // девиант — переворачиваем иконку вверх ногами
                 FlipY = (deviant && ConfigSettings.DeviantFlipIcon.Value) ? -1f : 1f,

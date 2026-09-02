@@ -39,6 +39,7 @@ namespace LCBridgeOverlay
             // состояния монстров (зол / трансформирован / на потолке / застыл).
             // Внутри свой интервал ~0.5с, чтобы не дёргать рефлексию каждый кадр.
             OverlayNet.Tick();
+            SeenRegistry.Tick();
             MonsterState.Tick(GameState.GetAllLiveEnemies());
 
             string json = BuildJson();

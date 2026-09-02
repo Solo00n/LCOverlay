@@ -51,6 +51,11 @@ namespace LCBridgeOverlay
         public static ConfigEntry<bool> ProximityShake;       // чем ближе монстр, тем нервнее трясётся иконка
         public static ConfigEntry<bool> ResetScansEachDay;    // забывать все сканы на новый день
         public static ConfigEntry<bool> ShareScans;           // делиться сканами с другими игроками
+        public static ConfigEntry<bool> RememberSeenMonsters; // помнить, кто водится на каждой луне
+        public static ConfigEntry<bool> RequireSignalTranslator; // обмен только при купленном трансляторе
+        public static ConfigEntry<string> MonsterIconStyle;   // Render | Pixel | Vector | Symbol
+        public static ConfigEntry<bool> ShowFacilityMap;      // схема локации на улице
+        public static ConfigEntry<string> MapLightMode;       // Effects | Schematic
         public static ConfigEntry<bool> NotifyMode;           // панель спит и просыпается на новости
         public static ConfigEntry<float> NotifyHoldSeconds;   // сколько держать её разбуженной
         public static ConfigEntry<bool> TeamDeaths;           // считать смерти всей команды
@@ -216,6 +221,21 @@ namespace LCBridgeOverlay
 
             ShareScans = cfg.Bind("Behavior", "ShareScans", true,
                 "Работает вместе с RequireScanToShow: сканы видны всему отряду — просветил один, увидели все. Выключи, и каждый будет видеть в оверлее только то, что просканировал сам. Решает хост для всего лобби.");
+
+            RememberSeenMonsters = cfg.Bind("Behavior", "RememberSeenMonsters", false,
+                "Работает вместе с RequireScanToShow: мод запоминает, кого ты встречал на каждой луне, и при следующем прилёте туда показывает их сразу. Память переживает перезапуск игры. Учти: это прямая противоположность ResetScansEachDay, который как раз не даёт знать заранее.");
+
+            RequireSignalTranslator = cfg.Bind("Behavior", "RequireSignalTranslator", false,
+                "Обмен данными между оверлеями работает, только если на корабле куплен сигнальный транслятор. Даёт этому предмету настоящий смысл: без него каждый видит только своё.");
+
+            MonsterIconStyle = cfg.Bind("General", "MonsterIconStyle", "Render",
+                "Как рисовать иконки монстров: Render — как есть, Pixel — 8-битный вид, Vector — только контур линиями, Symbol — сплошной силуэт в цвет темы.");
+
+            ShowFacilityMap = cfg.Bind("Widgets", "ShowFacilityMap", true,
+                "Вне корабля вместо полной панели показывать маленькую схему локации: поверхность, вход, комплекс и пещеры, монстры точками по зонам, лампы по настоящему свету, погода и лут. Сделано так, чтобы не мешать при передвижении.");
+
+            MapLightMode = cfg.Bind("Widgets", "MapLightMode", "Effects",
+                "Как схема показывает свет в комплексе: Effects — лампы мягко дышат, Schematic — просто горит или не горит.");
 
             NotifyMode = cfg.Bind("Behavior", "NotifyMode", false,
                 "Режим уведомлений: панель не висит на экране постоянно, а спит невидимой и разгорается только когда что-то изменилось. Над ней появляется мельтешащая папка, она влетает в панель и растворяется, изменившиеся цифры коротко мерцают. Включение и выключение озвучены радар-бустером.");
