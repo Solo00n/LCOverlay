@@ -55,6 +55,7 @@ namespace LCBridgeOverlay
 
         private string _builtFor;               // для какого интерьера собрана схема
         private bool _lightsOn = true;
+        private bool _lampOwnColor;
         private float _lightPulse;
 
         // ================= сборка =================
@@ -513,20 +514,22 @@ namespace LCBridgeOverlay
                 rt.sizeDelta = new Vector2(W, H);
 
                 var img = go.GetComponent<Image>();
-                img.sprite = l.Sprite;
                 img.raycastTarget = false;
                 img.type = Image.Type.Simple;
 
+                // Цвет темы достаётся только белой и серой графике; всё, что игрок
+                // уже покрасил, идёт как нарисовано. Иначе кабина лифта и лампы
+                // красились ВТОРОЙ раз — краска поверх краски.
+                img.sprite = MapImages.Tinted(l, S.Frame) ?? l.Sprite;
+                img.color = l.IsCave ? new Color(1f, 1f, 1f, 0.9f) : Color.white;
+
                 if (l.IsLamp)
                 {
-                    img.color = Color.white;
                     _lampImgs.Add(img);
+                    _lampOwnColor = l.HasColor;
                     // под каждой нарисованной лампой — своё пятно света
                     foreach (var b in l.Blobs) AddLampGlow(b.x * W, b.y * H);
                 }
-                // шахту красим в тему, а не в красный: на схеме она часть постройки
-                else if (l.IsCave) img.color = OverlayStyle.WithA(S.Frame, 0.9f);
-                else img.color = S.Frame;
 
                 if (l.IsElevator)
                 {
@@ -554,6 +557,7 @@ namespace LCBridgeOverlay
                     img.fillOrigin = (int)Image.OriginVertical.Top;
                     img.fillAmount = 1f;
 
+                    _cableOwnColor = l.HasColor;
                     foreach (var b in l.Blobs)
                         _cableExt.Add(Line(b.x * W, _cableBottom, b.x * W, _cableBottom + 1f,
                                            1.6f, S.Frame, "CableExt"));
@@ -794,6 +798,7 @@ namespace LCBridgeOverlay
         private float _elevCarTop, _elevTravel;   // потолок кабины и заданный ход
         private Image _cableImg;
         private float _cableBottom;
+        private bool _cableOwnColor;
         private readonly List<Image> _cableExt = new List<Image>();
 
         /// <summary>Кабина лифта: рамка с диагональной штриховкой.</summary>
@@ -868,7 +873,7 @@ namespace LCBridgeOverlay
                 var ert = (RectTransform)ext.transform;
                 ert.sizeDelta = new Vector2(Mathf.Max(0.5f, len), ert.sizeDelta.y);
                 ext.enabled = len > 1f;
-                ext.color = S.Frame;
+                if (!_cableOwnColor) ext.color = S.Frame;
             }
 
             // нарисованные линиями тросы тянутся за кабиной от пола здания
@@ -1143,6 +1148,15 @@ namespace LCBridgeOverlay
             foreach (var l in _lampImgs)
             {
                 if (l == null) continue;
+                if (_lampOwnColor)
+                {
+                    // лампа нарисована в своём цвете — трогаем только яркость,
+                    // иначе жёлтый лёг бы на жёлтый
+                    float g = !_lightsOn ? 0.45f
+                            : (!effects ? 1f : 0.82f + 0.18f * Mathf.Abs(Mathf.Sin(_lightPulse)));
+                    l.color = new Color(g, g, g, !_lightsOn ? 0.55f : 1f);
+                    continue;
+                }
                 if (!_lightsOn) { l.color = off; continue; }
                 if (!effects) { l.color = on; continue; }
                 // «эффект»: мягкое дыхание, как у лампы дневного света
@@ -1744,7 +1758,9 @@ namespace LCBridgeOverlay
                 var frt = (RectTransform)go.transform;
                 frt.SetParent(_art, false);
                 frt.anchorMin = frt.anchorMax = new Vector2(0f, 1f);
-                frt.pivot = new Vector2(0.5f, 0f);
+                // свисает от сопла вниз и НЕ зеркалится: языки нарисованы вверх,
+                // как у всякого огня, и разворачивать их было незачем
+                frt.pivot = new Vector2(0.5f, 1f);
                 _flameImg = go.GetComponent<Image>();
                 _flameImg.sprite = SpriteBank.RawPoint("flame");
                 _flameImg.raycastTarget = false;
@@ -1764,7 +1780,6 @@ namespace LCBridgeOverlay
             var rt = (RectTransform)_flameImg.transform;
             rt.anchoredPosition = new Vector2(x, -(y - 2f));
             rt.sizeDelta = new Vector2(wide, len);
-            rt.localScale = new Vector3(1f, -1f, 1f);        // языками вниз
             rt.localRotation = Quaternion.Euler(0f, 0f, tilt);
             _flameImg.enabled = true;
             _flameImg.color = new Color(1f, 1f, 1f, 0.88f + 0.12f * n1);

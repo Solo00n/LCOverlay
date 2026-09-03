@@ -1,5 +1,10 @@
 # Changelog — LCBridgeOverlay
 
+## 1.15.4
+- **A layer is only painted where it isn't painted already.** Every layer was multiplied by the theme colour, so a lift car, a lamp or a cable drawn in its own colour was painted a second time. The theme now reaches only the white and grey linework, brightness preserved as a multiplier; anything the artist has already coloured passes through as drawn. A whole schematic can therefore be brought as a single image with its coloured parts baked in.
+- **Lamps drawn in colour breathe by brightness alone** rather than being tinted yellow over yellow.
+- **The dropship's flame is no longer turned over.** It was drawn with its tongues upward, as fire is, and there was nothing to correct.
+
 ## 1.15.3
 - **The dark is cut to the shape of the drawing.** A sheet across the lower schematic still lay over it as a slab — the empty rock around the caves, the sky at either side, and its edges read as lines. Density is now taken from the layers themselves, so only the complex and the caves go dark, and it is half as heavy as it was.
 

@@ -33,6 +33,16 @@ namespace LCBridgeOverlay
             public bool IsLamp, IsCave, IsElevator, IsCable;
 
             /// <summary>
+            /// На слое есть заведомо цветные пиксели — жёлтая лампа, серая
+            /// вагонетка, крашеная кабина. Такое перекрашивать в цвет темы
+            /// нельзя: получится краска поверх краски.
+            /// </summary>
+            public bool HasColor;
+
+            internal Sprite Tinted;
+            internal string TintKey;
+
+            /// <summary>
             /// Непрозрачная часть слоя в долях холста, отсчёт сверху вниз. По ней
             /// мод узнаёт, где нарисована кабина лифта, не заставляя вписывать
             /// координаты руками.
@@ -136,6 +146,20 @@ namespace LCBridgeOverlay
                         }
                 if (x1 < 0) return;
 
+                // считаем, много ли на слое насыщенных пикселей: белую и серую
+                // графику красим темой, а цветную оставляем как нарисована
+                int opaque = 0, colored = 0;
+                for (int i = 0; i < px.Length; i++)
+                {
+                    var c = px[i];
+                    if (c.a <= 8) continue;
+                    opaque++;
+                    int mx = Mathf.Max(c.r, Mathf.Max(c.g, c.b));
+                    int mn = Mathf.Min(c.r, Mathf.Min(c.g, c.b));
+                    if (mx - mn > 30) colored++;
+                }
+                layer.HasColor = opaque > 0 && colored > opaque * 0.02f;
+
                 // текстура считает строки снизу, холст — сверху
                 layer.Bounds = new Rect(x0 / (float)w, 1f - (y1 + 1) / (float)h,
                                         (x1 - x0 + 1) / (float)w, (y1 - y0 + 1) / (float)h);
@@ -177,9 +201,63 @@ namespace LCBridgeOverlay
                     float by = 1f - (sy / (float)cnt + 0.5f) * Cell / h;
                     layer.Blobs.Add(new Vector2(bx, by));
                 }
-                Plugin.Log?.LogInfo($"[map] слой {layer.Name}: пятен найдено {layer.Blobs.Count}, рисунок {layer.Bounds.x:0.00} {layer.Bounds.y:0.00} {layer.Bounds.width:0.00} {layer.Bounds.height:0.00}");
+                Plugin.Log?.LogInfo($"[map] слой {layer.Name}: пятен {layer.Blobs.Count}, свой цвет {layer.HasColor}");
             }
             catch (Exception e) { Plugin.Log?.LogWarning($"[map] слой не обмерен: {e.Message}"); }
+        }
+
+        /// <summary>
+        /// Слой в цвете темы — но ТОЛЬКО там, где игрок оставил графику белой
+        /// или серой. Что уже покрашено (жёлтая лампа, крашеная кабина), остаётся
+        /// как нарисовано: красить это второй раз — красить поверх краски.
+        ///
+        /// Яркость белого пикселя сохраняем множителем, поэтому полутона линий не
+        /// теряются, а совмещённый макет можно принести одной картинкой.
+        /// </summary>
+        public static Sprite Tinted(Layer layer, Color frame)
+        {
+            try
+            {
+                if (layer == null || layer.Tex == null) return layer?.Sprite;
+                string key = ColorKey(frame);
+                if (layer.TintKey == key && layer.Tinted != null) return layer.Tinted;
+
+                var src = layer.Tex.GetPixels32();
+                var dst = new Color32[src.Length];
+                byte fr = (byte)(Mathf.Clamp01(frame.r) * 255f);
+                byte fg = (byte)(Mathf.Clamp01(frame.g) * 255f);
+                byte fb = (byte)(Mathf.Clamp01(frame.b) * 255f);
+
+                for (int i = 0; i < src.Length; i++)
+                {
+                    var c = src[i];
+                    if (c.a <= 8) { dst[i] = new Color32(0, 0, 0, 0); continue; }
+                    int mx = Mathf.Max(c.r, Mathf.Max(c.g, c.b));
+                    int mn = Mathf.Min(c.r, Mathf.Min(c.g, c.b));
+                    if (mx - mn > 30) { dst[i] = c; continue; }      // уже покрашено — не трогаем
+                    float k = mx / 255f;                              // яркость линии
+                    dst[i] = new Color32((byte)(fr * k), (byte)(fg * k), (byte)(fb * k), c.a);
+                }
+
+                var tex = new Texture2D(layer.Tex.width, layer.Tex.height, TextureFormat.RGBA32, false)
+                {
+                    filterMode = FilterMode.Point,
+                    wrapMode = TextureWrapMode.Clamp,
+                };
+                tex.SetPixels32(dst);
+                tex.Apply(false, false);
+                layer.Tinted = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height),
+                                             new Vector2(0.5f, 0.5f), 100f, 0, SpriteMeshType.FullRect);
+                layer.TintKey = key;
+                return layer.Tinted;
+            }
+            catch { return layer.Sprite; }
+        }
+
+        private static string ColorKey(Color c)
+        {
+            return Mathf.RoundToInt(c.r * 255f) + "," + Mathf.RoundToInt(c.g * 255f) + "," +
+                   Mathf.RoundToInt(c.b * 255f);
         }
 
         /// <summary>Сбросить кэш — чтобы подхватить поправленные файлы без перезапуска.</summary>
