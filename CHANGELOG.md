@@ -1,5 +1,8 @@
 # Changelog — LCBridgeOverlay
 
+## 1.15.2
+- **The version the plugin declares had been stuck at 1.13.2 since that release.** BepInEx chooses between copies of a plugin by that number, not by the date on the file, so with several copies in the plugins folder all claiming the same version it loaded whichever it happened to reach first — and a fresh build could simply never arrive in the game. The build now fails if the declared version and the project's disagree.
+
 ## 1.15.1
 - **The weather stopped throwing an error every frame.** Rebuilding the schematic destroys the drops and flashes along with everything else, but the weather kept its own list of them and reached into the wreckage on the next tick. The exception aborted the rest of the refresh — the creature marks among it — and filled the log with tens of megabytes. The effects are now dropped with the schematic they belong to, and a stale one is skipped rather than followed.
 - **The dark lies flat on the schematic again.** The tilt is fitted to each drawing as the schematic is built, and the vignette, the lamplight and the dropship are all made later — so they sat flat over a tilted picture. Anything made after the build now gets the tilt too.

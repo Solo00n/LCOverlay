@@ -5,7 +5,7 @@
     <TargetFramework>netstandard2.1</TargetFramework>
     <AssemblyName>LCBridgeOverlay</AssemblyName>
     <Product>LCBridgeOverlay</Product>
-    <Version>1.15.1</Version>
+    <Version>1.15.2</Version>
     <LangVersion>latest</LangVersion>
     <Nullable>disable</Nullable>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
@@ -25,6 +25,17 @@
     <PackageReference Include="BepInEx.PluginInfoProps" Version="2.*" />
     <PackageReference Include="LethalCompany.GameLibs.Steam" Version="*-*" Publicize="true" PrivateAssets="all" />
   </ItemGroup>
+
+  <!--
+    BepInEx выбирает между одинаковыми плагинами по версии из [BepInPlugin], а не
+    по дате файла. Разъехавшийся с проектом Plugin.VERSION однажды уже стоил
+    вечера: три копии мода заявляли 1.13.2, и грузилась произвольная — свежая
+    сборка просто не доезжала до игры. Пусть теперь ломается сборка, а не игра.
+  -->
+  <Target Name="CheckPluginVersion" BeforeTargets="CoreCompile">
+    <Error Condition="!$([System.IO.File]::ReadAllText('$(MSBuildProjectDirectory)/src/Plugin.cs').Contains('VERSION = &quot;$(Version)&quot;'))"
+           Text="Plugin.VERSION не совпадает с &lt;Version&gt; ($(Version)) — поправь src/Plugin.cs" />
+  </Target>
 
 </Project>
 
