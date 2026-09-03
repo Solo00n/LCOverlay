@@ -240,12 +240,15 @@ namespace LCBridgeOverlay
             for (int i = _art.childCount - 1; i >= 0; i--) Destroy(_art.GetChild(i).gameObject);
             _lampImgs.Clear(); _weatherBits.Clear(); _lampGlows.Clear();
             _darkNoise = null; _gloomTop = float.NaN;
-            _cableImg = null; _elevCarTop = 0f; _elevPos = 0f;
+            _cableImg = null; _cableExt.Clear(); _elevCarTop = 0f; _elevPos = 0f;
             _outSlots.Clear(); _inSlots.Clear(); _outDots.Clear(); _inDots.Clear();
             _outFill.Clear(); _inFill.Clear();
             _trapSlots.Clear(); _trapDots.Clear();
             _inPaths.Clear(); _outPaths.Clear();
             _elevCar = null;
+            // рисунки погоды уничтожены вместе с детьми _art: без сброса
+            // Tick лезет в снесённые объекты и сыплет ошибками каждый кадр
+            _fx = null; _wxKind = null; _wxRaw = null;
 
             // Порядок источников: картинки из папки, потом текстовый файл, потом
             // встроенный рисунок. Так свой макет можно принести и картинками,
@@ -538,15 +541,21 @@ namespace LCBridgeOverlay
                 }
                 else if (l.IsCable)
                 {
-                    // Тросы показываем ровно до потолка кабины: ниже их закрывает
-                    // она сама, а по мере спуска открывается всё больше троса.
-                    // Обрезаем заливкой, а не маской: маска не переживает наклон,
-                    // под которым стоит вся схема.
+                    // Трос виден ровно до потолка кабины. Дальшедва  пути: если его
+                    // нарисовали на весь ствол — лишнее срезаем заливкой (маска не
+                    // переживает наклон, под которым стоит схема); если только до
+                    // верхнего положения кабины — дотягиваем сами.
                     _cableImg = img;
+                    _cableBottom = l.Bounds.yMax * H;
                     img.type = Image.Type.Filled;
                     img.fillMethod = Image.FillMethod.Vertical;
                     img.fillOrigin = (int)Image.OriginVertical.Top;
                     img.fillAmount = 1f;
+
+                    foreach (var b in l.Blobs)
+                        _cableExt.Add(Line(b.x * W, _cableBottom, b.x * W, _cableBottom + 1f,
+                                           1.6f, S.Frame, "CableExt"));
+                    Plugin.Log?.LogInfo($"[map] тросы: конец рисунка {_cableBottom:0}, штук {_cableExt.Count}");
                 }
             }
         }
@@ -782,6 +791,8 @@ namespace LCBridgeOverlay
         private float _elevTop, _elevBottom, _elevPos, _elevCableTop;
         private float _elevCarTop, _elevTravel;   // потолок кабины и заданный ход
         private Image _cableImg;
+        private float _cableBottom;
+        private readonly List<Image> _cableExt = new List<Image>();
 
         /// <summary>Кабина лифта: рамка с диагональной штриховкой.</summary>
         private RectTransform MakeCar(float x, float y, float w, float h, Color col, Color scan)
@@ -820,6 +831,14 @@ namespace LCBridgeOverlay
             }
             catch { }
 
+            if (Time.unscaledTime >= _elevLog)
+            {
+                _elevLog = Time.unscaledTime + 10f;
+                Plugin.Log?.LogInfo($"[map] лифт: пульт {(_elevCtl != null ? "есть" : "нет")}, " +
+                                    $"доля {ElevatorFraction(_elevCtl):0.00}, внизу {atBottom}, " +
+                                    $"ход {_elevBottom:0}, потолок {_elevCarTop:0}");
+            }
+
             // Настоящий лифт едет плавно, и оверлей повторяет его положение один
             // в один: доля пути считается по самой кабине между её верхней и
             // нижней точками. Если до них не дотянуться — довольствуемся флажком
@@ -831,9 +850,24 @@ namespace LCBridgeOverlay
             float y = Mathf.Lerp(_elevTop, _elevBottom, _elevPos);
             _elevCar.anchoredPosition = new Vector2(_elevCar.anchoredPosition.x, -y);
 
-            // трос виден ровно до потолка кабины — ниже его закрывает она сама
+            float roof = _elevCarTop + y;
             if (_cableImg != null)
-                _cableImg.fillAmount = Mathf.Clamp01((_elevCarTop + y) / Mathf.Max(1f, H));
+            {
+                // нарисован весь ствол — срезаем ниже потолка кабины
+                bool full = _cableBottom > _elevCarTop + 4f;
+                _cableImg.fillAmount = full ? Mathf.Clamp01(roof / Mathf.Max(1f, H)) : 1f;
+            }
+            // а если трос нарисован только до верхнего положения — доводим его
+            // до кабины сами: спускается — троса открывается больше
+            foreach (var ext in _cableExt)
+            {
+                if (ext == null) continue;
+                float len = roof - _cableBottom;
+                var ert = (RectTransform)ext.transform;
+                ert.sizeDelta = new Vector2(Mathf.Max(0.5f, len), ert.sizeDelta.y);
+                ext.enabled = len > 1f;
+                ext.color = S.Frame;
+            }
 
             // нарисованные линиями тросы тянутся за кабиной от пола здания
             foreach (var c in new[] { _elevCable1, _elevCable2 })
@@ -936,6 +970,18 @@ namespace LCBridgeOverlay
         ///
         /// Свет — по пятну на КАЖДУЮ лампу с рисунка, а не одна дуга на комнату.
         /// </summary>
+        /// <summary>
+        /// Наделить перспективой то, что появилось уже после сборки схемы.
+        ///
+        /// Наклон навешивается на каждый рисунок по отдельности при сборке, и
+        /// полумрак с огнём, которые рождаются позже, оставались плоскими поверх
+        /// наклонённой картинки — виньетка ложилась мимо.
+        /// </summary>
+        private void Warp()
+        {
+            try { _mgr?.AddPerspectiveToTree(_art); } catch { }
+        }
+
         private void UpdateGloom(float dt)
         {
             if (float.IsNaN(_gloomTop))
@@ -955,6 +1001,7 @@ namespace LCBridgeOverlay
                 float span = Mathf.Max(20f, H - _gloomTop);
                 _darkNoise.sprite = SpriteBank.GloomGrad(_gloomSlope * W / span);
                 _darkNoise.raycastTarget = false;
+                Warp();
             }
 
             _gloom = Mathf.MoveTowards(_gloom, _lightsOn ? 0f : 1f, dt / 1.2f);
@@ -979,14 +1026,15 @@ namespace LCBridgeOverlay
             rt.SetParent(_art, false);
             rt.anchorMin = rt.anchorMax = new Vector2(0f, 1f);
             rt.pivot = new Vector2(0.5f, 0.5f);
-            // центр чуть НИЖЕ лампы: свет обнимает её и стекает вниз
-            rt.anchoredPosition = new Vector2(x, -(y + 18f));
+            // центр НА лампе: пятно обнимает её, а не висит под ней
+            rt.anchoredPosition = new Vector2(x, -y);
             rt.sizeDelta = new Vector2(96f, 96f);
             var im = go.GetComponent<Image>();
             im.sprite = SpriteBank.Glow();
             im.raycastTarget = false;
             _lampGlows.Add(im);
-            rt.SetAsFirstSibling();          // под рисунком, чтобы линии не мылились
+            rt.SetAsFirstSibling();
+            Warp();          // под рисунком, чтобы линии не мылились
         }
 
 
@@ -1341,6 +1389,7 @@ namespace LCBridgeOverlay
 
         private static ItemDropship _shipObj;
         private static float _shipNext;
+        private static float _elevLog;
 
         // Садится СЛЕВА, на траву, а не над кораблём: там пусто и он никому не мешает.
         // Садится СЛЕВА на траву; НИЖЕ линии земли — так он стоит на ней, а не
@@ -1506,7 +1555,7 @@ namespace LCBridgeOverlay
         private void Hide()
         {
             foreach (var g in _ship) if (g != null) g.enabled = false;
-            foreach (var g in _tongues) if (g != null) g.enabled = false;
+            if (_flameImg != null) _flameImg.enabled = false;
             if (_shipSprite != null) _shipSprite.enabled = false;
         }
 
@@ -1534,6 +1583,7 @@ namespace LCBridgeOverlay
                     _shipSprite.preserveAspect = true;
                     _shipSprite.raycastTarget = false;
                     Plugin.Log?.LogInfo("[map] доставщик: своя картинка из lcbridgeoverlay-map/dropship.png");
+                    Warp();
                 }
                 else
                     for (int i = 0; i < 16; i++) _ship.Add(Line(0f, 0f, 1f, 1f, 2f, S.Frame));
@@ -1586,60 +1636,49 @@ namespace LCBridgeOverlay
         }
 
         /// <summary>
-        /// Огонь под соплом — не ровная струя турбины, а несколько толстых языков,
-        /// как у горящей нефти: каждый живёт своей жизнью, шевелится и коптит.
+        /// Огонь под соплом — картинка из ресурсов (res/mobs/flame.png), а не
+        /// собранная кодом струя. Нарисована языками вверх, как и положено огню,
+        /// поэтому под кораблём её переворачиваем: опора у сопла, отрицательный
+        /// масштаб по вертикали разворачивает пламя вниз.
         ///
-        /// У земли пламя чувствует под собой опору: языки укорачиваются, толстеют
-        /// и РАЗВОРАЧИВАЮТСЯ вширь, растекаясь по поверхности.
+        /// У земли оно чувствует под собой опору: укорачивается и расходится
+        /// вширь, растекаясь по поверхности.
         /// </summary>
         private void DrawFlame(float x, float y, bool on, float low, float tilt, float scale)
         {
-            const int N = 5;
-            while (_tongues.Count < N)
+            if (_flameImg == null)
             {
                 var go = new GameObject("Flame", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
                 var frt = (RectTransform)go.transform;
                 frt.SetParent(_art, false);
                 frt.anchorMin = frt.anchorMax = new Vector2(0f, 1f);
-                // опора СВЕРХУ: широкий корень у сопла, конец языка внизу
-                frt.pivot = new Vector2(0.5f, 1f);
-                var im = go.GetComponent<Image>();
-                im.sprite = SpriteBank.Flame();
-                im.raycastTarget = false;
-                _tongues.Add(im);
+                frt.pivot = new Vector2(0.5f, 0f);
+                _flameImg = go.GetComponent<Image>();
+                _flameImg.sprite = SpriteBank.RawPoint("flame");
+                _flameImg.raycastTarget = false;
+                Warp();
             }
 
-            if (!on) { foreach (var g in _tongues) if (g != null) g.enabled = false; return; }
+            if (!on) { _flameImg.enabled = false; return; }
 
             float t = Time.unscaledTime;
             float k = Mathf.Clamp01(low);
             k = k * k * (3f - 2f * k);
+            float n1 = Mathf.PerlinNoise(t * 4.1f, 0.3f);
 
-            for (int i = 0; i < N; i++)
-            {
-                var im = _tongues[i];
-                if (im == null) continue;
-                float side = N == 1 ? 0f : (i / (float)(N - 1)) * 2f - 1f;   // -1 … 1 поперёк сопла
-                float ph = i * 3.7f;
-                float n1 = Mathf.PerlinNoise(t * 3.2f + ph, 0.3f);
-                float n2 = Mathf.PerlinNoise(0.7f, t * 2.4f + ph) * 2f - 1f;
+            float len = Mathf.Lerp(46f, 20f, k) * (0.82f + 0.28f * n1) * scale;
+            float wide = Mathf.Lerp(30f, 52f, k) * (0.9f + 0.16f * n1) * scale;
 
-                float len = Mathf.Lerp(44f, 16f, k) * (0.55f + 0.6f * n1)
-                          * (1f - 0.3f * Mathf.Abs(side)) * scale;
-                float wide = Mathf.Lerp(16f, 25f, k) * (0.75f + 0.45f * n1) * scale;
-                float ox = side * Mathf.Lerp(6f, 20f, k) * scale + n2 * 2.2f * scale;
-                float rot = tilt + side * Mathf.Lerp(7f, 52f, k) + n2 * 9f * (1f - k);
-
-                var rt = (RectTransform)im.transform;
-                rt.anchoredPosition = new Vector2(x + ox, -(y - 2f));
-                rt.sizeDelta = new Vector2(Mathf.Max(2f, wide), Mathf.Max(3f, len));
-                rt.localRotation = Quaternion.Euler(0f, 0f, rot);
-                im.enabled = true;
-                im.color = new Color(1f, 1f, 1f, 0.62f + 0.3f * n1);
-            }
+            var rt = (RectTransform)_flameImg.transform;
+            rt.anchoredPosition = new Vector2(x, -(y - 2f));
+            rt.sizeDelta = new Vector2(wide, len);
+            rt.localScale = new Vector3(1f, -1f, 1f);        // языками вниз
+            rt.localRotation = Quaternion.Euler(0f, 0f, tilt);
+            _flameImg.enabled = true;
+            _flameImg.color = new Color(1f, 1f, 1f, 0.88f + 0.12f * n1);
         }
 
-        private readonly List<Image> _tongues = new List<Image>();
+        private Image _flameImg;
 
 
         // Ловушки стоят в правом верхнем углу ЗДАНИЯ: это не обитатели уровня, им

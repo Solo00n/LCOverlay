@@ -138,7 +138,7 @@ namespace LCBridgeOverlay
                 layer.Bounds = new Rect(x0 / (float)w, 1f - (y1 + 1) / (float)h,
                                         (x1 - x0 + 1) / (float)w, (y1 - y0 + 1) / (float)h);
 
-                if (!layer.IsLamp) return;
+                if (!layer.IsLamp && !layer.IsCable) return;
 
                 // Пятна ищем по огрублённой сетке: лампа — это несколько пикселей,
                 // и точность до клетки здесь более чем достаточна.
@@ -175,7 +175,7 @@ namespace LCBridgeOverlay
                     float by = 1f - (sy / (float)cnt + 0.5f) * Cell / h;
                     layer.Blobs.Add(new Vector2(bx, by));
                 }
-                Plugin.Log?.LogInfo($"[map] слой {layer.Name}: ламп найдено {layer.Blobs.Count}");
+                Plugin.Log?.LogInfo($"[map] слой {layer.Name}: пятен найдено {layer.Blobs.Count}, рисунок {layer.Bounds.x:0.00} {layer.Bounds.y:0.00} {layer.Bounds.width:0.00} {layer.Bounds.height:0.00}");
             }
             catch (Exception e) { Plugin.Log?.LogWarning($"[map] слой не обмерен: {e.Message}"); }
         }

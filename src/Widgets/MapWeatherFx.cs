@@ -111,6 +111,10 @@ namespace LCBridgeOverlay
 
         private static void Place(RectTransform rt, float x1, float y1, float x2, float y2, float th)
         {
+            // Схему пересобирают на ходу, и снесённые вместе с ней капли доживают
+            // в наших списках. Раньше это валило Tick ошибкой каждый кадр, а с ним
+            // и весь остаток Refresh — метки монстров попросту не обновлялись.
+            if (rt == null) return;
             var d = new Vector2(x2 - x1, -(y2 - y1));
             rt.anchoredPosition = new Vector2(x1, -y1);
             rt.sizeDelta = new Vector2(Mathf.Max(0.5f, d.magnitude), th);

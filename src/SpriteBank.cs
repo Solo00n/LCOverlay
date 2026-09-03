@@ -51,6 +51,27 @@ namespace LCBridgeOverlay
 
         private static readonly Dictionary<string, Sprite> _styled = new Dictionary<string, Sprite>();
 
+        /// <summary>
+        /// Картинка как есть, точечной фильтрацией и без стилей: так рисуют
+        /// пиксель-арт, принесённый игроком, — огонь доставщика, например.
+        /// </summary>
+        public static Sprite RawPoint(string key)
+        {
+            if (string.IsNullOrEmpty(key)) return null;
+            Sprite got;
+            if (_point.TryGetValue(key, out got)) return got;
+            var src = GetRaw(key);
+            if (src != null && src.texture != null)
+            {
+                src.texture.filterMode = FilterMode.Point;
+                got = src;
+            }
+            _point[key] = got;
+            return got;
+        }
+
+        private static readonly Dictionary<string, Sprite> _point = new Dictionary<string, Sprite>();
+
         /// <summary>Исходная картинка из ресурсов, без стилизации.</summary>
         public static Sprite GetRaw(string key)
         {
@@ -261,39 +282,32 @@ namespace LCBridgeOverlay
         }
 
         /// <summary>
-        /// Свет лампы. Пятно ОБНИМАЕТ лампу со всех сторон и заметно сильнее
-        /// стекает вниз, чем поднимается вверх, — как и настоящий подвесной
-        /// светильник.
+        /// Свет лампы. Пятно ОБНИМАЕТ лампу со всех сторон и немного стекает вниз.
         ///
-        /// Прежний вариант обрывался ровно по полукругу, и граница резала глаз.
-        /// Здесь спад высокой степени: почти вся площадь еле светится, край
-        /// уходит в ноль незаметно. Плюс еле уловимая рябь по прозрачности —
-        /// без неё редкие уровни альфы складывались в кольца.
+        /// Нарочно грубое: сетка в два десятка клеток, точечная фильтрация и
+        /// прозрачность в дюжину ступеней — свет складывается из крупных пикселей,
+        /// как и всё остальное на схеме, а не размазывается градиентом.
         /// </summary>
         public static Sprite Glow()
         {
             if (_glow != null) return _glow;
-            const int N = 128;
+            const int N = 22;
             var tex = new Texture2D(N, N, TextureFormat.RGBA32, false)
             {
-                filterMode = FilterMode.Bilinear,
+                filterMode = FilterMode.Point,      // крупный пиксель, не мыло
                 wrapMode = TextureWrapMode.Clamp,
             };
             var px = new Color32[N * N];
-            var rnd = new System.Random(4242);
             for (int y = 0; y < N; y++)
                 for (int x = 0; x < N; x++)
                 {
                     float dx = (x / (float)(N - 1) - 0.5f) * 2f;
                     float dy = (y / (float)(N - 1) - 0.5f) * 2f;   // +1 верх, -1 низ
-                    // кверху свет гаснет вдвое быстрее, чем книзу
-                    float sy = dy > 0f ? dy / 0.5f : dy / 1.05f;
+                    float sy = dy > 0f ? dy / 0.8f : dy / 1.05f;   // чуть охотнее вниз
                     float d = Mathf.Sqrt(dx * dx + sy * sy);
-                    float k = Mathf.Clamp01(1f - d);
-                    float a2 = Mathf.Pow(k, 2.6f);
-                    a2 += ((float)rnd.NextDouble() - 0.5f) * 0.006f;  // рябь против колец
-                    px[y * N + x] = new Color32(255, 255, 255,
-                                                (byte)(Mathf.Clamp01(a2) * 255f));
+                    float a2 = Mathf.Pow(Mathf.Clamp01(1f - d), 1.9f);
+                    a2 = Mathf.Round(a2 * 12f) / 12f;              // ступени, а не плавность
+                    px[y * N + x] = new Color32(255, 255, 255, (byte)(a2 * 255f));
                 }
             tex.SetPixels32(px);
             tex.Apply(false, false);
@@ -316,10 +330,10 @@ namespace LCBridgeOverlay
             Sprite cached;
             if (_gloomGrads.TryGetValue(key, out cached) && cached != null) return cached;
 
-            const int Wd = 192, Ht = 256;
+            const int Wd = 44, Ht = 58;
             var tex = new Texture2D(Wd, Ht, TextureFormat.RGBA32, false)
             {
-                filterMode = FilterMode.Bilinear,
+                filterMode = FilterMode.Point,      // крупный пиксель, как у схемы
                 wrapMode = TextureWrapMode.Clamp,
             };
             var px = new Color32[Wd * Ht];
@@ -334,7 +348,8 @@ namespace LCBridgeOverlay
                     // растянутый плавный набор плотности: резкой кромки нет нигде
                     float k = Mathf.Clamp01(vv / 0.45f);
                     k = k * k * (3f - 2f * k);
-                    float a2 = k * (0.78f + 0.22f * (float)rnd.NextDouble());
+                    float a2 = k * (0.76f + 0.24f * (float)rnd.NextDouble());
+                    a2 = Mathf.Round(a2 * 10f) / 10f;      // ступени плотности
                     px[y * Wd + x] = new Color32(0, 0, 0, (byte)(Mathf.Clamp01(a2) * 255f));
                 }
             tex.SetPixels32(px);

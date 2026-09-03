@@ -1,5 +1,12 @@
 # Changelog — LCBridgeOverlay
 
+## 1.15.1
+- **The weather stopped throwing an error every frame.** Rebuilding the schematic destroys the drops and flashes along with everything else, but the weather kept its own list of them and reached into the wreckage on the next tick. The exception aborted the rest of the refresh — the creature marks among it — and filled the log with tens of megabytes. The effects are now dropped with the schematic they belong to, and a stale one is skipped rather than followed.
+- **The dark lies flat on the schematic again.** The tilt is fitted to each drawing as the schematic is built, and the vignette, the lamplight and the dropship are all made later — so they sat flat over a tilted picture. Anything made after the build now gets the tilt too.
+- **The dropship burns the flame you drew** (`res/mobs/flame.png`), turned to point downward, back to a single tongue.
+- **The light and the dark are pixels, not gradients** — a coarse grid, point sampling and a dozen steps of opacity, in keeping with the rest of the drawing. The light is also centred on its lamp rather than hanging below it.
+- **Cables pay out as the car descends.** Drawn down the whole shaft, they are cut at the car's roof; drawn only as far as the car's resting place, the mod carries them the rest of the way itself.
+
 ## 1.15.0
 - **The dropship comes in from the top right along a proper arc** and takes eight seconds to do it: six on the curve, a seventh hanging just above the pad on its jets, and the eighth setting down. It lands a little below the ground line, so its feet are under it rather than resting on top.
 - **The exhaust is burning oil, not a turbine.** Five thick tongues, each writhing to its own noise, sooty at the edges and hot at the root. Near the ground they shorten, thicken and splay outward, spreading across the surface.
