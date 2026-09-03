@@ -588,7 +588,14 @@ namespace LCBridgeOverlay
             // на луне, а на корабле оверлей — это рабочий инструмент.
             bool shipSafe = p != null && (p.onShip || !p.onMoon);
             _notify?.SetAlwaysOn(shipSafe);
-            float wake = (ConfigSettings.NotifyMode.Value && _notify != null) ? _notify.Wake : 1f;
+            float wake = 1f;
+            if (ConfigSettings.NotifyMode.Value && _notify != null)
+            {
+                // Панель не исчезает совсем, а уходит в фон — как при бездействии.
+                // Полное исчезновение сбивало с толку: непонятно, работает ли мод.
+                float floor = Mathf.Clamp01(ConfigSettings.IdleMinOpacity.Value);
+                wake = Mathf.Lerp(floor, 1f, _notify.Wake);
+            }
             _group.alpha = e * _idleAlpha * pauseMul * wake; // + затухание при неподвижной камере
 
             bool anyVisible = _vis > 0.001f;
@@ -620,11 +627,33 @@ namespace LCBridgeOverlay
                 SetPanelBlocks(!want);
                 _dirty = true;          // пересобрать панель под новый состав
             }
-            _map.Refresh(p, want);
+
+            // Переход корабль ⇄ улица: раньше рейку прятал только Refresh, который
+            // идёт раз в пакет. Пробежка туда-сюда за секунду оставляла на экране
+            // и рейку, и схему разом — теперь состояние правится каждый кадр.
+            float dt = Time.unscaledDeltaTime;
+            _mapT = Mathf.MoveTowards(_mapT, want ? 1f : 0f, dt / 0.55f);
+            _mobRail?.SetRailsVisible(_mapT < 0.999f);
+
+            // коробка таймера сворачивается, и глаз сам уезжает в центр шапки
+            if (_timerBoxLE != null)
+            {
+                float e = 1f - Mathf.Pow(1f - _mapT, 3f);
+                float wide = Mathf.Lerp(205f, 0f, e);
+                _timerBoxLE.preferredWidth = wide;
+                _timerBoxLE.minWidth = wide;
+                if (_timerBox != null && _timerBox.activeSelf != (wide > 1f))
+                    _timerBox.SetActive(wide > 1f);
+            }
+
+            _map.Refresh(p, want, _mapT);
             if (want) _map.ApplyFonts(_fontBody, _fontBig);
         }
 
         private bool _mapShown;
+        private GameObject _timerBox;
+        private LayoutElement _timerBoxLE;
+        private float _mapT;            // 0 корабль … 1 схема, для плавных переходов
 
         // Режим уведомлений: плашка ивента не висит весь день, а всплывает дважды —
         // в начале дня и при отлёте. Держим момент, до которого её видно.
@@ -1029,10 +1058,7 @@ namespace LCBridgeOverlay
 
             // ---- монстры (иконки по бортам) + ловушки снизу ----
             bool showMon = Gate.Monsters;
-            // Со схемой боковые рейки не нужны: монстры уже показаны на ней, а по краям
-            // они бы дублировали то же самое и лезли в глаза.
-            bool railOn = showMon && !_mapShown;
-            _mobRail.SetMobs(railOn ? p?.monstersOutside : null, railOn ? p?.monstersInside : null);
+            _mobRail.SetMobs(showMon ? p?.monstersOutside : null, showMon ? p?.monstersInside : null);
             var traps = Gate.Traps ? p?.traps : null;
             _mobRail.SetTraps(traps);
             _trapFire.Firing = Gate.Traps && traps != null && traps.Length > 0 &&
@@ -1538,6 +1564,8 @@ namespace LCBridgeOverlay
             // этого перекраивали бы шапку (таймер/глаз мигали «как перезагрузка»)
             var boxLE = box.AddComponent<LayoutElement>();
             boxLE.preferredWidth = 205f; boxLE.minWidth = 205f;
+            _timerBox = box;
+            _timerBoxLE = boxLE;
             var hl = box.AddComponent<HorizontalLayoutGroup>();
             // ассиметрия сверху/снизу компенсирует пустое место под цифрами (descent)
             hl.padding = new RectOffset(12, 12, 9, 3);

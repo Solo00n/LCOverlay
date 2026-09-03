@@ -51,6 +51,7 @@ namespace LCBridgeOverlay
         private readonly List<Image> _inFill = new List<Image>();
         private readonly List<RectTransform> _trapSlots = new List<RectTransform>();
         private readonly List<Image> _trapDots = new List<Image>();
+        private readonly List<float> _trapNear = new List<float>();
 
         private string _builtFor;               // для какого интерьера собрана схема
         private bool _lightsOn = true;
@@ -520,7 +521,9 @@ namespace LCBridgeOverlay
                     // а мод сдвинет её вниз вместе с настоящей
                     _elevCar = rt;
                     _elevTop = 0f;
-                    _elevBottom = 30f;      // насколько слой уезжает вниз
+                    // слой лифта уезжает вниз почти на всю высоту комнаты — иначе
+                    // ход в 30 пикселей было не заметить
+                    _elevBottom = (RoomBottom - RoomTop) - 30f;
                 }
             }
         }
@@ -796,19 +799,17 @@ namespace LCBridgeOverlay
 
         // ================= жизнь =================
 
-        public void Refresh(BridgePayload p, bool wantVisible)
+        public void Refresh(BridgePayload p, bool wantVisible, float mapT = 1f)
         {
             if (_root == null) return;
 
-            // Появление схемы: метки не возникают на местах, а СЪЕЗЖАЮТСЯ с краёв —
-            // оттуда, где только что были боковые рейки корабля.
-            if (_root.gameObject.activeSelf != wantVisible)
-            {
-                _root.gameObject.SetActive(wantVisible);
-                if (wantVisible) _arrive = 0f;
-            }
-            if (_arrive < 1f) _arrive = Mathf.MoveTowards(_arrive, 1f, Time.unscaledDeltaTime / 0.9f);
-            if (!wantVisible || p == null) return;
+            // Метки ездят между схемой и боковыми рейками В ОБЕ стороны: сходятся
+            // с краёв при выходе наружу и разъезжаются обратно при возвращении.
+            // Держим схему живой, пока идёт переход, иначе уезжать было бы нечему.
+            bool alive = wantVisible || mapT > 0.001f;
+            if (_root.gameObject.activeSelf != alive) _root.gameObject.SetActive(alive);
+            _arrive = mapT;
+            if (!alive || p == null) return;
 
             float dt = Time.unscaledDeltaTime;
             string interior = p.interiorType ?? "";
@@ -823,12 +824,61 @@ namespace LCBridgeOverlay
             UpdateElevator(dt);
             UpdateDropship(dt, p != null && !p.onMoon);
             UpdateLights(dt);
+            UpdateGloom(dt);
             UpdateDots(p);
             UpdateTraps(Gate.Traps ? p.traps : null);
             UpdateWeather(p, dt);
         }
 
         /// <summary>Лампы схемы повторяют настоящий свет в комплексе.</summary>
+        private Image _darkNoise, _lampGlow;
+        private float _gloom;
+
+        /// <summary>
+        /// Полумрак и свет. Вырубили щиток — поверх помещений и пещер ложится тёмный
+        /// шум, и разглядеть, что там творится, становится труднее. Горит свет — от
+        /// потолка вниз идёт мягкое свечение полукругом.
+        /// </summary>
+        private void UpdateGloom(float dt)
+        {
+            if (_darkNoise == null)
+            {
+                var go = new GameObject("Gloom", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+                var rt = (RectTransform)go.transform;
+                rt.SetParent(_art, false);
+                rt.anchorMin = rt.anchorMax = new Vector2(0f, 1f);
+                rt.pivot = new Vector2(0f, 1f);
+                rt.anchoredPosition = new Vector2(RoomLeft, -RoomTop);
+                rt.sizeDelta = new Vector2(RoomRight - RoomLeft, CaveBottom - RoomTop);
+                _darkNoise = go.GetComponent<Image>();
+                _darkNoise.sprite = SpriteBank.Noise();
+                _darkNoise.type = Image.Type.Tiled;
+                _darkNoise.raycastTarget = false;
+            }
+            if (_lampGlow == null)
+            {
+                var go = new GameObject("LampGlow", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+                var rt = (RectTransform)go.transform;
+                rt.SetParent(_art, false);
+                rt.anchorMin = rt.anchorMax = new Vector2(0f, 1f);
+                rt.pivot = new Vector2(0.5f, 1f);
+                rt.anchoredPosition = new Vector2((RoomLeft + RoomRight) * 0.5f, -(RoomTop + 14f));
+                rt.sizeDelta = new Vector2(RoomRight - RoomLeft - 20f, 74f);
+                _lampGlow = go.GetComponent<Image>();
+                _lampGlow.sprite = SpriteBank.Glow();
+                _lampGlow.raycastTarget = false;
+                rt.SetAsFirstSibling();
+            }
+
+            _gloom = Mathf.MoveTowards(_gloom, _lightsOn ? 0f : 1f, dt / 1.2f);
+            _darkNoise.color = new Color(0f, 0f, 0f, 0.62f * _gloom);
+            _darkNoise.enabled = _gloom > 0.01f;
+
+            float glow = (1f - _gloom) * (0.16f + 0.05f * Mathf.Sin(_lightPulse));
+            _lampGlow.color = new Color(1f, 0.85f, 0.35f, glow);
+            _lampGlow.enabled = glow > 0.01f;
+        }
+
         private void UpdateLights(float dt)
         {
             _lightsOn = FacilityLightsOn();
@@ -911,8 +961,12 @@ namespace LCBridgeOverlay
                     // существа (вырос, разозлился, с турелью) — это по-прежнему одно
                     // существо, и двух меток ему не полагается. Девиант отдельно:
                     // это действительно другая версия.
+                    // Разновидность — это девиант и версия с турелью: они и правда
+                    // другие существа. А «на потолке», «зол», «атакует», «вырос» —
+                    // это СОСТОЯНИЯ одного и того же, и второй метки им не полагается.
                     string key = (MobRailWidget.SpeciesKeyPublic(raw) ?? raw)
-                               + (raw.IndexOf("+Deviant", System.StringComparison.OrdinalIgnoreCase) >= 0 ? "#d" : "");
+                               + (raw.IndexOf("+Deviant", System.StringComparison.OrdinalIgnoreCase) >= 0 ? "#d" : "")
+                               + (raw.IndexOf("+Turret", System.StringComparison.OrdinalIgnoreCase) >= 0 ? "#t" : "");
                     int at = seen.IndexOf(key);
                     if (at >= 0)
                     {
@@ -1059,7 +1113,13 @@ namespace LCBridgeOverlay
                 if (ConfigSettings.ProximityFade.Value && dist >= 0f)
                     a2 = Mathf.Lerp(0.28f, 1f, Mathf.InverseLerp(34f, 6f, dist));
 
-                if (fog > 0f && Mathf.PerlinNoise(t * 14f, phase) > 0.72f) a2 *= 0.45f;
+                // Туман глушит метки так же, как темнота глушит комплекс: они не
+                // просто дёргаются, а становятся ощутимо хуже видны.
+                if (fog > 0f)
+                {
+                    a2 *= Mathf.Lerp(1f, 0.4f, fog);
+                    if (Mathf.PerlinNoise(t * 14f, phase) > 0.72f) a2 *= 0.45f;
+                }
 
                 var col = MobRailWidget.IconTint(S);
                 col.a = Mathf.MoveTowards(img.color.a, a2, dt * 4f);
@@ -1165,7 +1225,6 @@ namespace LCBridgeOverlay
         // ---- доставщик из магазина ----
         private readonly List<Image> _ship = new List<Image>();
         private Image _shipSprite;                 // если игрок положил свою картинку
-        private readonly List<Image> _flame = new List<Image>();
         private float _shipT = -1f;                // 0 садится … 1 улетел, -1 его нет
         private bool _shipWasHere;
 
@@ -1241,7 +1300,14 @@ namespace LCBridgeOverlay
                 _shipSprite.enabled = true;
                 // доставщик — часть постройки, а не угроза: красим его цветом темы,
                 // а не тем, каким помечены монстры
-                _shipSprite.color = MobRailWidget.TintedIconStylePublic() ? S.Frame : Color.white;
+                // закрашен целиком, а не одним контуром
+                if (MobRailWidget.TintedIconStylePublic())
+                {
+                    var full = SpriteBank.GetOutlineFilled("dropship", SpriteBank.FillLevels);
+                    if (full != null && _shipSprite.sprite != full) _shipSprite.sprite = full;
+                    _shipSprite.color = S.Frame;
+                }
+                else _shipSprite.color = Color.white;
                 foreach (var g in _ship) if (g != null) g.enabled = false;
             }
             else DrawShipLines(ShipX, y, col);
@@ -1252,7 +1318,7 @@ namespace LCBridgeOverlay
         private void Hide()
         {
             foreach (var g in _ship) if (g != null) g.enabled = false;
-            foreach (var g in _flame) if (g != null) g.enabled = false;
+            if (_flameImg != null) _flameImg.enabled = false;
             if (_shipSprite != null) _shipSprite.enabled = false;
         }
 
@@ -1271,7 +1337,7 @@ namespace LCBridgeOverlay
                     rt.SetParent(_art, false);
                     rt.anchorMin = rt.anchorMax = new Vector2(0f, 1f);
                     rt.pivot = new Vector2(0.5f, 1f);
-                    rt.sizeDelta = new Vector2(26f, 36f);
+                    rt.sizeDelta = new Vector2(52f, 72f);
                     _shipSprite = go.GetComponent<Image>();
                     _shipSprite.sprite = spr;
                     _shipSprite.preserveAspect = true;
@@ -1281,8 +1347,7 @@ namespace LCBridgeOverlay
                 else
                     for (int i = 0; i < 16; i++) _ship.Add(Line(0f, 0f, 1f, 1f, 2f, S.Frame));
             }
-            if (_flame.Count == 0)
-                for (int i = 0; i < 7; i++) _flame.Add(Line(0f, 0f, 1f, 1f, 2f, new Color(1f, 0.6f, 0.15f, 1f)));
+
         }
 
         /// <summary>
@@ -1329,30 +1394,38 @@ namespace LCBridgeOverlay
             for (int i = n; i < _ship.Count; i++) _ship[i].enabled = false;
         }
 
-        /// <summary>Пламя под соплами: несколько дрожащих языков.</summary>
+        /// <summary>
+        /// Одна большая свеча пламени под кораблём — вместо россыпи полосок, из
+        /// которых огонь не читался. Дышит по высоте и чуть качается.
+        /// </summary>
         private void DrawFlame(float x, float y, bool on)
         {
-            float t = Time.unscaledTime;
-            for (int i = 0; i < _flame.Count; i++)
+            if (_flameImg == null)
             {
-                var img = _flame[i];
-                if (img == null) continue;
-                if (!on) { img.enabled = false; continue; }
-
-                float fx = -12f + i * 4f;
-                float len = 10f + 9f * Mathf.PerlinNoise(t * 9f + i, 0f);
-                var rt = (RectTransform)img.transform;
-                var d = new Vector2(Mathf.Sin(t * 7f + i) * 2f, -len);
-                rt.anchoredPosition = new Vector2(x + fx, -(y + 2f));
-                rt.sizeDelta = new Vector2(len, 2.5f);
-                rt.localRotation = Quaternion.Euler(0f, 0f, Mathf.Atan2(d.y, d.x) * Mathf.Rad2Deg);
-                img.enabled = true;
-                // от белого у сопла к оранжевому на конце
-                img.color = Color.Lerp(new Color(1f, 0.95f, 0.6f, 0.95f),
-                                       new Color(1f, 0.45f, 0.1f, 0.5f),
-                                       Mathf.Abs(i - 3f) / 3f);
+                var go = new GameObject("Flame", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+                var frt = (RectTransform)go.transform;
+                frt.SetParent(_art, false);
+                frt.anchorMin = frt.anchorMax = new Vector2(0f, 1f);
+                frt.pivot = new Vector2(0.5f, 0f);      // растёт ВНИЗ от сопла
+                _flameImg = go.GetComponent<Image>();
+                _flameImg.sprite = SpriteBank.Flame();
+                _flameImg.raycastTarget = false;
             }
+
+            if (!on) { _flameImg.enabled = false; return; }
+
+            float t = Time.unscaledTime;
+            float len = 34f + 12f * Mathf.PerlinNoise(t * 6f, 0f);
+            float wide = 20f + 4f * Mathf.PerlinNoise(0f, t * 7f);
+            var rt = (RectTransform)_flameImg.transform;
+            rt.anchoredPosition = new Vector2(x, -(y + 1f));
+            rt.sizeDelta = new Vector2(wide, len);
+            rt.localRotation = Quaternion.Euler(0f, 0f, 180f + Mathf.Sin(t * 5f) * 3f);
+            _flameImg.enabled = true;
+            _flameImg.color = new Color(1f, 1f, 1f, 0.9f);
         }
+
+        private Image _flameImg;
 
 
         // Ловушки стоят в правом верхнем углу ЗДАНИЯ: это не обитатели уровня, им
@@ -1361,10 +1434,14 @@ namespace LCBridgeOverlay
 
         private void BuildTrapSlots()
         {
-            for (int i = 0; i < 6; i++)
+            // Ловушки раскиданы по ПОЛУ всего комплекса, а не сложены в углу:
+            // верхний этаж на схеме крошечный, и там они не помещались.
+            // Раскладка детерминированная — не прыгает от захода к заходу.
+            for (int i = 0; i < 8; i++)
             {
-                float x = TrapX + (i % 3) * TrapStep;
-                float y = TrapY + (i / 3) * TrapStep;
+                float f = (i * 0.618f) % 1f;                      // равномерно, но без сетки
+                float x = Mathf.Lerp(RoomLeft + 24f, RoomRight - 24f, f);
+                float y = RoomBottom - 18f - (i % 2) * 12f;       // у самого пола, через один чуть выше
                 var sl = Slot(x, y);
                 _trapSlots.Add(sl);
                 _trapDots.Add(MakeMark(sl, "Trap"));
@@ -1413,13 +1490,18 @@ namespace LCBridgeOverlay
                 }
 
                 string raw = shown[i];
-                var spr = SpriteBank.Get(seen[i]);
+                float dist = DistOf(raw);
+                // ловушки тоже закрашиваются с приближением
+                float nearT = dist >= 0f ? Mathf.InverseLerp(40f, 4f, dist) : 0f;
+                while (_trapNear.Count <= i) _trapNear.Add(0f);
+                _trapNear[i] = Mathf.MoveTowards(_trapNear[i], nearT, Time.unscaledDeltaTime / 0.7f);
+
+                var spr = TrapIconFilled(seen[i], _trapNear[i]);
                 if (spr != null && img.sprite != spr) img.sprite = spr;
 
-                float dist = DistOf(raw);
-                float sc = 1f;
+                float sc = 1.5f;   // в полтора раза крупнее монстров
                 if (ConfigSettings.ScaleMonstersByCount.Value)
-                    sc = Mathf.Min(1.6f, 1f + 0.16f * (CountOf(raw) - 1));
+                    sc *= Mathf.Min(1.6f, 1f + 0.16f * (CountOf(raw) - 1));
                 rt.localScale = new Vector3(sc, sc, 1f);
                 rt.anchoredPosition = Vector2.zero;
 
@@ -1431,6 +1513,21 @@ namespace LCBridgeOverlay
                 col.a = Mathf.MoveTowards(img.color.a, a, dt * 4f);
                 img.color = col;
             }
+        }
+
+        /// <summary>Иконка ловушки с нутрянкой по близости — как у монстров.</summary>
+        private static Sprite TrapIconFilled(string key, float near)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(key)) return null;
+                if (!MobRailWidget.TintedIconStylePublic()) return SpriteBank.Get(key);
+                float k = Mathf.Clamp01(near);
+                k = k * k * (3f - 2f * k);
+                int lvl = Mathf.RoundToInt(Mathf.Lerp(4f, SpriteBank.FillLevels, k));
+                return SpriteBank.GetOutlineFilled(key, lvl);
+            }
+            catch { return SpriteBank.Get(key); }
         }
 
         /// <summary>Дистанция из строки монстра ("@42"), или -1.</summary>
@@ -1519,6 +1616,7 @@ namespace LCBridgeOverlay
         // Границы зон на холсте — эффекты по ним ориентируются. Значения совпадают с
         // тем, что нарисовано; при своём макете правятся здесь же.
         private const float RoomTop = 158f, RoomBottom = 236f;
+        private const float RoomLeft = 30f, RoomRight = 318f;
         private const float BuildX1 = 192f, BuildX2 = 318f, BuildRoofY = 22f;
         private const float CaveTop = 250f, CaveBottom = 384f;
 

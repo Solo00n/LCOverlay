@@ -1,5 +1,16 @@
 # Changelog — LCBridgeOverlay
 
+## 1.14.0
+- **Marks travel both ways.** They slid in from the rails when you stepped outside, but on the way back they simply vanished; now the journey runs in reverse as well. Running in and out repeatedly could also leave the rails and the schematic on screen at once — the two are reconciled every frame rather than once per packet.
+- **The timer hides on the schematic and the eye moves to the centre**, sliding across as you enter and leave the ship.
+- **Traps sit along the floor of the complex**, scattered across its width rather than stacked in a corner where the top storey left no room, half again as large, and filling in as you approach — as creatures do.
+- **The dropship is filled in and twice the size**, and its exhaust is one steady candle of flame rather than a handful of stripes that never read as fire.
+- **Cut the power and the complex goes dark**: noise settles over the rooms and caves, and what is inside becomes harder to make out. Restore it and each lamp casts a soft half-circle of light beneath it.
+- **Fog dims the marks** as it dims the world outside, instead of only jittering them.
+- **A phase is not a species.** A grown maneater, a roused nutcracker, a larva on the ceiling — these are states of one creature and share its mark. Deviants and the turret variant are genuinely other creatures and keep their own.
+- **Notification mode dims the overlay rather than removing it.** Vanishing entirely made it unclear whether the mod was running at all; it now falls back to `IdleMinOpacity` and returns to full on news.
+- **The mineshaft lift actually travels** the height of the room, so its movement can be seen.
+
 ## 1.13.2
 - **One creature, one mark.** The schematic was grouping by picture rather than by creature, so a species with some of its number in another phase — a maneater grown, a hoarding bug roused — split into two marks that often looked the same. It groups by creature now, and the mark shows the phase of the nearest one. Deviants still stand apart, being a genuinely different version.
 - **Floodwater stops at the building** instead of running across it, and it climbs twice as high over the course of the day.

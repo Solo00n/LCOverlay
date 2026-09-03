@@ -341,6 +341,22 @@ namespace LCBridgeOverlay
             return 1f + c3 * xm * xm * xm + c1 * xm * xm;
         }
 
+        /// <summary>
+        /// Показать/спрятать боковые рейки. Зовётся каждый кадр из панели: со схемой
+        /// на улице они не нужны, а переключать это раз в пакет оказалось мало —
+        /// на быстрых перебежках корабль/улица успевали появиться обе картинки.
+        /// </summary>
+        public void SetRailsVisible(bool on)
+        {
+            if (_railsVisible == on) return;
+            _railsVisible = on;
+            if (_left != null) _left.gameObject.SetActive(on);
+            if (_right != null) _right.gameObject.SetActive(on);
+            if (_traps != null) _traps.gameObject.SetActive(on);
+        }
+
+        private bool _railsVisible = true;
+
         public void SetMobs(string[] outside, string[] inside)
         {
             // дистанции обновляем ВСЕГДА (для живой прозрачности), не пересобирая рейку.

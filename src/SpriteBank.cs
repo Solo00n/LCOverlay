@@ -230,6 +230,95 @@ namespace LCBridgeOverlay
             catch { }
         }
 
+        private static Sprite _noise, _glow, _flame;
+
+        /// <summary>
+        /// Тёмный шум. Накрываем им внутренности комплекса, когда вырублен свет:
+        /// разглядеть, что там творится, становится труднее — как и должно быть.
+        /// </summary>
+        public static Sprite Noise()
+        {
+            if (_noise != null) return _noise;
+            const int N = 96;
+            var tex = new Texture2D(N, N, TextureFormat.RGBA32, false)
+            {
+                filterMode = FilterMode.Bilinear,
+                wrapMode = TextureWrapMode.Repeat,
+            };
+            var px = new Color32[N * N];
+            var rnd = new System.Random(20250903);
+            for (int i = 0; i < px.Length; i++)
+            {
+                byte v = (byte)rnd.Next(0, 60);
+                byte a = (byte)rnd.Next(90, 220);
+                px[i] = new Color32(v, v, v, a);
+            }
+            tex.SetPixels32(px);
+            tex.Apply(false, false);
+            _noise = Sprite.Create(tex, new Rect(0, 0, N, N), new Vector2(0.5f, 0.5f), 100f, 0,
+                                   SpriteMeshType.FullRect);
+            return _noise;
+        }
+
+        /// <summary>Мягкое свечение полукругом вниз — свет от лампы.</summary>
+        public static Sprite Glow()
+        {
+            if (_glow != null) return _glow;
+            const int N = 64;
+            var tex = new Texture2D(N, N, TextureFormat.RGBA32, false)
+            {
+                filterMode = FilterMode.Bilinear,
+                wrapMode = TextureWrapMode.Clamp,
+            };
+            var px = new Color32[N * N];
+            for (int y = 0; y < N; y++)
+                for (int x = 0; x < N; x++)
+                {
+                    // центр наверху: свет падает ВНИЗ полукругом
+                    float dx = (x - N * 0.5f) / (N * 0.5f);
+                    float dy = y / (float)N;            // 0 внизу … 1 наверху
+                    float d = Mathf.Sqrt(dx * dx + (1f - dy) * (1f - dy));
+                    float a = Mathf.Clamp01(1f - d);
+                    a = a * a;
+                    px[y * N + x] = new Color32(255, 255, 255, (byte)(a * 255f));
+                }
+            tex.SetPixels32(px);
+            tex.Apply(false, false);
+            _glow = Sprite.Create(tex, new Rect(0, 0, N, N), new Vector2(0.5f, 1f), 100f, 0,
+                                  SpriteMeshType.FullRect);
+            return _glow;
+        }
+
+        /// <summary>Язык пламени: широкий у сопла, острый книзу.</summary>
+        public static Sprite Flame()
+        {
+            if (_flame != null) return _flame;
+            const int W2 = 48, H2 = 96;
+            var tex = new Texture2D(W2, H2, TextureFormat.RGBA32, false)
+            {
+                filterMode = FilterMode.Bilinear,
+                wrapMode = TextureWrapMode.Clamp,
+            };
+            var px = new Color32[W2 * H2];
+            for (int y = 0; y < H2; y++)
+                for (int x = 0; x < W2; x++)
+                {
+                    float ny = y / (float)(H2 - 1);          // 0 низ (остриё) … 1 верх (сопло)
+                    float half = Mathf.Lerp(0.06f, 0.5f, Mathf.Pow(ny, 0.55f));
+                    float dx = Mathf.Abs(x / (float)(W2 - 1) - 0.5f);
+                    float k = Mathf.Clamp01(1f - dx / Mathf.Max(0.001f, half));
+                    k *= k;
+                    // ядро белое, края оранжевые
+                    var col = Color.Lerp(new Color(1f, 0.42f, 0.08f), new Color(1f, 0.95f, 0.75f), k * ny);
+                    px[y * W2 + x] = new Color(col.r, col.g, col.b, k * Mathf.Lerp(0.55f, 1f, ny));
+                }
+            tex.SetPixels32(px);
+            tex.Apply(false, false);
+            _flame = Sprite.Create(tex, new Rect(0, 0, W2, H2), new Vector2(0.5f, 1f), 100f, 0,
+                                   SpriteMeshType.FullRect);
+            return _flame;
+        }
+
         // ================= стили иконок =================
         // Все три выводятся из исходной картинки. Так набор не надо рисовать трижды,
         // он не расходится между стилями и автоматически покрывает новых монстров.
