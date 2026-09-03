@@ -49,8 +49,15 @@ namespace LCBridgeOverlay
             /// </summary>
             public Rect Bounds;
 
-            /// <summary>Центры отдельных пятен — по ним расставляется свет ламп.</summary>
+            /// <summary>Центры отдельных пятен слоя — по ним тянутся тросы.</summary>
             public List<Vector2> Blobs = new List<Vector2>();
+
+            /// <summary>
+            /// Центры ЖЁЛТЫХ пятен. Лампу узнаём по цвету, а не по имени файла:
+            /// совмещённый макет приходит одной картинкой, и отдельного слоя ламп
+            /// в нём нет — а свет под ними всё равно должен быть.
+            /// </summary>
+            public List<Vector2> LampBlobs = new List<Vector2>();
         }
 
         public static string Dir
@@ -164,44 +171,59 @@ namespace LCBridgeOverlay
                 layer.Bounds = new Rect(x0 / (float)w, 1f - (y1 + 1) / (float)h,
                                         (x1 - x0 + 1) / (float)w, (y1 - y0 + 1) / (float)h);
 
-                if (!layer.IsLamp && !layer.IsCable) return;
-
                 // Пятна ищем по огрублённой сетке: лампа — это несколько пикселей,
                 // и точность до клетки здесь более чем достаточна.
                 const int Cell = 3;
                 int gw = (w + Cell - 1) / Cell, gh = (h + Cell - 1) / Cell;
-                var full = new bool[gw * gh];
-                for (int y = 0; y < h; y++)
-                    for (int x = 0; x < w; x++)
-                        if (px[y * w + x].a > 8) full[(y / Cell) * gw + (x / Cell)] = true;
 
-                var stack = new List<int>();
-                for (int i = 0; i < full.Length && layer.Blobs.Count < 32; i++)
+                Action<Func<Color32, bool>, List<Vector2>> find = (fits, into) =>
                 {
-                    if (!full[i]) continue;
-                    stack.Clear(); stack.Add(i); full[i] = false;
-                    long sx = 0, sy = 0; int cnt = 0;
-                    while (stack.Count > 0)
+                    var full = new bool[gw * gh];
+                    bool anyCell = false;
+                    for (int y = 0; y < h; y++)
+                        for (int x = 0; x < w; x++)
+                        {
+                            var c = px[y * w + x];
+                            if (c.a <= 8 || !fits(c)) continue;
+                            full[(y / Cell) * gw + (x / Cell)] = true;
+                            anyCell = true;
+                        }
+                    if (!anyCell) return;
+
+                    var stack = new List<int>();
+                    for (int i = 0; i < full.Length && into.Count < 32; i++)
                     {
-                        int c = stack[stack.Count - 1]; stack.RemoveAt(stack.Count - 1);
-                        int cx = c % gw, cy = c / gw;
-                        sx += cx; sy += cy; cnt++;
-                        for (int dy = -1; dy <= 1; dy++)
-                            for (int dx = -1; dx <= 1; dx++)
-                            {
-                                int nx = cx + dx, ny = cy + dy;
-                                if (nx < 0 || ny < 0 || nx >= gw || ny >= gh) continue;
-                                int k = ny * gw + nx;
-                                if (!full[k]) continue;
-                                full[k] = false; stack.Add(k);
-                            }
+                        if (!full[i]) continue;
+                        stack.Clear(); stack.Add(i); full[i] = false;
+                        long sx = 0, sy = 0; int cnt = 0;
+                        while (stack.Count > 0)
+                        {
+                            int c = stack[stack.Count - 1]; stack.RemoveAt(stack.Count - 1);
+                            int cx = c % gw, cy = c / gw;
+                            sx += cx; sy += cy; cnt++;
+                            for (int dy = -1; dy <= 1; dy++)
+                                for (int dx = -1; dx <= 1; dx++)
+                                {
+                                    int nx = cx + dx, ny = cy + dy;
+                                    if (nx < 0 || ny < 0 || nx >= gw || ny >= gh) continue;
+                                    int k = ny * gw + nx;
+                                    if (!full[k]) continue;
+                                    full[k] = false; stack.Add(k);
+                                }
+                        }
+                        if (cnt < 2) continue;               // одинокая точка — не лампа
+                        into.Add(new Vector2((sx / (float)cnt + 0.5f) * Cell / w,
+                                             1f - (sy / (float)cnt + 0.5f) * Cell / h));
                     }
-                    if (cnt < 2) continue;               // одинокая точка — не лампа
-                    float bx = (sx / (float)cnt + 0.5f) * Cell / w;
-                    float by = 1f - (sy / (float)cnt + 0.5f) * Cell / h;
-                    layer.Blobs.Add(new Vector2(bx, by));
-                }
-                Plugin.Log?.LogInfo($"[map] слой {layer.Name}: пятен {layer.Blobs.Count}, свой цвет {layer.HasColor}");
+                };
+
+                // жёлтое — это лампа, где бы она ни лежала
+                find(c => c.r > 150 && c.g > 120 && c.r - c.b > 80, layer.LampBlobs);
+                // а по всем непрозрачным пятнам слоя тросов видно, где каждый трос
+                if (layer.IsCable) find(c => true, layer.Blobs);
+
+                Plugin.Log?.LogInfo($"[map] слой {layer.Name}: ламп {layer.LampBlobs.Count}, " +
+                                    $"пятен {layer.Blobs.Count}, свой цвет {layer.HasColor}");
             }
             catch (Exception e) { Plugin.Log?.LogWarning($"[map] слой не обмерен: {e.Message}"); }
         }

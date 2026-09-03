@@ -1,5 +1,9 @@
 # Changelog — LCBridgeOverlay
 
+## 1.15.5
+- **A lamp is recognised by its colour, not by the name of its file.** A whole schematic can now be brought as one image, and the light still pools under every yellow mark in it. Only a layer of its own still breathes with the breaker — blinking the entire picture on account of three lamps would not do.
+- The bundled sample layers no longer ride inside the DLL; they belong in the player's config folder.
+
 ## 1.15.4
 - **A layer is only painted where it isn't painted already.** Every layer was multiplied by the theme colour, so a lift car, a lamp or a cable drawn in its own colour was painted a second time. The theme now reaches only the white and grey linework, brightness preserved as a multiplier; anything the artist has already coloured passes through as drawn. A whole schematic can therefore be brought as a single image with its coloured parts baked in.
 - **Lamps drawn in colour breathe by brightness alone** rather than being tinted yellow over yellow.

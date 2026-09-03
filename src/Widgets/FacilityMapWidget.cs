@@ -523,12 +523,17 @@ namespace LCBridgeOverlay
                 img.sprite = MapImages.Tinted(l, S.Frame) ?? l.Sprite;
                 img.color = l.IsCave ? new Color(1f, 1f, 1f, 0.9f) : Color.white;
 
+                // Свет ставим под КАЖДОЙ жёлтой отметиной, на каком бы слое она ни
+                // была: совмещённый макет приходит одной картинкой, и отдельного
+                // слоя ламп в нём нет.
+                foreach (var b in l.LampBlobs) AddLampGlow(b.x * W, b.y * H);
+
+                // а дышать яркостью может только отдельный слой: мигать всей
+                // картинкой из-за трёх ламп никуда не годится
                 if (l.IsLamp)
                 {
                     _lampImgs.Add(img);
                     _lampOwnColor = l.HasColor;
-                    // под каждой нарисованной лампой — своё пятно света
-                    foreach (var b in l.Blobs) AddLampGlow(b.x * W, b.y * H);
                 }
 
                 if (l.IsElevator)

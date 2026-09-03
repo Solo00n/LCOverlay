@@ -5,7 +5,7 @@
     <TargetFramework>netstandard2.1</TargetFramework>
     <AssemblyName>LCBridgeOverlay</AssemblyName>
     <Product>LCBridgeOverlay</Product>
-    <Version>1.15.4</Version>
+    <Version>1.15.5</Version>
     <LangVersion>latest</LangVersion>
     <Nullable>disable</Nullable>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
@@ -15,7 +15,9 @@
 
   <!-- РРєРѕРЅРєРё РјРѕРЅСЃС‚СЂРѕРІ/Р»РѕРІСѓС€РµРє вЂ” РІСЃС‚СЂР°РёРІР°СЋС‚СЃСЏ РїСЂСЏРјРѕ РІ DLL -->
   <ItemGroup>
-    <EmbeddedResource Include="res/**/*.png" />
+    <!-- В DLL зашиваем только иконки. res/map — это образец слоёв схемы, он
+         живёт в конфиге игрока и внутри сборки ему делать нечего. -->
+    <EmbeddedResource Include="res/**/*.png" Exclude="res/map/**" />
   </ItemGroup>
 
   <!-- РЎСЃС‹Р»РєРё РЅР° BepInEx Рё РёРіСЂРѕРІС‹Рµ DLL РёР· NuGet (РєР°Рє Сѓ LCBridge). -->
