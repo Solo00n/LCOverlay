@@ -260,40 +260,103 @@ namespace LCBridgeOverlay
             return _noise;
         }
 
-        /// <summary>Мягкое свечение полукругом вниз — свет от лампы.</summary>
+        /// <summary>
+        /// Свет лампы. Пятно ОБНИМАЕТ лампу со всех сторон и заметно сильнее
+        /// стекает вниз, чем поднимается вверх, — как и настоящий подвесной
+        /// светильник.
+        ///
+        /// Прежний вариант обрывался ровно по полукругу, и граница резала глаз.
+        /// Здесь спад высокой степени: почти вся площадь еле светится, край
+        /// уходит в ноль незаметно. Плюс еле уловимая рябь по прозрачности —
+        /// без неё редкие уровни альфы складывались в кольца.
+        /// </summary>
         public static Sprite Glow()
         {
             if (_glow != null) return _glow;
-            const int N = 64;
+            const int N = 128;
             var tex = new Texture2D(N, N, TextureFormat.RGBA32, false)
             {
                 filterMode = FilterMode.Bilinear,
                 wrapMode = TextureWrapMode.Clamp,
             };
             var px = new Color32[N * N];
+            var rnd = new System.Random(4242);
             for (int y = 0; y < N; y++)
                 for (int x = 0; x < N; x++)
                 {
-                    // центр наверху: свет падает ВНИЗ полукругом
-                    float dx = (x - N * 0.5f) / (N * 0.5f);
-                    float dy = y / (float)N;            // 0 внизу … 1 наверху
-                    float d = Mathf.Sqrt(dx * dx + (1f - dy) * (1f - dy));
-                    float a = Mathf.Clamp01(1f - d);
-                    a = a * a;
-                    px[y * N + x] = new Color32(255, 255, 255, (byte)(a * 255f));
+                    float dx = (x / (float)(N - 1) - 0.5f) * 2f;
+                    float dy = (y / (float)(N - 1) - 0.5f) * 2f;   // +1 верх, -1 низ
+                    // кверху свет гаснет вдвое быстрее, чем книзу
+                    float sy = dy > 0f ? dy / 0.5f : dy / 1.05f;
+                    float d = Mathf.Sqrt(dx * dx + sy * sy);
+                    float k = Mathf.Clamp01(1f - d);
+                    float a2 = Mathf.Pow(k, 2.6f);
+                    a2 += ((float)rnd.NextDouble() - 0.5f) * 0.006f;  // рябь против колец
+                    px[y * N + x] = new Color32(255, 255, 255,
+                                                (byte)(Mathf.Clamp01(a2) * 255f));
                 }
             tex.SetPixels32(px);
             tex.Apply(false, false);
-            _glow = Sprite.Create(tex, new Rect(0, 0, N, N), new Vector2(0.5f, 1f), 100f, 0,
+            _glow = Sprite.Create(tex, new Rect(0, 0, N, N), new Vector2(0.5f, 0.5f), 100f, 0,
                                   SpriteMeshType.FullRect);
             return _glow;
         }
 
-        /// <summary>Язык пламени: широкий у сопла, острый книзу.</summary>
+        /// <summary>
+        /// Полотно полумрака: книзу глухое, кверху сходит на нет. Линия схода
+        /// может идти НАКЛОННО (slope — на сколько долей высоты она опускается
+        /// от левого края к правому), чтобы лечь по рельефу схемы.
+        ///
+        /// Зерно замешано прямо в полотно: отдельной картинкой шума его было бы
+        /// не помножить на прозрачность средствами обычного UI.
+        /// </summary>
+        public static Sprite GloomGrad(float slope)
+        {
+            int key = Mathf.RoundToInt(slope * 50f);
+            Sprite cached;
+            if (_gloomGrads.TryGetValue(key, out cached) && cached != null) return cached;
+
+            const int Wd = 192, Ht = 256;
+            var tex = new Texture2D(Wd, Ht, TextureFormat.RGBA32, false)
+            {
+                filterMode = FilterMode.Bilinear,
+                wrapMode = TextureWrapMode.Clamp,
+            };
+            var px = new Color32[Wd * Ht];
+            var rnd = new System.Random(20260101);
+            float sl = key / 50f;
+            for (int y = 0; y < Ht; y++)
+                for (int x = 0; x < Wd; x++)
+                {
+                    float u = x / (float)(Wd - 1);
+                    float v = 1f - y / (float)(Ht - 1);           // 0 вверху … 1 внизу
+                    float vv = v - (u - 0.5f) * sl;               // наклон линии схода
+                    // растянутый плавный набор плотности: резкой кромки нет нигде
+                    float k = Mathf.Clamp01(vv / 0.45f);
+                    k = k * k * (3f - 2f * k);
+                    float a2 = k * (0.78f + 0.22f * (float)rnd.NextDouble());
+                    px[y * Wd + x] = new Color32(0, 0, 0, (byte)(Mathf.Clamp01(a2) * 255f));
+                }
+            tex.SetPixels32(px);
+            tex.Apply(false, false);
+            var spr = Sprite.Create(tex, new Rect(0, 0, Wd, Ht), new Vector2(0.5f, 1f), 100f, 0,
+                                    SpriteMeshType.FullRect);
+            _gloomGrads[key] = spr;
+            return spr;
+        }
+
+        private static readonly System.Collections.Generic.Dictionary<int, Sprite> _gloomGrads =
+            new System.Collections.Generic.Dictionary<int, Sprite>();
+
+        /// <summary>
+        /// Язык пламени горящей нефти: толстый, с округлым концом и неровными
+        /// боками, а не ровный клин турбины. Тёмный у кромок и по низу — копоть,
+        /// светлый у корня.
+        /// </summary>
         public static Sprite Flame()
         {
             if (_flame != null) return _flame;
-            const int W2 = 48, H2 = 96;
+            const int W2 = 64, H2 = 96;
             var tex = new Texture2D(W2, H2, TextureFormat.RGBA32, false)
             {
                 filterMode = FilterMode.Bilinear,
@@ -303,14 +366,26 @@ namespace LCBridgeOverlay
             for (int y = 0; y < H2; y++)
                 for (int x = 0; x < W2; x++)
                 {
-                    float ny = y / (float)(H2 - 1);          // 0 низ (остриё) … 1 верх (сопло)
-                    float half = Mathf.Lerp(0.06f, 0.5f, Mathf.Pow(ny, 0.55f));
+                    float ny = y / (float)(H2 - 1);          // 0 низ (конец) … 1 верх (корень)
+                    // округлый конец снизу и раздутое пузом тело — форма капли,
+                    // перевёрнутой вниз
+                    float tip = Mathf.Sqrt(Mathf.Clamp01(ny / 0.24f));
+                    float belly = 0.58f + 0.42f * Mathf.Sin(Mathf.Clamp01(ny) * Mathf.PI * 0.92f);
+                    float lobes = 1f + 0.09f * Mathf.Sin(ny * 11f);   // неровные бока
+                    float half = 0.5f * tip * belly * lobes;
+
                     float dx = Mathf.Abs(x / (float)(W2 - 1) - 0.5f);
                     float k = Mathf.Clamp01(1f - dx / Mathf.Max(0.001f, half));
-                    k *= k;
-                    // ядро белое, края оранжевые
-                    var col = Color.Lerp(new Color(1f, 0.42f, 0.08f), new Color(1f, 0.95f, 0.75f), k * ny);
-                    px[y * W2 + x] = new Color(col.r, col.g, col.b, k * Mathf.Lerp(0.55f, 1f, ny));
+                    k = k * k * (3f - 2f * k);
+
+                    // копоть по краям и у конца, жар у корня
+                    var soot = new Color(0.22f, 0.05f, 0.02f);
+                    var red = new Color(0.90f, 0.20f, 0.03f);
+                    var hot = new Color(1f, 0.78f, 0.30f);
+                    var col = Color.Lerp(soot, red, Mathf.Clamp01(ny * 1.5f));
+                    col = Color.Lerp(col, hot, Mathf.Clamp01(k * ny * 1.3f));
+                    px[y * W2 + x] = new Color(col.r, col.g, col.b,
+                                               Mathf.Pow(k, 0.75f) * Mathf.Lerp(0.5f, 1f, ny));
                 }
             tex.SetPixels32(px);
             tex.Apply(false, false);

@@ -1,5 +1,13 @@
 # Changelog — LCBridgeOverlay
 
+## 1.15.0
+- **The dropship comes in from the top right along a proper arc** and takes eight seconds to do it: six on the curve, a seventh hanging just above the pad on its jets, and the eighth setting down. It lands a little below the ground line, so its feet are under it rather than resting on top.
+- **The exhaust is burning oil, not a turbine.** Five thick tongues, each writhing to its own noise, sooty at the edges and hot at the root. Near the ground they shorten, thicken and splay outward, spreading across the surface.
+- **The dark is one sheet across the whole lower schematic** — solid at the bottom, fading away around the lift passage — instead of a black rectangle drawn to the walls of the complex, which read as exactly that. Its fading edge can be slanted to follow the terrain: `gloom <height> [slant]` in `map.txt`.
+- **Every lamp on the drawing gets its own pool of light.** The layer's lamps are found automatically, and the light wraps around each one and pools beneath it. The falloff is far softer and carries a trace of dither, so the old visible rim of the half-circle is gone.
+- **The lift copies the real one.** Its position is read from the car itself as it travels between the shaft's top and bottom points, rather than from a mere at-the-bottom flag, so the overlay moves with it. It starts the day at the top, as the game's does.
+- **Cables are a layer of their own** (`*cable*` in the filename) and are drawn only above the car's roof — descending pays out more of them. The lift layer is measured from the drawing, so no coordinates need typing; `elev <travel>` in `map.txt` sets how far it runs.
+
 ## 1.14.2
 - **The dropship's exhaust burns outside the hull.** The ship hung from its top edge while the flame was drawn from the point it was anchored by, some forty pixels above its feet, so the fire burned inside the craft. It now stands on its base — the point it lands on — and the flame falls away beneath it. The flame itself was also upside down, its nozzle at the far end and its point against the hull.
 - **It comes in from space.** The descent is an arc from up and to the right rather than a drop down a plumb line, the craft leans into its own travel, sways as it comes, and grows as it nears the ground instead of arriving at full size.

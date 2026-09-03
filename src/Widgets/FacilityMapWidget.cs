@@ -238,7 +238,9 @@ namespace LCBridgeOverlay
         private void Build(string interior)
         {
             for (int i = _art.childCount - 1; i >= 0; i--) Destroy(_art.GetChild(i).gameObject);
-            _lampImgs.Clear(); _weatherBits.Clear();
+            _lampImgs.Clear(); _weatherBits.Clear(); _lampGlows.Clear();
+            _darkNoise = null; _gloomTop = float.NaN;
+            _cableImg = null; _elevCarTop = 0f; _elevPos = 0f;
             _outSlots.Clear(); _inSlots.Clear(); _outDots.Clear(); _inDots.Clear();
             _outFill.Clear(); _inFill.Clear();
             _trapSlots.Clear(); _trapDots.Clear();
@@ -510,20 +512,41 @@ namespace LCBridgeOverlay
                 img.raycastTarget = false;
                 img.type = Image.Type.Simple;
 
-                if (l.IsLamp) { img.color = Color.white; _lampImgs.Add(img); }
+                if (l.IsLamp)
+                {
+                    img.color = Color.white;
+                    _lampImgs.Add(img);
+                    // под каждой нарисованной лампой — своё пятно света
+                    foreach (var b in l.Blobs) AddLampGlow(b.x * W, b.y * H);
+                }
                 // шахту красим в тему, а не в красный: на схеме она часть постройки
                 else if (l.IsCave) img.color = OverlayStyle.WithA(S.Frame, 0.9f);
                 else img.color = S.Frame;
 
                 if (l.IsElevator)
                 {
-                    // слой лифта ездит целиком: рисуй кабину в верхнем положении,
-                    // а мод сдвинет её вниз вместе с настоящей
+                    // Слой лифта ездит целиком: кабину рисуют в ВЕРХНЕМ положении —
+                    // там она и стоит в начале дня, — а мод возит её вслед за
+                    // настоящей. Куда именно, он смотрит по самому рисунку.
                     _elevCar = rt;
                     _elevTop = 0f;
-                    // слой лифта уезжает вниз почти на всю высоту комнаты — иначе
-                    // ход в 30 пикселей было не заметить
-                    _elevBottom = (RoomBottom - RoomTop) - 30f;
+                    _elevCarTop = l.Bounds.yMin * H;
+                    float carBottom = l.Bounds.yMax * H;
+                    _elevBottom = _elevTravel > 0f ? _elevTravel
+                                                   : Mathf.Max(20f, (H - 24f) - carBottom);
+                    Plugin.Log?.LogInfo($"[map] лифт: потолок кабины {_elevCarTop:0}, ход {_elevBottom:0}");
+                }
+                else if (l.IsCable)
+                {
+                    // Тросы показываем ровно до потолка кабины: ниже их закрывает
+                    // она сама, а по мере спуска открывается всё больше троса.
+                    // Обрезаем заливкой, а не маской: маска не переживает наклон,
+                    // под которым стоит вся схема.
+                    _cableImg = img;
+                    img.type = Image.Type.Filled;
+                    img.fillMethod = Image.FillMethod.Vertical;
+                    img.fillOrigin = (int)Image.OriginVertical.Top;
+                    img.fillAmount = 1f;
                 }
             }
         }
@@ -535,6 +558,21 @@ namespace LCBridgeOverlay
             foreach (var c in lay.Cmds)
             {
                 var n = c.N;
+                if (c.Op == "gloom" && n.Length >= 1)
+                {
+                    // gloom <высота схода> [<наклон кромки в пикселях на всю ширину>]
+                    _gloomTop = n[0];
+                    _gloomSlope = n.Length >= 2 ? n[1] : 0f;
+                    continue;
+                }
+                if (c.Op == "elev" && n.Length == 1)
+                {
+                    // сколько кабина проезжает вниз; читается уже после картинок,
+                    // поэтому ход правим прямо здесь
+                    _elevTravel = n[0];
+                    if (_elevCar != null) _elevBottom = n[0];
+                    continue;
+                }
                 if (c.Op == "slotout" && n.Length >= 2)
                 {
                     // отрезок можно задать явно (4 числа), иначе монстр ходит вокруг точки
@@ -742,6 +780,8 @@ namespace LCBridgeOverlay
         private RectTransform _elevCar;
         private Image _elevCable1, _elevCable2;
         private float _elevTop, _elevBottom, _elevPos, _elevCableTop;
+        private float _elevCarTop, _elevTravel;   // потолок кабины и заданный ход
+        private Image _cableImg;
 
         /// <summary>Кабина лифта: рамка с диагональной штриховкой.</summary>
         private RectTransform MakeCar(float x, float y, float w, float h, Color col, Color scan)
@@ -780,18 +820,64 @@ namespace LCBridgeOverlay
             }
             catch { }
 
-            float target = atBottom ? 1f : 0f;
-            _elevPos = Mathf.MoveTowards(_elevPos, target, dt / 3f);   // ход примерно как у настоящего
+            // Настоящий лифт едет плавно, и оверлей повторяет его положение один
+            // в один: доля пути считается по самой кабине между её верхней и
+            // нижней точками. Если до них не дотянуться — довольствуемся флажком
+            // «внизу» и едем к нему сами.
+            float frac = ElevatorFraction(_elevCtl);
+            if (frac >= 0f) _elevPos = frac;
+            else _elevPos = Mathf.MoveTowards(_elevPos, atBottom ? 1f : 0f, dt / 3f);
+
             float y = Mathf.Lerp(_elevTop, _elevBottom, _elevPos);
             _elevCar.anchoredPosition = new Vector2(_elevCar.anchoredPosition.x, -y);
 
-            // тросы тянутся за кабиной от самого пола здания
+            // трос виден ровно до потолка кабины — ниже его закрывает она сама
+            if (_cableImg != null)
+                _cableImg.fillAmount = Mathf.Clamp01((_elevCarTop + y) / Mathf.Max(1f, H));
+
+            // нарисованные линиями тросы тянутся за кабиной от пола здания
             foreach (var c in new[] { _elevCable1, _elevCable2 })
             {
                 if (c == null) continue;
                 var rt = (RectTransform)c.transform;
                 rt.sizeDelta = new Vector2(Mathf.Max(1f, y - _elevCableTop), rt.sizeDelta.y);
             }
+        }
+
+        private static System.Reflection.FieldInfo _fElevTr, _fElevTop, _fElevBot;
+
+        /// <summary>
+        /// Доля пути настоящего лифта: 0 наверху, 1 внизу, -1 если не выяснить.
+        ///
+        /// Поля читаем отражением: публикованная сборка для сборки мода не значит,
+        /// что к ним пустят в игре.
+        /// </summary>
+        private static float ElevatorFraction(MineshaftElevatorController c)
+        {
+            try
+            {
+                if (c == null) return -1f;
+                if (_fElevTr == null)
+                {
+                    var T = typeof(MineshaftElevatorController);
+                    const System.Reflection.BindingFlags B =
+                        System.Reflection.BindingFlags.Instance |
+                        System.Reflection.BindingFlags.Public |
+                        System.Reflection.BindingFlags.NonPublic;
+                    _fElevTr = T.GetField("elevatorTransform", B);
+                    _fElevTop = T.GetField("elevatorTopPoint", B);
+                    _fElevBot = T.GetField("elevatorBottomPoint", B);
+                }
+                var tr = _fElevTr != null ? _fElevTr.GetValue(c) as Transform : null;
+                var tp = _fElevTop != null ? _fElevTop.GetValue(c) as Transform : null;
+                var bp = _fElevBot != null ? _fElevBot.GetValue(c) as Transform : null;
+                if (tr == null || tp == null || bp == null) return -1f;
+
+                float top = tp.position.y, bot = bp.position.y;
+                if (Mathf.Abs(top - bot) < 0.01f) return -1f;
+                return Mathf.Clamp01((top - tr.position.y) / (top - bot));
+            }
+            catch { return -1f; }
         }
 
         private static MineshaftElevatorController _elevCtl;
@@ -831,16 +917,30 @@ namespace LCBridgeOverlay
         }
 
         /// <summary>Лампы схемы повторяют настоящий свет в комплексе.</summary>
-        private Image _darkNoise, _lampGlow;
+        private Image _darkNoise;
+        private readonly List<Image> _lampGlows = new List<Image>();
         private float _gloom;
 
+        // Где полумрак сходит на нет и под каким наклоном лежит его кромка. По
+        // умолчанию — по переходу лифта: выше него комплекс освещён и так.
+        private float _gloomTop = float.NaN, _gloomSlope;
+
         /// <summary>
-        /// Полумрак и свет. Вырубили щиток — поверх помещений и пещер ложится тёмный
-        /// шум, и разглядеть, что там творится, становится труднее. Горит свет — от
-        /// потолка вниз идёт мягкое свечение полукругом.
+        /// Полумрак и свет.
+        ///
+        /// Тьма — это ОДНО полотно на весь низ схемы: книзу глухое, кверху сходит
+        /// на нет где-то на переходе лифта. Прежний прямоугольник по стенам
+        /// комплекса читался в игре как чёрный квадрат посреди картинки; у полотна
+        /// же боковые и нижняя кромки совпадают с краями схемы, а верхней попросту
+        /// нет. Кромку схода можно наклонить, чтобы она легла по рельефу.
+        ///
+        /// Свет — по пятну на КАЖДУЮ лампу с рисунка, а не одна дуга на комнату.
         /// </summary>
         private void UpdateGloom(float dt)
         {
+            if (float.IsNaN(_gloomTop))
+                _gloomTop = _elevCar != null ? Mathf.Max(0f, _elevCarTop - 24f) : RoomTop;
+
             if (_darkNoise == null)
             {
                 var go = new GameObject("Gloom", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
@@ -848,36 +948,47 @@ namespace LCBridgeOverlay
                 rt.SetParent(_art, false);
                 rt.anchorMin = rt.anchorMax = new Vector2(0f, 1f);
                 rt.pivot = new Vector2(0f, 1f);
-                rt.anchoredPosition = new Vector2(RoomLeft, -RoomTop);
-                rt.sizeDelta = new Vector2(RoomRight - RoomLeft, CaveBottom - RoomTop);
+                rt.anchoredPosition = new Vector2(0f, -_gloomTop);
+                rt.sizeDelta = new Vector2(W, Mathf.Max(20f, H - _gloomTop));
                 _darkNoise = go.GetComponent<Image>();
-                _darkNoise.sprite = SpriteBank.Noise();
-                _darkNoise.type = Image.Type.Tiled;
+                // наклон уводим в САМО полотно: поверни его — и вылезут косые углы
+                float span = Mathf.Max(20f, H - _gloomTop);
+                _darkNoise.sprite = SpriteBank.GloomGrad(_gloomSlope * W / span);
                 _darkNoise.raycastTarget = false;
-            }
-            if (_lampGlow == null)
-            {
-                var go = new GameObject("LampGlow", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
-                var rt = (RectTransform)go.transform;
-                rt.SetParent(_art, false);
-                rt.anchorMin = rt.anchorMax = new Vector2(0f, 1f);
-                rt.pivot = new Vector2(0.5f, 1f);
-                rt.anchoredPosition = new Vector2((RoomLeft + RoomRight) * 0.5f, -(RoomTop + 14f));
-                rt.sizeDelta = new Vector2(RoomRight - RoomLeft - 20f, 74f);
-                _lampGlow = go.GetComponent<Image>();
-                _lampGlow.sprite = SpriteBank.Glow();
-                _lampGlow.raycastTarget = false;
-                rt.SetAsFirstSibling();
             }
 
             _gloom = Mathf.MoveTowards(_gloom, _lightsOn ? 0f : 1f, dt / 1.2f);
-            _darkNoise.color = new Color(0f, 0f, 0f, 0.62f * _gloom);
+            _darkNoise.color = new Color(1f, 1f, 1f, 0.72f * _gloom);
             _darkNoise.enabled = _gloom > 0.01f;
 
-            float glow = (1f - _gloom) * (0.16f + 0.05f * Mathf.Sin(_lightPulse));
-            _lampGlow.color = new Color(1f, 0.85f, 0.35f, glow);
-            _lampGlow.enabled = glow > 0.01f;
+            float glow = (1f - _gloom) * (0.30f + 0.06f * Mathf.Sin(_lightPulse));
+            var lit = new Color(1f, 0.86f, 0.42f, glow);
+            foreach (var g in _lampGlows)
+            {
+                if (g == null) continue;
+                g.color = lit;
+                g.enabled = glow > 0.01f;
+            }
         }
+
+        /// <summary>Пятно света под лампой, нарисованной на слое.</summary>
+        private void AddLampGlow(float x, float y)
+        {
+            var go = new GameObject("LampGlow", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+            var rt = (RectTransform)go.transform;
+            rt.SetParent(_art, false);
+            rt.anchorMin = rt.anchorMax = new Vector2(0f, 1f);
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            // центр чуть НИЖЕ лампы: свет обнимает её и стекает вниз
+            rt.anchoredPosition = new Vector2(x, -(y + 18f));
+            rt.sizeDelta = new Vector2(96f, 96f);
+            var im = go.GetComponent<Image>();
+            im.sprite = SpriteBank.Glow();
+            im.raycastTarget = false;
+            _lampGlows.Add(im);
+            rt.SetAsFirstSibling();          // под рисунком, чтобы линии не мылились
+        }
+
 
         private void UpdateLights(float dt)
         {
@@ -1232,7 +1343,13 @@ namespace LCBridgeOverlay
         private static float _shipNext;
 
         // Садится СЛЕВА, на траву, а не над кораблём: там пусто и он никому не мешает.
-        private const float ShipX = 62f, ShipGroundY = 96f;
+        // Садится СЛЕВА на траву; НИЖЕ линии земли — так он стоит на ней, а не
+        // висит над. Заходит из правого верхнего угла.
+        private const float ShipX = 62f, ShipGroundY = Ground + 9f;
+        private const float ShipFallSecs = 8f;      // ровно столько идёт посадка
+        private const float ShipHoverAt = 6f;       // с этой секунды висит у земли
+        private const float ShipDropAt = 7f;        // с этой — опускается на неё
+        private float _shipAge;                     // секунд с начала манёвра
 
         /// <summary>Путь к своей картинке доставщика, если её положили рядом со слоями.</summary>
         private static string ShipImagePath
@@ -1266,7 +1383,7 @@ namespace LCBridgeOverlay
 
             if (here && !_shipWasHere)
             {
-                _shipT = 0f;
+                _shipT = 0f; _shipAge = 0f;
                 Plugin.Log?.LogInfo("[map] доставщик садится");
             }
             _shipWasHere = here;
@@ -1279,33 +1396,32 @@ namespace LCBridgeOverlay
 
             EnsureShipParts();
 
-            if (here) _shipT = landed ? 0.5f : Mathf.MoveTowards(_shipT, 0.5f, dt / 4f);
+            // Своё время манёвра. Игра сообщает лишь «летит» и «сел», а посадка
+            // должна занимать ровно восемь секунд с зависанием на седьмой.
+            _shipAge += dt;
+            if (here)
+            {
+                // если игра успела отчитаться о посадке раньше — досрочно доводим
+                if (landed && _shipAge < ShipFallSecs) _shipAge = Mathf.Max(_shipAge, ShipDropAt);
+                _shipT = Mathf.Clamp01(_shipAge / ShipFallSecs) * 0.5f;
+            }
             else
             {
                 _shipT = Mathf.MoveTowards(_shipT, 1f, dt / 4f);
                 if (_shipT >= 1f) { _shipT = -1f; Hide(); return; }
             }
 
-            // высота: сверху вниз на посадке, снизу вверх на взлёте. y — это ТОЧКА
-            // ПОСАДКИ, то есть низ корпуса, а не его середина.
-            float k = _shipT;
-            float y = k < 0.5f ? Mathf.Lerp(-130f, ShipGroundY, k / 0.5f)
-                               : Mathf.Lerp(ShipGroundY, -150f, (k - 0.5f) / 0.5f);
-            bool burning = k < 0.48f || k > 0.52f;   // на стоянке двигатели молчат
+            float sx, y, tilt, sc;
+            if (_shipT < 0.5f) DescentPath(_shipAge, out sx, out y, out tilt, out sc);
+            else
+            {
+                // взлёт — та же дуга задом наперёд, только быстрее
+                float u = (_shipT - 0.5f) / 0.5f;
+                DescentPath(Mathf.Lerp(ShipFallSecs, 0f, u), out sx, out y, out tilt, out sc);
+            }
 
-            // Он прилетел из космоса, а не выехал из-за верхнего края: заходит
-            // сверху-справа, заваливается на площадку по дуге, качается на ветру и
-            // растёт по мере приближения — пока он высоко, он попросту далеко.
-            float alt = Mathf.Max(0f, ShipGroundY - y);
-            float high = Mathf.Clamp01(alt / 150f);          // 1 в вышине … 0 на земле
-            float low = 1f - Mathf.Clamp01(alt / 60f);       // 0 далеко … 1 у самой земли
-            float tt = Time.unscaledTime;
-
-            float arc = high * high * 96f;
-            float wob = (Mathf.Sin(tt * 2.1f) * 5.5f + Mathf.Sin(tt * 5.3f + 1.7f) * 2.2f) * high;
-            float sx = ShipX + arc + wob;
-            float tilt = Mathf.Clamp(arc * 0.16f + wob * 0.5f, -22f, 22f);
-            float sc = Mathf.Lerp(1f, 0.42f, high);
+            bool burning = _shipT < 0.49f || _shipT > 0.51f;   // на стоянке двигатели молчат
+            float low = 1f - Mathf.Clamp01((ShipGroundY - y) / 55f);
 
             var col = OverlayStyle.WithA(S.Frame, 1f);
             if (_shipSprite != null)
@@ -1317,7 +1433,6 @@ namespace LCBridgeOverlay
                 _shipSprite.enabled = true;
                 // доставщик — часть постройки, а не угроза: красим его цветом темы,
                 // а не тем, каким помечены монстры
-                // закрашен целиком, а не одним контуром
                 if (MobRailWidget.TintedIconStylePublic())
                 {
                     var full = SpriteBank.GetOutlineFilled("dropship", SpriteBank.FillLevels);
@@ -1332,10 +1447,66 @@ namespace LCBridgeOverlay
             DrawFlame(sx, y, burning, low, tilt, sc);
         }
 
+        /// <summary>
+        /// Где доставщик на такой-то секунде посадки. Отдаёт точку касания (низ
+        /// корпуса), крен и размер.
+        ///
+        /// Он приходит из правого верхнего угла по КВАДРАТИЧНОЙ ДУГЕ: опорная
+        /// точка стоит прямо над площадкой, поэтому кривая приходит в неё отвесно,
+        /// без излома. Первые секунды он пролетает быстро — их он проводит за
+        /// краем схемы, — а к земле подходит всё медленнее.
+        ///
+        /// На шестой секунде он уже у самой земли и ВИСИТ, чуть покачиваясь, и
+        /// только на восьмой опускается на неё.
+        /// </summary>
+        private void DescentPath(float age, out float x, out float y, out float tilt, out float scale)
+        {
+            float hoverY = ShipGroundY - 15f;       // высота зависания
+            float tt = Time.unscaledTime;
+
+            if (age < ShipHoverAt)
+            {
+                float a = Mathf.Clamp01(age / ShipHoverAt);
+                float e = 1f - (1f - a) * (1f - a);          // быстро вдали, медленно у земли
+
+                var p0 = new Vector2(W + 46f, -96f);        // из-за правого верхнего угла
+                var p1 = new Vector2(ShipX, -34f);          // опора прямо над площадкой
+                var p2 = new Vector2(ShipX, hoverY);
+                float m = 1f - e;
+                x = m * m * p0.x + 2f * m * e * p1.x + e * e * p2.x;
+                y = m * m * p0.y + 2f * m * e * p1.y + e * e * p2.y;
+
+                // касательная к дуге — по ней и кренится корпус
+                float dx = 2f * m * (p1.x - p0.x) + 2f * e * (p2.x - p1.x);
+                float dy = 2f * m * (p1.y - p0.y) + 2f * e * (p2.y - p1.y);
+                tilt = Mathf.Clamp(Mathf.Atan2(-dx, dy) * Mathf.Rad2Deg * 0.55f, -28f, 28f);
+
+                float sway = (1f - e) * (Mathf.Sin(tt * 2.3f) * 3.4f + Mathf.Sin(tt * 5.1f) * 1.3f);
+                x += sway; tilt += sway * 0.6f;
+                scale = Mathf.Lerp(0.42f, 1f, e);
+                return;
+            }
+
+            x = ShipX; scale = 1f;
+            if (age < ShipDropAt)
+            {
+                // висит: лёгкая болтанка на струе, вниз почти не идёт
+                float b = (age - ShipHoverAt) / (ShipDropAt - ShipHoverAt);
+                y = hoverY + Mathf.Sin(tt * 3.1f) * 2.2f * (1f - b * 0.5f);
+                x += Mathf.Sin(tt * 1.9f) * 1.6f;
+                tilt = Mathf.Sin(tt * 2.4f) * 2.2f;
+                return;
+            }
+
+            float d = Mathf.Clamp01((age - ShipDropAt) / (ShipFallSecs - ShipDropAt));
+            y = Mathf.Lerp(hoverY, ShipGroundY, d * d * (3f - 2f * d));
+            tilt = Mathf.Sin(tt * 2.4f) * 2.2f * (1f - d);
+        }
+
         private void Hide()
         {
             foreach (var g in _ship) if (g != null) g.enabled = false;
-            if (_flameImg != null) _flameImg.enabled = false;
+            foreach (var g in _tongues) if (g != null) g.enabled = false;
             if (_shipSprite != null) _shipSprite.enabled = false;
         }
 
@@ -1415,46 +1586,60 @@ namespace LCBridgeOverlay
         }
 
         /// <summary>
-        /// Свеча пламени под соплом. Растёт ВНИЗ от низа корпуса и наклоняется
-        /// вместе с ним.
+        /// Огонь под соплом — не ровная струя турбины, а несколько толстых языков,
+        /// как у горящей нефти: каждый живёт своей жизнью, шевелится и коптит.
         ///
-        /// У земли факел чувствует под собой опору: укорачивается и расходится
-        /// вширь, растекаясь почти горизонтально, — так делает всякая струя,
-        /// упирающаяся в поверхность.
+        /// У земли пламя чувствует под собой опору: языки укорачиваются, толстеют
+        /// и РАЗВОРАЧИВАЮТСЯ вширь, растекаясь по поверхности.
         /// </summary>
         private void DrawFlame(float x, float y, bool on, float low, float tilt, float scale)
         {
-            if (_flameImg == null)
+            const int N = 5;
+            while (_tongues.Count < N)
             {
                 var go = new GameObject("Flame", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
                 var frt = (RectTransform)go.transform;
                 frt.SetParent(_art, false);
                 frt.anchorMin = frt.anchorMax = new Vector2(0f, 1f);
-                // опора СВЕРХУ: широкий конец у сопла, остриё внизу. С прежней
-                // опорой снизу и разворотом на 180° факел висел остриём вверх.
+                // опора СВЕРХУ: широкий корень у сопла, конец языка внизу
                 frt.pivot = new Vector2(0.5f, 1f);
-                _flameImg = go.GetComponent<Image>();
-                _flameImg.sprite = SpriteBank.Flame();
-                _flameImg.raycastTarget = false;
+                var im = go.GetComponent<Image>();
+                im.sprite = SpriteBank.Flame();
+                im.raycastTarget = false;
+                _tongues.Add(im);
             }
 
-            if (!on) { _flameImg.enabled = false; return; }
+            if (!on) { foreach (var g in _tongues) if (g != null) g.enabled = false; return; }
 
             float t = Time.unscaledTime;
             float k = Mathf.Clamp01(low);
             k = k * k * (3f - 2f * k);
-            float len = Mathf.Lerp(48f, 14f, k) * (0.85f + 0.3f * Mathf.PerlinNoise(t * 6f, 0f)) * scale;
-            float wide = Mathf.Lerp(17f, 48f, k) * (0.9f + 0.2f * Mathf.PerlinNoise(0f, t * 7f)) * scale;
 
-            var rt = (RectTransform)_flameImg.transform;
-            rt.anchoredPosition = new Vector2(x, -y);
-            rt.sizeDelta = new Vector2(wide, len);
-            rt.localRotation = Quaternion.Euler(0f, 0f, tilt + Mathf.Sin(t * 5f) * 3f * (1f - k));
-            _flameImg.enabled = true;
-            _flameImg.color = new Color(1f, 1f, 1f, 0.9f);
+            for (int i = 0; i < N; i++)
+            {
+                var im = _tongues[i];
+                if (im == null) continue;
+                float side = N == 1 ? 0f : (i / (float)(N - 1)) * 2f - 1f;   // -1 … 1 поперёк сопла
+                float ph = i * 3.7f;
+                float n1 = Mathf.PerlinNoise(t * 3.2f + ph, 0.3f);
+                float n2 = Mathf.PerlinNoise(0.7f, t * 2.4f + ph) * 2f - 1f;
+
+                float len = Mathf.Lerp(44f, 16f, k) * (0.55f + 0.6f * n1)
+                          * (1f - 0.3f * Mathf.Abs(side)) * scale;
+                float wide = Mathf.Lerp(16f, 25f, k) * (0.75f + 0.45f * n1) * scale;
+                float ox = side * Mathf.Lerp(6f, 20f, k) * scale + n2 * 2.2f * scale;
+                float rot = tilt + side * Mathf.Lerp(7f, 52f, k) + n2 * 9f * (1f - k);
+
+                var rt = (RectTransform)im.transform;
+                rt.anchoredPosition = new Vector2(x + ox, -(y - 2f));
+                rt.sizeDelta = new Vector2(Mathf.Max(2f, wide), Mathf.Max(3f, len));
+                rt.localRotation = Quaternion.Euler(0f, 0f, rot);
+                im.enabled = true;
+                im.color = new Color(1f, 1f, 1f, 0.62f + 0.3f * n1);
+            }
         }
 
-        private Image _flameImg;
+        private readonly List<Image> _tongues = new List<Image>();
 
 
         // Ловушки стоят в правом верхнем углу ЗДАНИЯ: это не обитатели уровня, им
