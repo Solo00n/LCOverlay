@@ -39,7 +39,14 @@ namespace LCBridgeOverlay
             /// </summary>
             public bool HasColor;
 
-            internal Sprite Tinted;
+            internal Sprite Tinted, Lamps;
+
+            /// <summary>
+            /// Насколько плотно клетка занята ФОНОМ — полупрозрачной заливкой, а не
+            /// линиями. По ней ложится полумрак: темнеть должен фон комплекса и
+            /// пещер, а не обводка, лампы и рельсы поверх него.
+            /// </summary>
+            public float[] Backdrop;
             internal string TintKey;
 
             /// <summary>
@@ -58,6 +65,15 @@ namespace LCBridgeOverlay
             /// в нём нет — а свет под ними всё равно должен быть.
             /// </summary>
             public List<Vector2> LampBlobs = new List<Vector2>();
+        }
+
+        /// <summary>Сетка, в которой считается фон и по которой кроится полумрак.</summary>
+        public const int GloomW = 112, GloomH = 136;
+
+        /// <summary>Пиксель жёлтый — значит лампа, на каком бы слое он ни лежал.</summary>
+        private static bool IsLampPixel(Color32 c)
+        {
+            return c.a > 8 && c.r > 150 && c.g > 120 && c.r - c.b > 80;
         }
 
         public static string Dir
@@ -167,6 +183,29 @@ namespace LCBridgeOverlay
                 }
                 layer.HasColor = opaque > 0 && colored > opaque * 0.02f;
 
+                // Фон — это ПОЛУПРОЗРАЧНАЯ заливка: в макете она белая с альфой 30,
+                // а линии, лампы и рельсы кладут поверх неё в полную силу. Считаем,
+                // насколько плотно фон занимает каждую клетку будущего полумрака.
+                var back = new float[GloomW * GloomH];
+                var hits = new int[GloomW * GloomH];
+                for (int y = 0; y < h; y++)
+                {
+                    int gy = (int)((1f - (y + 0.5f) / h) * GloomH);
+                    if (gy < 0) gy = 0; else if (gy >= GloomH) gy = GloomH - 1;
+                    for (int x = 0; x < w; x++)
+                    {
+                        int gx = (x * GloomW) / w;
+                        if (gx >= GloomW) gx = GloomW - 1;
+                        int k = (GloomH - 1 - gy) * GloomW + gx;
+                        hits[k]++;
+                        var c = px[y * w + x];
+                        if (c.a > 8 && c.a < 200) back[k] += 1f;
+                    }
+                }
+                for (int i = 0; i < back.Length; i++)
+                    if (hits[i] > 0) back[i] = Mathf.Clamp01(back[i] / hits[i] * 1.6f);
+                layer.Backdrop = back;
+
                 // текстура считает строки снизу, холст — сверху
                 layer.Bounds = new Rect(x0 / (float)w, 1f - (y1 + 1) / (float)h,
                                         (x1 - x0 + 1) / (float)w, (y1 - y0 + 1) / (float)h);
@@ -256,8 +295,16 @@ namespace LCBridgeOverlay
                     if (c.a <= 8) { dst[i] = new Color32(0, 0, 0, 0); continue; }
                     int mx = Mathf.Max(c.r, Mathf.Max(c.g, c.b));
                     int mn = Mathf.Min(c.r, Mathf.Min(c.g, c.b));
-                    if (mx - mn > 30) { dst[i] = c; continue; }      // уже покрашено — не трогаем
-                    float k = mx / 255f;                              // яркость линии
+                    if (mx - mn > 30)
+                    {
+                        // лампы уезжают в собственный слой, чтобы их можно было
+                        // гасить вместе со щитком; остальное цветное — как есть
+                        dst[i] = (!layer.IsLamp && IsLampPixel(c)) ? new Color32(0, 0, 0, 0) : c;
+                        continue;
+                    }
+                    // Серое поднимаем: в лоб оно давало половинную яркость темы и
+                    // рельсы с колёсами тонули. Белое остаётся белым.
+                    float k = 0.55f + 0.45f * (mx / 255f);
                     dst[i] = new Color32((byte)(fr * k), (byte)(fg * k), (byte)(fb * k), c.a);
                 }
 
@@ -274,6 +321,38 @@ namespace LCBridgeOverlay
                 return layer.Tinted;
             }
             catch { return layer.Sprite; }
+        }
+
+        /// <summary>
+        /// Только лампы этого слоя, всё прочее прозрачно. Отдельной картинкой их
+        /// можно приглушать вместе со щитком, оставаясь в жёлтом, — в совмещённом
+        /// макете своего слоя ламп нет.
+        /// </summary>
+        public static Sprite LampsOnly(Layer layer)
+        {
+            try
+            {
+                if (layer == null || layer.Tex == null || layer.IsLamp) return null;
+                if (layer.Lamps != null) return layer.Lamps;
+                if (layer.LampBlobs.Count == 0) return null;
+
+                var src = layer.Tex.GetPixels32();
+                var dst = new Color32[src.Length];
+                for (int i = 0; i < src.Length; i++)
+                    dst[i] = IsLampPixel(src[i]) ? src[i] : new Color32(0, 0, 0, 0);
+
+                var tex = new Texture2D(layer.Tex.width, layer.Tex.height, TextureFormat.RGBA32, false)
+                {
+                    filterMode = FilterMode.Point,
+                    wrapMode = TextureWrapMode.Clamp,
+                };
+                tex.SetPixels32(dst);
+                tex.Apply(false, false);
+                layer.Lamps = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height),
+                                            new Vector2(0.5f, 0.5f), 100f, 0, SpriteMeshType.FullRect);
+                return layer.Lamps;
+            }
+            catch { return null; }
         }
 
         private static string ColorKey(Color c)

@@ -531,6 +531,27 @@ namespace LCBridgeOverlay
                 // слоя ламп в нём нет.
                 foreach (var b in l.LampBlobs) AddLampGlow(b.x * W, b.y * H);
 
+                // а сами лампы вынимаем в свою картинку поверх — тогда они гаснут
+                // со щитком, оставаясь жёлтыми, и не тянут за собой весь макет
+                var only = MapImages.LampsOnly(l);
+                if (only != null)
+                {
+                    var lgo = new GameObject("Layer_" + l.Name + "_lamps",
+                                             typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+                    var lrt = (RectTransform)lgo.transform;
+                    lrt.SetParent(_art, false);
+                    lrt.anchorMin = lrt.anchorMax = new Vector2(0f, 1f);
+                    lrt.pivot = new Vector2(0f, 1f);
+                    lrt.anchoredPosition = Vector2.zero;
+                    lrt.sizeDelta = new Vector2(W, H);
+                    var lim = lgo.GetComponent<Image>();
+                    lim.sprite = only;
+                    lim.raycastTarget = false;
+                    lim.color = Color.white;
+                    _lampImgs.Add(lim);
+                    _lampOwnColor = true;
+                }
+
                 // а дышать яркостью может только отдельный слой: мигать всей
                 // картинкой из-за трёх ламп никуда не годится
                 if (l.IsLamp)
@@ -1094,7 +1115,7 @@ namespace LCBridgeOverlay
                 if (_gloomSpr != null) return _gloomSpr;
                 if (_gloomSrc == null || _gloomSrc.Count == 0) return null;
 
-                const int GW = 112, GH = 136;
+                const int GW = MapImages.GloomW, GH = MapImages.GloomH;
                 var tex = new Texture2D(GW, GH, TextureFormat.RGBA32, false)
                 {
                     filterMode = FilterMode.Point,
@@ -1113,13 +1134,15 @@ namespace LCBridgeOverlay
                         float v = (y + 0.5f) / GH;              // снизу вверх, как в текстуре
                         float cy = (1f - v) * H;                // та же высота, но сверху вниз
 
-                        // где вообще что-то нарисовано: лампы и подвижные части не в счёт
+                        // Темнеет ТОЛЬКО фон комплекса и пещер. Обводка, лампы и
+                        // рельсы лежат поверх него в полную силу и глушить их
+                        // незачем — от этого схема переставала читаться.
                         float cover = 0f;
                         foreach (var l in _gloomSrc)
                         {
-                            if (l == null || l.Tex == null) continue;
+                            if (l == null || l.Backdrop == null) continue;
                             if (l.IsLamp || l.IsElevator || l.IsCable) continue;
-                            float a = l.Tex.GetPixelBilinear(u, v).a;
+                            float a = l.Backdrop[y * GW + x];
                             if (a > cover) cover = a;
                         }
                         if (cover <= 0.02f) { px[y * GW + x] = new Color32(0, 0, 0, 0); continue; }

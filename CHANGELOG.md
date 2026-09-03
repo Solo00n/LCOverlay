@@ -1,5 +1,11 @@
 # Changelog — LCBridgeOverlay
 
+## 1.15.7
+- **The dark falls on the background of the complex and on nothing else.** The outlines, the rails and the lamps lie over that background at full strength and dimming them only made the schematic harder to read. Background is told from linework by its transparency, which is how it is drawn.
+- **Lamps stay yellow and simply go dim when the power is off.** In a single combined image they had no layer of their own to dim, so they are lifted out into one automatically.
+- **Rails and wheels are lighter.** Grey took the theme colour at half brightness and sank into the drawing; the mapping now lifts the mid-tones and leaves white alone.
+- **Fog outdoors lies along the ground** instead of filling the sky, where its bands used to cut straight through the discs of an eclipse.
+
 ## 1.15.6
 - **Whatever moves on the schematic now keeps its perspective current.** The tilt is worked into each drawing's mesh from where its corners fall in the panel, but a uGUI mesh is only rebuilt when the rectangle changes size. Anything that travels without resizing — the dropship, the lift car, the creature marks — kept the tilt it was given wherever it happened to be built, and drifted away from its neighbours. The flame under the ship breathes in size and so was always laid correctly: that is exactly why the two came apart, and why the fire appeared to burn off to one side.
 
