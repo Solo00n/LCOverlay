@@ -24,6 +24,11 @@ namespace LCBridgeOverlay
 
         private void Update()
         {
+            // Сканер опрашиваем КАЖДЫЙ кадр, а не вместе с пакетом раз в секунду:
+            // узел скана живёт недолго, и при секундном шаге его легко было
+            // проскочить — отсюда «просканил, а в оверлее нет».
+            try { MonsterState.PollScannerNow(); } catch { }
+
             _timer += Time.deltaTime;
             if (_forceNow) { _forceNow = false; _timer = Interval; } // тикнуть в этом кадре
             if (_timer < Interval) return;

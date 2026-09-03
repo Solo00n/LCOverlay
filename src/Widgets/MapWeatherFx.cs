@@ -306,11 +306,17 @@ namespace LCBridgeOverlay
             {
                 // Вода стоит у самой поверхности и поднимается над ней, а не заливает
                 // подземелье: пещеры и комнаты красить нельзя.
+                // К концу дня вода поднимается заметно выше, чем раньше.
                 float prog = FloodProgress();
-                float y = Mathf.Lerp(Ground + 4f, Ground - 22f, prog);
-                Place((RectTransform)_waterLine.transform, 8f, y, W - 8f, y, 2.5f);
+                float y = Mathf.Lerp(Ground + 4f, Ground - 46f, prog);
+
+                // И НЕ заходит на здание: оно стоит на земле, затапливать его нечем.
+                // Поэтому линия обрывается у его левой стены.
+                float right = Mathf.Min(W - 8f, _bx1 - 4f);
+                if (right < 12f) right = 12f;
+                Place((RectTransform)_waterLine.transform, 8f, y, right, y, 2.5f);
                 Place((RectTransform)_waterRipple.transform, 16f, y + 5f + Mathf.Sin(t * 1.6f) * 1.5f,
-                      W - 16f, y + 5f + Mathf.Sin(t * 1.6f + 1f) * 1.5f, 1.5f);
+                      Mathf.Max(20f, right - 8f), y + 5f + Mathf.Sin(t * 1.6f + 1f) * 1.5f, 1.5f);
 
             }
 

@@ -111,6 +111,19 @@ namespace LCBridgeOverlay
         ///  3) но и этого мало: мод GoodItemScan ВЫЧИЩАЕТ ванильные scanNodes и
         ///     scanElements и ведёт свой список. Поэтому спрашиваем оба источника.
         /// </summary>
+        /// <summary>
+        /// Опрос сканера. Зовётся каждый кадр, но реально работает 10 раз в секунду:
+        /// узел скана живёт секунды, так что этого с запасом, а рефлексию каждый
+        /// кадр гонять незачем.
+        /// </summary>
+        private static float _pollNext;
+        public static void PollScannerNow()
+        {
+            if (Time.unscaledTime < _pollNext) return;
+            _pollNext = Time.unscaledTime + 0.1f;
+            PollScanner();
+        }
+
         private static void PollScanner()
         {
             var nodes = new List<ScanNodeProperties>();
@@ -276,7 +289,6 @@ namespace LCBridgeOverlay
                 if (Time.unscaledTime < _next) return;
                 _next = Time.unscaledTime + Interval;
 
-                PollScanner();          // что игрок просветил сканером прямо сейчас
                 if (enemies == null) return;
 
                 _tokens.Clear();

@@ -580,6 +580,22 @@ namespace LCBridgeOverlay
 
         /// <summary>Ключ иконки по сырой строке монстра — нужен схеме локации.</summary>
         /// <summary>
+        /// Ключ ВИДА — без состояний и без турели, так же как группирует рейка.
+        ///
+        /// Схема схлопывает записи именно по нему: иначе один вид, часть особей
+        /// которого в другой фазе (людоед вырос, жук разозлился), давал ДВЕ метки —
+        /// это и были «две одинаковые иконки».
+        /// </summary>
+        public static string SpeciesKeyPublic(string raw)
+        {
+            if (string.IsNullOrEmpty(raw)) return null;
+            string baseName = Regex.Replace(raw,
+                @"\+turret|\+slayer|\+aggro|\+angry|\+adult|\+attack|\+ceiling|\+frozen|\+scanned|\+firing|\+hurt|\+deviant|\+w\d|\s*@\d+",
+                "", RegexOptions.IgnoreCase).Trim();
+            return Norm(Canon(baseName));
+        }
+
+        /// <summary>
         /// Ключ иконки по сырой строке монстра — нужен схеме локации.
         ///
         /// ВАЖНО: состояния тут НЕ выбрасываются вслепую. Часть из них меняет саму

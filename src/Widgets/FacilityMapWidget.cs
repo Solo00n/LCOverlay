@@ -907,7 +907,11 @@ namespace LCBridgeOverlay
 
                     // Девиант — ОТДЕЛЬНАЯ версия монстра, как в основном оверлее:
                     // если валить его в одну кучу с обычным, инверснутый пропадал.
-                    string key = (MobRailWidget.IconKeyPublic(raw) ?? raw)
+                    // Схлопываем по ВИДУ, а не по иконке: фазы одного и того же
+                    // существа (вырос, разозлился, с турелью) — это по-прежнему одно
+                    // существо, и двух меток ему не полагается. Девиант отдельно:
+                    // это действительно другая версия.
+                    string key = (MobRailWidget.SpeciesKeyPublic(raw) ?? raw)
                                + (raw.IndexOf("+Deviant", System.StringComparison.OrdinalIgnoreCase) >= 0 ? "#d" : "");
                     int at = seen.IndexOf(key);
                     if (at >= 0)

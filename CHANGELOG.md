@@ -1,5 +1,10 @@
 # Changelog — LCBridgeOverlay
 
+## 1.13.2
+- **One creature, one mark.** The schematic was grouping by picture rather than by creature, so a species with some of its number in another phase — a maneater grown, a hoarding bug roused — split into two marks that often looked the same. It groups by creature now, and the mark shows the phase of the nearest one. Deviants still stand apart, being a genuinely different version.
+- **Floodwater stops at the building** instead of running across it, and it climbs twice as high over the course of the day.
+- **A scan is far less likely to be missed.** The scanner was read once a second alongside the data packet, and a scan node that came and went between those reads was simply never seen. It is checked ten times a second now.
+
 ## 1.13.1
 - **Outline and fill can no longer come apart.** They were two images kept in step by copying one transform onto the other, and however carefully that was done something always drifted. They are one sprite now, the interior baked in at sixteen densities and chosen by distance, so there is nothing left to misalign.
 - **Creatures stopped twitching as they walk.** Two of them near the spacing threshold shoved each other back and forth every frame; the push is now eased in rather than applied whole. Facing also flickered at each turn, where the direction is genuinely ambiguous, so it is held through the turn instead.
