@@ -1,5 +1,8 @@
 # Changelog — LCBridgeOverlay
 
+## 1.17.1
+- **The dark stopped being a square.** A sheet spanning the full canvas ran past the drawing at its sides and foot, and those edges read as a box against the planet behind. Density is still one plain vertical gradient, but it is now clipped to the silhouette of the schematic — the whole silhouette, so the cart on the lower floor darkens along with everything else. The grain is gone with it: the gradient alone sets the density.
+
 ## 1.17.0
 - **The dark is a plain gradient again.** Cutting it to the silhouette of the drawing read as a vignette, and worse, it went around whatever lies over the background — the cart on the lower floor stayed bright in the middle of the dark. Everything below the fade now darkens together.
 - **What the planet holds is written under its name**, where it is read along with it, rather than in the footer of the schematic.

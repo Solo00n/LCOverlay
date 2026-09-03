@@ -1100,15 +1100,24 @@ namespace LCBridgeOverlay
                 _darkNoise = go.GetComponent<Image>();
                 _darkNoise.raycastTarget = false;
 
-                // Просто градиент во всю ширину: сверху прозрачно, книзу глухо.
-                // Раскрой по силуэту рисунка выглядел виньеткой и, что хуже, обходил
-                // стороной то, что лежит поверх фона — вагонетка на нижнем этаже так
-                // и оставалась светлой посреди темноты.
-                float span = Mathf.Max(20f, H - _gloomTop);
-                rt.anchoredPosition = new Vector2(0f, -_gloomTop);
-                rt.sizeDelta = new Vector2(W, span);
-                // наклон уводим в САМО полотно: поворот дал бы косые углы
-                _darkNoise.sprite = SpriteBank.GloomGrad(_gloomSlope * W / span);
+                // Плотность — чистый вертикальный градиент, ровно один на всю схему.
+                // Но обрезан он по СИЛУЭТУ рисунка: полотно во всю ширину выходило
+                // на фон планеты боковыми и нижней кромками и читалось квадратом.
+                var carved = CarveGloom();
+                if (carved != null)
+                {
+                    rt.anchoredPosition = Vector2.zero;
+                    rt.sizeDelta = new Vector2(W, H);
+                    _darkNoise.sprite = carved;
+                }
+                else
+                {
+                    // схема собрана линиями — обрезать не по чему
+                    float span = Mathf.Max(20f, H - _gloomTop);
+                    rt.anchoredPosition = new Vector2(0f, -_gloomTop);
+                    rt.sizeDelta = new Vector2(W, span);
+                    _darkNoise.sprite = SpriteBank.GloomGrad(_gloomSlope * W / span);
+                }
                 Warp();
             }
 
@@ -1160,15 +1169,15 @@ namespace LCBridgeOverlay
                         float v = (y + 0.5f) / GH;              // снизу вверх, как в текстуре
                         float cy = (1f - v) * H;                // та же высота, но сверху вниз
 
-                        // Темнеет ТОЛЬКО фон комплекса и пещер. Обводка, лампы и
-                        // рельсы лежат поверх него в полную силу и глушить их
-                        // незачем — от этого схема переставала читаться.
+                        // Силуэт схемы: темнеет всё, что нарисовано, — и фон, и
+                        // обводка, и вагонетка на нижнем этаже. Наружу за рисунок
+                        // темнота не выходит, поэтому квадрата не получается.
                         float cover = 0f;
                         foreach (var l in _gloomSrc)
                         {
-                            if (l == null || l.Backdrop == null) continue;
-                            if (l.IsLamp || l.IsElevator || l.IsCable) continue;
-                            float a = l.Backdrop[y * GW + x];
+                            if (l == null || l.Cover == null) continue;
+                            if (l.IsLamp) continue;
+                            float a = l.Cover[y * GW + x];
                             if (a > cover) cover = a;
                         }
                         if (cover <= 0.02f) { px[y * GW + x] = new Color32(0, 0, 0, 0); continue; }
@@ -1178,7 +1187,8 @@ namespace LCBridgeOverlay
                         t = Mathf.Clamp01(t);
                         t = t * t * (3f - 2f * t);
 
-                        float a2 = cover * t * (0.88f + 0.12f * (float)rnd.NextDouble());
+                        // без зерна: плотность задаёт один только градиент
+                        float a2 = cover * t;
                         if (a2 > 0.01f) any = true;
                         px[y * GW + x] = new Color32(0, 0, 0, (byte)(Mathf.Clamp01(a2) * 255f));
                     }

@@ -47,6 +47,12 @@ namespace LCBridgeOverlay
             /// пещер, а не обводка, лампы и рельсы поверх него.
             /// </summary>
             public float[] Backdrop;
+
+            /// <summary>
+            /// Занятость клетки ЛЮБЫМ рисунком. По ней темнота обрезается по силуэту
+            /// схемы и не выходит прямоугольником на фон планеты.
+            /// </summary>
+            public float[] Cover;
             internal string TintKey;
 
             /// <summary>
@@ -187,6 +193,7 @@ namespace LCBridgeOverlay
                 // а линии, лампы и рельсы кладут поверх неё в полную силу. Считаем,
                 // насколько плотно фон занимает каждую клетку будущего полумрака.
                 var back = new float[GloomW * GloomH];
+                var cover = new float[GloomW * GloomH];
                 var hits = new int[GloomW * GloomH];
                 for (int y = 0; y < h; y++)
                 {
@@ -199,12 +206,21 @@ namespace LCBridgeOverlay
                         int k = (GloomH - 1 - gy) * GloomW + gx;
                         hits[k]++;
                         var c = px[y * w + x];
+                        if (c.a > 8) cover[k] += 1f;
                         if (c.a > 8 && c.a < 200) back[k] += 1f;
                     }
                 }
                 for (int i = 0; i < back.Length; i++)
-                    if (hits[i] > 0) back[i] = Mathf.Clamp01(back[i] / hits[i] * 1.6f);
+                    if (hits[i] > 0)
+                    {
+                        back[i] = Mathf.Clamp01(back[i] / hits[i] * 1.6f);
+                        // силуэт, а не плотность: клетка, занятая хотя бы наполовину,
+                        // считается закрытой целиком — иначе внутри рисунка темнота
+                        // шла бы пятнами и читалась как виньетка
+                        cover[i] = Mathf.Clamp01(cover[i] / hits[i] * 2.5f);
+                    }
                 layer.Backdrop = back;
+                layer.Cover = cover;
 
                 // текстура считает строки снизу, холст — сверху
                 layer.Bounds = new Rect(x0 / (float)w, 1f - (y1 + 1) / (float)h,

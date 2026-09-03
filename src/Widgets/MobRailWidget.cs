@@ -956,22 +956,7 @@ namespace LCBridgeOverlay
                     continue;
                 }
 
-                float x = 0f;
-                foreach (var v in g.Variants)
-                {
-                    // застывший койл (на него кто-то смотрит) — покачивание выключаем
-                    float vAmp = v.Frozen ? 0f : amp;
-                    // ключ подсветки — со стороной рейки (улица/комплекс раздельно)
-                    var irt = MakeIcon(rail, v.IconKey, v.Slayer || v.Kamikaze, g.Key.GetHashCode(),
-                                       scale, vAmp, SideKey(growLeft, g.Key), v.Hurt, v.Deviant);
-                    // первая иконка колоды центром на кромке (x=0), остальные — наружу
-                    irt.anchoredPosition = new Vector2(growLeft ? -x : x, y);
-                    // у монстра стреляет турель — трассеры полетят из его иконки
-                    if (v.Firing) firingList.Add(irt);
-                    x += Overlap;
-                }
-                if (!exp && g.Total > 1) AddCountBadge(rail, g.Total, growLeft, x, y);
-                y -= RowStep;
+                // ветки «иконка на каждую версию» больше нет: см. oneIcon выше
             }
 
             // включаем стрельбу на этой рейке, если хоть у одного монстра турель ведёт огонь
