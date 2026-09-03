@@ -68,7 +68,7 @@ namespace LCBridgeOverlay
         }
 
         /// <summary>Сетка, в которой считается фон и по которой кроится полумрак.</summary>
-        public const int GloomW = 112, GloomH = 136;
+        public const int GloomW = 220, GloomH = 268;
 
         /// <summary>Пиксель жёлтый — значит лампа, на каком бы слое он ни лежал.</summary>
         private static bool IsLampPixel(Color32 c)

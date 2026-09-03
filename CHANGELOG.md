@@ -1,5 +1,10 @@
 # Changelog — LCBridgeOverlay
 
+## 1.16.1
+- **The lift moves.** Its position was read from a field called `elevatorTransform`, which the game does not have — the string exists in the assembly but belongs elsewhere, so the lookup quietly returned nothing and the car stood where it was drawn all day. The car is `elevatorPoint`.
+- **The lift has a top station.** Where it travels is worked out from the cable: drawn running well above the car, the car was drawn at the bottom and rises until its roof meets the winch, which is where it stands at the start of the day. The cable is reeled in and paid out to match.
+- **The light and the dark are smooth again**, without the coarse grid and the stepped opacity.
+
 ## 1.16.0
 - **The dropship's flame is drawn in line, like everything around it** — an outline of the same picture, in the theme colour — and sits higher, so it issues from the ship rather than hanging beneath it.
 - **The dark reaches higher and is heavier**, and its fade now falls across the lift tunnel instead of being stretched over half the schematic.

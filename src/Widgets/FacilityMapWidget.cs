@@ -263,6 +263,7 @@ namespace LCBridgeOverlay
             {
                 _gloomSrc = imgs;
                 DrawFromImages(imgs);
+                ResolveElevatorRange();
                 var slotsLay = MapLayout.Load();
                 if (slotsLay != null) AddSlotsFromLayout(slotsLay);
                 if (_inDots.Count == 0 && _outDots.Count == 0) DefaultSlots();
@@ -566,12 +567,11 @@ namespace LCBridgeOverlay
                     // там она и стоит в начале дня, — а мод возит её вслед за
                     // настоящей. Куда именно, он смотрит по самому рисунку.
                     _elevCar = rt;
-                    _elevTop = 0f;
                     _elevCarTop = l.Bounds.yMin * H;
-                    float carBottom = l.Bounds.yMax * H;
-                    _elevBottom = _elevTravel > 0f ? _elevTravel
-                                                   : Mathf.Max(20f, (H - 24f) - carBottom);
-                    Plugin.Log?.LogInfo($"[map] лифт: потолок кабины {_elevCarTop:0}, ход {_elevBottom:0}");
+                    _elevCarBottom = l.Bounds.yMax * H;
+                    // пределы хода выясняются, когда прочитаны все слои: их задаёт трос
+                    _elevTop = 0f;
+                    _elevBottom = 0f;
                 }
                 else if (l.IsCable)
                 {
@@ -581,6 +581,7 @@ namespace LCBridgeOverlay
                     // верхнего положения кабины — дотягиваем сами.
                     _cableImg = img;
                     _cableBottom = l.Bounds.yMax * H;
+                    _cableTop = l.Bounds.yMin * H;
                     img.type = Image.Type.Filled;
                     img.fillMethod = Image.FillMethod.Vertical;
                     img.fillOrigin = (int)Image.OriginVertical.Top;
@@ -593,6 +594,38 @@ namespace LCBridgeOverlay
                     Plugin.Log?.LogInfo($"[map] тросы: конец рисунка {_cableBottom:0}, штук {_cableExt.Count}");
                 }
             }
+        }
+
+        /// <summary>
+        /// Куда лифт ездит. Выясняется по ТРОСУ, а не по догадке.
+        ///
+        /// Трос идёт от лебёдки вверху шахты до крыши кабины. Если он нарисован
+        /// заметно ВЫШЕ кабины — значит кабину нарисовали в нижнем положении, и
+        /// подниматься ей до самой лебёдки: там она и стоит в начале дня. Если
+        /// троса нет, кабина считается нарисованной наверху и едет вниз.
+        /// </summary>
+        private void ResolveElevatorRange()
+        {
+            if (_elevCar == null) return;
+
+            if (_elevTravel > 0f)                      // задано руками в map.txt
+            {
+                _elevTop = 0f; _elevBottom = _elevTravel;
+            }
+            else if (_cableImg != null && _cableTop < _elevCarTop - 20f)
+            {
+                // кабина нарисована ВНИЗУ: наверху её крыша встаёт под лебёдку
+                _elevTop = (_cableTop + 6f) - _elevCarTop;
+                _elevBottom = 0f;
+            }
+            else
+            {
+                // кабина нарисована наверху — едет вниз, к низу схемы
+                _elevTop = 0f;
+                _elevBottom = Mathf.Max(20f, (H - 24f) - _elevCarBottom);
+            }
+            Plugin.Log?.LogInfo($"[map] лифт: потолок кабины {_elevCarTop:0}, трос от {_elevTop:0} " +
+                                $"до {_elevBottom:0} (верх/низ хода)");
         }
 
         /// <summary>Места монстров из текстового файла (картинки их не задают).</summary>
@@ -614,7 +647,7 @@ namespace LCBridgeOverlay
                     // сколько кабина проезжает вниз; читается уже после картинок,
                     // поэтому ход правим прямо здесь
                     _elevTravel = n[0];
-                    if (_elevCar != null) _elevBottom = n[0];
+                    if (_elevCar != null) { _elevTop = 0f; _elevBottom = n[0]; }
                     continue;
                 }
                 if (c.Op == "slotout" && n.Length >= 2)
@@ -826,7 +859,8 @@ namespace LCBridgeOverlay
         private float _elevTop, _elevBottom, _elevPos, _elevCableTop;
         private float _elevCarTop, _elevTravel;   // потолок кабины и заданный ход
         private Image _cableImg;
-        private float _cableBottom;
+        private float _cableBottom, _cableTop;
+        private float _elevCarBottom;
         private bool _cableOwnColor;
         private readonly List<Image> _cableExt = new List<Image>();
 
@@ -886,13 +920,11 @@ namespace LCBridgeOverlay
             float y = Mathf.Lerp(_elevTop, _elevBottom, _elevPos);
             _elevCar.anchoredPosition = new Vector2(_elevCar.anchoredPosition.x, -y);
 
+            // трос виден ровно до крыши кабины: поднимается — сматывается,
+            // опускается — разматывается
             float roof = _elevCarTop + y;
             if (_cableImg != null)
-            {
-                // нарисован весь ствол — срезаем ниже потолка кабины
-                bool full = _cableBottom > _elevCarTop + 4f;
-                _cableImg.fillAmount = full ? Mathf.Clamp01(roof / Mathf.Max(1f, H)) : 1f;
-            }
+                _cableImg.fillAmount = Mathf.Clamp01(roof / Mathf.Max(1f, H));
             // а если трос нарисован только до верхнего положения — доводим его
             // до кабины сами: спускается — троса открывается больше
             foreach (var ext in _cableExt)
@@ -934,7 +966,11 @@ namespace LCBridgeOverlay
                         System.Reflection.BindingFlags.Instance |
                         System.Reflection.BindingFlags.Public |
                         System.Reflection.BindingFlags.NonPublic;
-                    _fElevTr = T.GetField("elevatorTransform", B);
+                    // Кабина — это elevatorPoint. Поля elevatorTransform в игре НЕТ:
+                    // такая строка есть в сборке, но принадлежит другому классу, и
+                    // отражение молча возвращало null — доля пути выходила -1, а
+                    // кабина стояла как вкопанная.
+                    _fElevTr = T.GetField("elevatorPoint", B);
                     _fElevTop = T.GetField("elevatorTopPoint", B);
                     _fElevBot = T.GetField("elevatorBottomPoint", B);
                 }
@@ -1118,7 +1154,7 @@ namespace LCBridgeOverlay
                 const int GW = MapImages.GloomW, GH = MapImages.GloomH;
                 var tex = new Texture2D(GW, GH, TextureFormat.RGBA32, false)
                 {
-                    filterMode = FilterMode.Point,
+                    filterMode = FilterMode.Bilinear,
                     wrapMode = TextureWrapMode.Clamp,
                 };
                 var px = new Color32[GW * GH];
@@ -1155,8 +1191,7 @@ namespace LCBridgeOverlay
                         t = Mathf.Clamp01(t);
                         t = t * t * (3f - 2f * t);
 
-                        float a2 = cover * t * (0.76f + 0.24f * (float)rnd.NextDouble());
-                        a2 = Mathf.Round(a2 * 10f) / 10f;       // ступени, а не плавность
+                        float a2 = cover * t * (0.88f + 0.12f * (float)rnd.NextDouble());
                         if (a2 > 0.01f) any = true;
                         px[y * GW + x] = new Color32(0, 0, 0, (byte)(Mathf.Clamp01(a2) * 255f));
                     }
