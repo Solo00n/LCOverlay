@@ -366,8 +366,8 @@ namespace LCBridgeOverlay
                 // Снаружи туман СТЕЛЕТСЯ У ЗЕМЛИ, а не занимает всё небо. Раньше он
                 // шёл от самого верха и полосы резали насквозь диски затмения —
                 // выходила невнятица; да и настоящий туман лежит низко.
-                float top = FogInside ? roomTop + 6f : Ground - 46f;
-                float span = FogInside ? (roomBottom - roomTop - 12f) : 42f;
+                float top = FogInside ? roomTop + 6f : Ground - 74f;
+                float span = FogInside ? (roomBottom - roomTop - 12f) : 66f;
                 for (int i = 0; i < _fogLines.Count; i++)
                 {
                     float y = top + Mathf.Repeat(i * (span / _fogLines.Count) + t * 5f, span);

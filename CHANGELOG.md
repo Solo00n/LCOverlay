@@ -1,5 +1,14 @@
 # Changelog — LCBridgeOverlay
 
+## 1.17.0
+- **The dark is a plain gradient again.** Cutting it to the silhouette of the drawing read as a vignette, and worse, it went around whatever lies over the background — the cart on the lower floor stayed bright in the middle of the dark. Everything below the fade now darkens together.
+- **What the planet holds is written under its name**, where it is read along with it, rather than in the footer of the schematic.
+- **Lamps no longer cast rays.** They argued with the line drawing; a lamp says what it needs to by being lit or out.
+- **A creature's mark swells like a bubble when more of its kind appear** — a springy overshoot that settles.
+- **One mark per creature, always.** A snare flea crawling and a snare flea on the ceiling are one animal in two states, and splitting them across two marks was wrong. The states now play through a single mark.
+- **A creature holds its place in the list whether or not it has been scanned.** Its rank comes from the whole roster, so the one specimen you have found of a numerous species sits at the top where it belongs instead of drifting to the bottom.
+- **Fog outdoors sits higher**, having hugged the ground rather too closely.
+
 ## 1.16.1
 - **The lift moves.** Its position was read from a field called `elevatorTransform`, which the game does not have — the string exists in the assembly but belongs elsewhere, so the lookup quietly returned nothing and the car stood where it was drawn all day. The car is `elevatorPoint`.
 - **The lift has a top station.** Where it travels is worked out from the cable: drawn running well above the car, the car was drawn at the bottom and rises until its roof meets the winch, which is where it stands at the start of the day. The cable is reeled in and paid out to match.

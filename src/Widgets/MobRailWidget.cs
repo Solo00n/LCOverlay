@@ -41,6 +41,7 @@ namespace LCBridgeOverlay
             public float Alpha = 1f;          // текущая (сглаженная) прозрачность
             public Color BaseColor = Color.white; // обычный цвет иконки
             public float HurtFlash;           // 1 → 0, вспышка при получении урона
+            public float Grow;                // 1 → 0, пружинистый рост при пополнении
             public float FlipY = 1f;          // -1 = иконка вверх ногами (девиант)
 
             // Версии одного монстра (обычный / с турелью / slayer / девиант).
@@ -85,6 +86,7 @@ namespace LCBridgeOverlay
         private readonly Dictionary<string, float> _distByVariant = new Dictionary<string, float>();
         // джестер: 0..1 — насколько он «завёлся» (тряска нарастает к хлопку)
         private readonly Dictionary<string, float> _windByGroup = new Dictionary<string, float>();
+        private readonly Dictionary<string, int> _countByGroup = new Dictionary<string, int>();
 
         /// <summary>Иконки турелей на нижней рейке — эмиттеры для эффекта стрельбы.</summary>
         public readonly List<RectTransform> TurretIcons = new List<RectTransform>();
@@ -129,6 +131,15 @@ namespace LCBridgeOverlay
 
                 if (s.Appear < 1f) s.Appear = Mathf.MoveTowards(s.Appear, 1f, dt / 0.3f);
                 float sc = s.Scale * EaseOutBack(s.Appear);         // появление с «отскоком»
+
+                // Вида стало больше — иконка вздувается пузырём и, качнувшись,
+                // оседает. Затухающая синусоида: заметно, но не суетливо.
+                if (s.Grow > 0f)
+                {
+                    s.Grow = Mathf.MoveTowards(s.Grow, 0f, dt / 0.75f);
+                    float u = 1f - s.Grow;
+                    sc *= 1f + 0.42f * s.Grow * Mathf.Cos(u * 16f);
+                }
 
                 // Джестер заводится: тряска нарастает тем сильнее, чем ближе хлопок.
                 // Как только он вылезет, придёт иконка 2-й фазы и всё вернётся к
@@ -326,6 +337,20 @@ namespace LCBridgeOverlay
         }
 
         /// <summary>0..1 — насколько джестер этой группы «завёлся» (0 = не заводится).</summary>
+        /// <summary>
+        /// Вида стало больше — качнуть иконку пузырём. Прежнее число помним по
+        /// группе; на убыль не отзываемся, там нечему радоваться.
+        /// </summary>
+        private void TriggerGrow(string sideGroupKey, int total)
+        {
+            int was;
+            bool known = _countByGroup.TryGetValue(sideGroupKey, out was);
+            _countByGroup[sideGroupKey] = total;
+            if (!known || total <= was) return;
+            SwayItem it;
+            if (_byGroup.TryGetValue(sideGroupKey, out it) && it != null) it.Grow = 1f;
+        }
+
         private float WindFor(string groupKey)
         {
             if (!ConfigSettings.JesterWindUpShake.Value || string.IsNullOrEmpty(groupKey)) return 0f;
@@ -842,8 +867,6 @@ namespace LCBridgeOverlay
             {
                 if (Hidden(raw)) continue;
                 var d = Parse(raw);
-                // ТЗ 3.1: с RequireScanToShow монстр появляется только после сканирования
-                if (Gate.RequireScan && !d.Scanned) continue;
                 if (d.IconKey == null || SpriteBank.Get(d.IconKey) == null)
                 {
                     // диагностика: какой монстр остался без иконки (имя из игры) —
@@ -857,10 +880,15 @@ namespace LCBridgeOverlay
                     byKey[d.GroupKey] = g;
                     groups.Add(g);
                 }
+                // ТЗ 3.1: с RequireScanToShow монстр ПОКАЗЫВАЕТСЯ только после
+                // сканирования — но в подсчёт и в сортировку идёт всё равно. Иначе
+                // единственный найденный монстр многочисленного вида уезжал вниз
+                // рейки, хотя его место наверху.
+                g.Total += d.Cnt;
+                if (Gate.RequireScan && !d.Scanned) continue;
                 var same = g.Variants.Find(v => v.Rank == d.Rank && v.IconKey == d.IconKey);
                 if (same != null) same.Cnt += d.Cnt;
                 else g.Variants.Add(d);
-                g.Total += d.Cnt;
             }
             // 2.10: если у монстра несколько версий (обычный / с турелью / slayer) —
             // показываем только БЛИЖАЙШУЮ к игроку. Смысла подсвечивать дальнего
@@ -868,7 +896,11 @@ namespace LCBridgeOverlay
             // ВСЕГДА ОДНА ИКОНКА на монстра: версии не выбрасываем — они поедут в
             // одну иконку, которая либо покажет версию «рядом», либо будет плавно
             // листать их по кругу (см. UpdateVariant).
-            bool oneIcon = ConfigSettings.NearestVariantOnly.Value;
+            // ВСЕГДА одна иконка на вид. Состояние — это не второй монстр:
+            // ползущая и висящая на потолке личинка суть одна и та же особь, и
+            // разводить их по двум иконкам было ошибкой. Версии уезжают в одну
+            // иконку, которая листает их сменой картинки.
+            const bool oneIcon = true;
 
             groups.Sort((a, b) => b.Total.CompareTo(a.Total)); // многочисленные — выше
 
@@ -886,9 +918,13 @@ namespace LCBridgeOverlay
                     amp = 5f + extra * 2.2f;      // до ~22°
                 }
 
+                // Место в списке за видом закреплено, даже если сам он ещё не
+                // просканирован: строка остаётся пустой, а соседи не всплывают.
+                if (g.Variants.Count == 0) { y -= RowStep; continue; }
+
                 g.Variants.Sort((a, b) => a.Rank.CompareTo(b.Rank)); // обычный → турель → slayer
 
-                if (oneIcon && g.Variants.Count > 0)
+                if (oneIcon)
                 {
                     // одна иконка на монстра: собираем список версий и отдаём его иконке
                     var views = new List<VariantView>(g.Variants.Count);
@@ -911,6 +947,7 @@ namespace LCBridgeOverlay
                     var oneRt = MakeIcon(rail, first.IconKey, first.Slayer || first.Kamikaze,
                                          g.Key.GetHashCode(), scale, oneAmp,
                                          SideKey(growLeft, g.Key), anyHurt, first.Deviant, views);
+                    TriggerGrow(SideKey(growLeft, g.Key), g.Total);
                     oneRt.anchoredPosition = new Vector2(growLeft ? 0f : 0f, y);
                     if (anyFiring) firingList.Add(oneRt);
 

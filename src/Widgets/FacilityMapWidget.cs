@@ -77,18 +77,20 @@ namespace LCBridgeOverlay
 
             var le = go.AddComponent<LayoutElement>();
             le.preferredWidth = inner;
-            le.preferredHeight = H * _fit + 52f;         // схема + название сверху + лут снизу
+            le.preferredHeight = H * _fit + 48f;         // название, строка о планете, схема
             _le = le;
 
             _moonText = Text(_root, 26f, new Vector2(0f, 0f), TextAlignmentOptions.Top, S.Text);
-            _lootText = Text(_root, 15f, new Vector2(0f, -(H * _fit + 30f)), TextAlignmentOptions.Top, S.TextDim);
+            // Сведения о планете стоят ПОД её названием, а не в подвале схемы:
+            // читаются они вместе с ним, и внизу им делать нечего.
+            _lootText = Text(_root, 15f, new Vector2(0f, -26f), TextAlignmentOptions.Top, S.TextDim);
 
             var artGo = new GameObject("Art", typeof(RectTransform));
             _art = (RectTransform)artGo.transform;
             _art.SetParent(_root, false);
             _art.anchorMin = _art.anchorMax = new Vector2(0f, 1f);
             _art.pivot = new Vector2(0f, 1f);
-            _art.anchoredPosition = new Vector2(0f, -30f);
+            _art.anchoredPosition = new Vector2(0f, -46f);   // ниже названия и строки о планете
             _art.sizeDelta = new Vector2(W, H);
             _art.localScale = new Vector3(_fit, _fit, 1f);   // увеличиваем всё разом
 
@@ -530,7 +532,6 @@ namespace LCBridgeOverlay
                 // Свет ставим под КАЖДОЙ жёлтой отметиной, на каком бы слое она ни
                 // была: совмещённый макет приходит одной картинкой, и отдельного
                 // слоя ламп в нём нет.
-                foreach (var b in l.LampBlobs) AddLampGlow(b.x * W, b.y * H);
 
                 // а сами лампы вынимаем в свою картинку поверх — тогда они гаснут
                 // со щитком, оставаясь жёлтыми, и не тянут за собой весь макет
@@ -1099,23 +1100,15 @@ namespace LCBridgeOverlay
                 _darkNoise = go.GetComponent<Image>();
                 _darkNoise.raycastTarget = false;
 
-                var carved = CarveGloom();
-                if (carved != null)
-                {
-                    // тьма выкроена по самому рисунку — ложится на холст один в один
-                    rt.anchoredPosition = Vector2.zero;
-                    rt.sizeDelta = new Vector2(W, H);
-                    _darkNoise.sprite = carved;
-                }
-                else
-                {
-                    // рисунка нет (схема собрана линиями) — кладём полотно во всю
-                    // ширину; наклон уводим в САМО полотно, поворот дал бы косые углы
-                    float span = Mathf.Max(20f, H - _gloomTop);
-                    rt.anchoredPosition = new Vector2(0f, -_gloomTop);
-                    rt.sizeDelta = new Vector2(W, span);
-                    _darkNoise.sprite = SpriteBank.GloomGrad(_gloomSlope * W / span);
-                }
+                // Просто градиент во всю ширину: сверху прозрачно, книзу глухо.
+                // Раскрой по силуэту рисунка выглядел виньеткой и, что хуже, обходил
+                // стороной то, что лежит поверх фона — вагонетка на нижнем этаже так
+                // и оставалась светлой посреди темноты.
+                float span = Mathf.Max(20f, H - _gloomTop);
+                rt.anchoredPosition = new Vector2(0f, -_gloomTop);
+                rt.sizeDelta = new Vector2(W, span);
+                // наклон уводим в САМО полотно: поворот дал бы косые углы
+                _darkNoise.sprite = SpriteBank.GloomGrad(_gloomSlope * W / span);
                 Warp();
             }
 
@@ -1123,14 +1116,8 @@ namespace LCBridgeOverlay
             _darkNoise.color = new Color(1f, 1f, 1f, 0.78f * _gloom);
             _darkNoise.enabled = _gloom > 0.01f;
 
-            float glow = (1f - _gloom) * (0.30f + 0.06f * Mathf.Sin(_lightPulse));
-            var lit = new Color(1f, 0.86f, 0.42f, glow);
-            foreach (var g in _lampGlows)
-            {
-                if (g == null) continue;
-                g.color = lit;
-                g.enabled = glow > 0.01f;
-            }
+            // Лучей от ламп нет: они спорили с линейной графикой схемы. Лампа
+            // говорит о свете сама — тем, что горит или потушена.
         }
 
         /// <summary>
