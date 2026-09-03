@@ -1,5 +1,10 @@
 # Changelog — LCBridgeOverlay
 
+## 1.14.2
+- **The dropship's exhaust burns outside the hull.** The ship hung from its top edge while the flame was drawn from the point it was anchored by, some forty pixels above its feet, so the fire burned inside the craft. It now stands on its base — the point it lands on — and the flame falls away beneath it. The flame itself was also upside down, its nozzle at the far end and its point against the hull.
+- **It comes in from space.** The descent is an arc from up and to the right rather than a drop down a plumb line, the craft leans into its own travel, sways as it comes, and grows as it nears the ground instead of arriving at full size.
+- **The flame feels the ground.** As the ship settles the exhaust shortens and spreads wide, flattening out the way any jet does against a surface.
+
 ## 1.14.1
 - **Notification mode has stopped fussing over loot.** Ship loot and scrap on the planet woke the panel on every item picked up, which meant it was awake most of the day and the news worth reading was lost in it. Neither wakes it now. The crew count is likewise quiet — a death already wakes the panel, and one event needs one signal.
 

@@ -1286,17 +1286,34 @@ namespace LCBridgeOverlay
                 if (_shipT >= 1f) { _shipT = -1f; Hide(); return; }
             }
 
-            // высота: сверху вниз на посадке, снизу вверх на взлёте
+            // высота: сверху вниз на посадке, снизу вверх на взлёте. y — это ТОЧКА
+            // ПОСАДКИ, то есть низ корпуса, а не его середина.
             float k = _shipT;
-            float y = k < 0.5f ? Mathf.Lerp(-90f, ShipGroundY, k / 0.5f)
-                               : Mathf.Lerp(ShipGroundY, -110f, (k - 0.5f) / 0.5f);
+            float y = k < 0.5f ? Mathf.Lerp(-130f, ShipGroundY, k / 0.5f)
+                               : Mathf.Lerp(ShipGroundY, -150f, (k - 0.5f) / 0.5f);
             bool burning = k < 0.48f || k > 0.52f;   // на стоянке двигатели молчат
+
+            // Он прилетел из космоса, а не выехал из-за верхнего края: заходит
+            // сверху-справа, заваливается на площадку по дуге, качается на ветру и
+            // растёт по мере приближения — пока он высоко, он попросту далеко.
+            float alt = Mathf.Max(0f, ShipGroundY - y);
+            float high = Mathf.Clamp01(alt / 150f);          // 1 в вышине … 0 на земле
+            float low = 1f - Mathf.Clamp01(alt / 60f);       // 0 далеко … 1 у самой земли
+            float tt = Time.unscaledTime;
+
+            float arc = high * high * 96f;
+            float wob = (Mathf.Sin(tt * 2.1f) * 5.5f + Mathf.Sin(tt * 5.3f + 1.7f) * 2.2f) * high;
+            float sx = ShipX + arc + wob;
+            float tilt = Mathf.Clamp(arc * 0.16f + wob * 0.5f, -22f, 22f);
+            float sc = Mathf.Lerp(1f, 0.42f, high);
 
             var col = OverlayStyle.WithA(S.Frame, 1f);
             if (_shipSprite != null)
             {
                 var rt = (RectTransform)_shipSprite.transform;
-                rt.anchoredPosition = new Vector2(ShipX, -(y - 26f));
+                rt.anchoredPosition = new Vector2(sx, -y);
+                rt.localScale = new Vector3(sc, sc, 1f);
+                rt.localRotation = Quaternion.Euler(0f, 0f, tilt);
                 _shipSprite.enabled = true;
                 // доставщик — часть постройки, а не угроза: красим его цветом темы,
                 // а не тем, каким помечены монстры
@@ -1310,9 +1327,9 @@ namespace LCBridgeOverlay
                 else _shipSprite.color = Color.white;
                 foreach (var g in _ship) if (g != null) g.enabled = false;
             }
-            else DrawShipLines(ShipX, y, col);
+            else DrawShipLines(sx, y, col);
 
-            DrawFlame(ShipX, y, burning);
+            DrawFlame(sx, y, burning, low, tilt, sc);
         }
 
         private void Hide()
@@ -1336,7 +1353,10 @@ namespace LCBridgeOverlay
                     var rt = (RectTransform)go.transform;
                     rt.SetParent(_art, false);
                     rt.anchorMin = rt.anchorMax = new Vector2(0f, 1f);
-                    rt.pivot = new Vector2(0.5f, 1f);
+                    // опора — НИЗ корабля: именно им он касается земли, и от него же
+                    // бьёт пламя. С прежней опорой сверху низ корпуса оказывался
+                    // на четыре десятка пикселей ниже сопла, и огонь горел внутри.
+                    rt.pivot = new Vector2(0.5f, 0f);
                     rt.sizeDelta = new Vector2(52f, 72f);
                     _shipSprite = go.GetComponent<Image>();
                     _shipSprite.sprite = spr;
@@ -1395,10 +1415,14 @@ namespace LCBridgeOverlay
         }
 
         /// <summary>
-        /// Одна большая свеча пламени под кораблём — вместо россыпи полосок, из
-        /// которых огонь не читался. Дышит по высоте и чуть качается.
+        /// Свеча пламени под соплом. Растёт ВНИЗ от низа корпуса и наклоняется
+        /// вместе с ним.
+        ///
+        /// У земли факел чувствует под собой опору: укорачивается и расходится
+        /// вширь, растекаясь почти горизонтально, — так делает всякая струя,
+        /// упирающаяся в поверхность.
         /// </summary>
-        private void DrawFlame(float x, float y, bool on)
+        private void DrawFlame(float x, float y, bool on, float low, float tilt, float scale)
         {
             if (_flameImg == null)
             {
@@ -1406,7 +1430,9 @@ namespace LCBridgeOverlay
                 var frt = (RectTransform)go.transform;
                 frt.SetParent(_art, false);
                 frt.anchorMin = frt.anchorMax = new Vector2(0f, 1f);
-                frt.pivot = new Vector2(0.5f, 0f);      // растёт ВНИЗ от сопла
+                // опора СВЕРХУ: широкий конец у сопла, остриё внизу. С прежней
+                // опорой снизу и разворотом на 180° факел висел остриём вверх.
+                frt.pivot = new Vector2(0.5f, 1f);
                 _flameImg = go.GetComponent<Image>();
                 _flameImg.sprite = SpriteBank.Flame();
                 _flameImg.raycastTarget = false;
@@ -1415,12 +1441,15 @@ namespace LCBridgeOverlay
             if (!on) { _flameImg.enabled = false; return; }
 
             float t = Time.unscaledTime;
-            float len = 34f + 12f * Mathf.PerlinNoise(t * 6f, 0f);
-            float wide = 20f + 4f * Mathf.PerlinNoise(0f, t * 7f);
+            float k = Mathf.Clamp01(low);
+            k = k * k * (3f - 2f * k);
+            float len = Mathf.Lerp(48f, 14f, k) * (0.85f + 0.3f * Mathf.PerlinNoise(t * 6f, 0f)) * scale;
+            float wide = Mathf.Lerp(17f, 48f, k) * (0.9f + 0.2f * Mathf.PerlinNoise(0f, t * 7f)) * scale;
+
             var rt = (RectTransform)_flameImg.transform;
-            rt.anchoredPosition = new Vector2(x, -(y + 1f));
+            rt.anchoredPosition = new Vector2(x, -y);
             rt.sizeDelta = new Vector2(wide, len);
-            rt.localRotation = Quaternion.Euler(0f, 0f, 180f + Mathf.Sin(t * 5f) * 3f);
+            rt.localRotation = Quaternion.Euler(0f, 0f, tilt + Mathf.Sin(t * 5f) * 3f * (1f - k));
             _flameImg.enabled = true;
             _flameImg.color = new Color(1f, 1f, 1f, 0.9f);
         }
