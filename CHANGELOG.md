@@ -1,5 +1,8 @@
 # Changelog — LCBridgeOverlay
 
+## 1.15.6
+- **Whatever moves on the schematic now keeps its perspective current.** The tilt is worked into each drawing's mesh from where its corners fall in the panel, but a uGUI mesh is only rebuilt when the rectangle changes size. Anything that travels without resizing — the dropship, the lift car, the creature marks — kept the tilt it was given wherever it happened to be built, and drifted away from its neighbours. The flame under the ship breathes in size and so was always laid correctly: that is exactly why the two came apart, and why the fire appeared to burn off to one side.
+
 ## 1.15.5
 - **A lamp is recognised by its colour, not by the name of its file.** A whole schematic can now be brought as one image, and the light still pools under every yellow mark in it. Only a layer of its own still breathes with the breaker — blinking the entire picture on account of three lamps would not do.
 - The bundled sample layers no longer ride inside the DLL; they belong in the player's config folder.

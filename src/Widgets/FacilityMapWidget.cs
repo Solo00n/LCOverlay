@@ -248,6 +248,9 @@ namespace LCBridgeOverlay
             _trapSlots.Clear(); _trapDots.Clear();
             _inPaths.Clear(); _outPaths.Clear();
             _elevCar = null;
+            if (_movers == null)
+                _movers = new[] { _outDots, _inDots, _outFill, _inFill, _trapDots,
+                                  _cableExt, _ship };
             // рисунки погоды уничтожены вместе с детьми _art: без сброса
             // Tick лезет в снесённые объекты и сыплет ошибками каждый кадр
             _fx = null; _wxKind = null; _wxRaw = null;
@@ -266,7 +269,7 @@ namespace LCBridgeOverlay
                 SortInsidePathsByFloor();
                 BuildTrapSlots();
                 _builtFor = interior ?? "";
-                try { _mgr?.AddPerspectiveToTree(_art); } catch { }
+                Warp();
                 return;
             }
 
@@ -274,7 +277,7 @@ namespace LCBridgeOverlay
             if (lay != null && DrawFromLayout(lay))
             {
                 _builtFor = interior ?? "";
-                try { _mgr?.AddPerspectiveToTree(_art); } catch { }
+                Warp();
                 return;
             }
 
@@ -405,7 +408,7 @@ namespace LCBridgeOverlay
             }
 
             _builtFor = interior ?? "";
-            try { _mgr?.AddPerspectiveToTree(_art); } catch { }
+            Warp();
         }
 
         /// <summary>
@@ -991,8 +994,38 @@ namespace LCBridgeOverlay
         /// </summary>
         private void Warp()
         {
-            try { _mgr?.AddPerspectiveToTree(_art); } catch { }
+            try { _mgr?.AddPerspectiveToTree(_art); KeepWarpedAll(); } catch { }
         }
+
+        /// <summary>
+        /// Пометить графику подвижной: её меш перекладывается перспективой КАЖДЫЙ
+        /// кадр, а не только при смене размера.
+        ///
+        /// Наклон считается по тому, где вершины оказались в панели, а меш uGUI
+        /// пересобирает лишь когда меняется размер прямоугольника. Всё, что ездит
+        /// не меняя размера — доставщик, кабина лифта, метки монстров, — так и
+        /// оставалось перекошенным по старому месту и разъезжалось с соседями.
+        /// Огонь под кораблём дышал размером и потому ложился верно: расходились
+        /// они именно из-за этого.
+        /// </summary>
+        private static void KeepWarped(Graphic g)
+        {
+            if (g == null) return;
+            var w = g.GetComponent<PerspectiveWarp>();
+            if (w != null) w.Continuous = true;
+        }
+
+        private void KeepWarpedAll()
+        {
+            foreach (var l in _movers)
+                for (int i = 0; i < l.Count; i++) KeepWarped(l[i]);
+            KeepWarped(_shipSprite);
+            KeepWarped(_flameImg);
+            if (_elevCar != null) KeepWarped(_elevCar.GetComponent<Graphic>());
+        }
+
+        /// <summary>Списки графики, которая ездит по схеме, не меняя размера.</summary>
+        private List<Image>[] _movers;
 
         private void UpdateGloom(float dt)
         {
