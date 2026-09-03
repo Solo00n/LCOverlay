@@ -51,8 +51,7 @@ namespace LCBridgeOverlay
         private NotifyWidget _notify;  // режим уведомлений: панель спит и просыпается на новости
         private FacilityMapWidget _map; // схема локации для улицы
         private string _sigQuota, _sigMon, _sigTrap, _sigEvent, _sigMoon;
-        private int _sigDeaths = int.MinValue, _sigDay = int.MinValue, _sigLoot = int.MinValue;
-        private int _sigScrap = int.MinValue, _sigAlive = int.MinValue;
+        private int _sigDeaths = int.MinValue, _sigDay = int.MinValue;
         private bool _sigReady;
         private TextMeshProUGUI _moonText, _interiorText, _itemsText, _oldBirdText;
         private Image _lampImg;                       // 2.14: иконка аппарата у интерьера
@@ -483,8 +482,7 @@ namespace LCBridgeOverlay
             {
                 _sigReady = true;
                 _sigMon = mon; _sigTrap = trap; _sigEvent = ev; _sigMoon = moon; _sigQuota = quota;
-                _sigDeaths = p.deaths; _sigDay = p.dayCount; _sigLoot = p.shipLoot;
-                _sigScrap = p.levelScrap; _sigAlive = p.alive;
+                _sigDeaths = p.deaths; _sigDay = p.dayCount;
                 return;
             }
 
@@ -499,9 +497,10 @@ namespace LCBridgeOverlay
             if (quota != _sigQuota) { _sigQuota = quota; _notify.Ping(_lootQuotaText); }
             if (p.deaths != _sigDeaths) { _sigDeaths = p.deaths; _notify.Ping(_deathsText); }
             if (p.dayCount != _sigDay) { _sigDay = p.dayCount; _notify.Ping(_dayText); }
-            if (p.shipLoot != _sigLoot) { _sigLoot = p.shipLoot; _notify.Ping(_lootQuotaText); }
-            if (p.levelScrap != _sigScrap) { _sigScrap = p.levelScrap; _notify.Ping(_onPlanetVal); }
-            if (p.alive != _sigAlive) { _sigAlive = p.alive; _notify.Ping(null); }
+            // Лут на корабле и хлам на планете НЕ будят: они меняются на каждом
+            // поднятом предмете, панель дёргалась бы весь день и за этим шумом
+            // терялось бы всё остальное. Число живых тоже молчит — смерть уже
+            // разбудила панель строкой выше, а два сигнала на одно событие лишние.
         }
 
         /// <summary>

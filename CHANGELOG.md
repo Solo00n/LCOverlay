@@ -1,5 +1,8 @@
 # Changelog — LCBridgeOverlay
 
+## 1.14.1
+- **Notification mode has stopped fussing over loot.** Ship loot and scrap on the planet woke the panel on every item picked up, which meant it was awake most of the day and the news worth reading was lost in it. Neither wakes it now. The crew count is likewise quiet — a death already wakes the panel, and one event needs one signal.
+
 ## 1.14.0
 - **Marks travel both ways.** They slid in from the rails when you stepped outside, but on the way back they simply vanished; now the journey runs in reverse as well. Running in and out repeatedly could also leave the rails and the schematic on screen at once — the two are reconciled every frame rather than once per packet.
 - **The timer hides on the schematic and the eye moves to the centre**, sliding across as you enter and leave the ship.
