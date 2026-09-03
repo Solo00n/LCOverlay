@@ -1,5 +1,8 @@
 # Changelog — LCBridgeOverlay
 
+## 1.15.3
+- **The dark is cut to the shape of the drawing.** A sheet across the lower schematic still lay over it as a slab — the empty rock around the caves, the sky at either side, and its edges read as lines. Density is now taken from the layers themselves, so only the complex and the caves go dark, and it is half as heavy as it was.
+
 ## 1.15.2
 - **The version the plugin declares had been stuck at 1.13.2 since that release.** BepInEx chooses between copies of a plugin by that number, not by the date on the file, so with several copies in the plugins folder all claiming the same version it loaded whichever it happened to reach first — and a fresh build could simply never arrive in the game. The build now fails if the declared version and the project's disagree.
 

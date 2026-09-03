@@ -29,6 +29,7 @@ namespace LCBridgeOverlay
         {
             public string Name;
             public Sprite Sprite;
+            public Texture2D Tex;
             public bool IsLamp, IsCave, IsElevator, IsCable;
 
             /// <summary>
@@ -86,6 +87,7 @@ namespace LCBridgeOverlay
                     var layer = new Layer
                     {
                         Name = nm,
+                        Tex = tex,
                         Sprite = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height),
                                                new Vector2(0.5f, 0.5f), 100f, 0, SpriteMeshType.FullRect),
                         IsLamp = nm.Contains("lamp"),

@@ -241,6 +241,7 @@ namespace LCBridgeOverlay
             _lampImgs.Clear(); _weatherBits.Clear(); _lampGlows.Clear();
             _darkNoise = null; _gloomTop = float.NaN;
             _cableImg = null; _cableExt.Clear(); _elevCarTop = 0f; _elevPos = 0f;
+            _gloomSrc = null; _gloomSpr = null;
             _outSlots.Clear(); _inSlots.Clear(); _outDots.Clear(); _inDots.Clear();
             _outFill.Clear(); _inFill.Clear();
             _trapSlots.Clear(); _trapDots.Clear();
@@ -256,6 +257,7 @@ namespace LCBridgeOverlay
             var imgs = MapImages.Load();
             if (imgs != null && imgs.Count > 0)
             {
+                _gloomSrc = imgs;
                 DrawFromImages(imgs);
                 var slotsLay = MapLayout.Load();
                 if (slotsLay != null) AddSlotsFromLayout(slotsLay);
@@ -994,18 +996,31 @@ namespace LCBridgeOverlay
                 rt.SetParent(_art, false);
                 rt.anchorMin = rt.anchorMax = new Vector2(0f, 1f);
                 rt.pivot = new Vector2(0f, 1f);
-                rt.anchoredPosition = new Vector2(0f, -_gloomTop);
-                rt.sizeDelta = new Vector2(W, Mathf.Max(20f, H - _gloomTop));
                 _darkNoise = go.GetComponent<Image>();
-                // наклон уводим в САМО полотно: поверни его — и вылезут косые углы
-                float span = Mathf.Max(20f, H - _gloomTop);
-                _darkNoise.sprite = SpriteBank.GloomGrad(_gloomSlope * W / span);
                 _darkNoise.raycastTarget = false;
+
+                var carved = CarveGloom();
+                if (carved != null)
+                {
+                    // тьма выкроена по самому рисунку — ложится на холст один в один
+                    rt.anchoredPosition = Vector2.zero;
+                    rt.sizeDelta = new Vector2(W, H);
+                    _darkNoise.sprite = carved;
+                }
+                else
+                {
+                    // рисунка нет (схема собрана линиями) — кладём полотно во всю
+                    // ширину; наклон уводим в САМО полотно, поворот дал бы косые углы
+                    float span = Mathf.Max(20f, H - _gloomTop);
+                    rt.anchoredPosition = new Vector2(0f, -_gloomTop);
+                    rt.sizeDelta = new Vector2(W, span);
+                    _darkNoise.sprite = SpriteBank.GloomGrad(_gloomSlope * W / span);
+                }
                 Warp();
             }
 
             _gloom = Mathf.MoveTowards(_gloom, _lightsOn ? 0f : 1f, dt / 1.2f);
-            _darkNoise.color = new Color(1f, 1f, 1f, 0.72f * _gloom);
+            _darkNoise.color = new Color(1f, 1f, 1f, 0.5f * _gloom);
             _darkNoise.enabled = _gloom > 0.01f;
 
             float glow = (1f - _gloom) * (0.30f + 0.06f * Mathf.Sin(_lightPulse));
@@ -1017,6 +1032,83 @@ namespace LCBridgeOverlay
                 g.enabled = glow > 0.01f;
             }
         }
+
+        /// <summary>
+        /// Выкроить полумрак по силуэту схемы.
+        ///
+        /// Прямоугольное полотно ложилось на схему плитой: под ним оказывалась и
+        /// пустая порода вокруг пещер, и небо по бокам, и края читались линиями.
+        /// Здесь плотность берётся из самих слоёв — где нарисован комплекс и
+        /// пещеры, там и темнеет, — и умножается на набор плотности сверху вниз.
+        ///
+        /// Разрешение нарочно втрое грубее холста: тьма должна быть из тех же
+        /// крупных пикселей, что и всё остальное.
+        /// </summary>
+        private Sprite CarveGloom()
+        {
+            try
+            {
+                if (_gloomSpr != null) return _gloomSpr;
+                if (_gloomSrc == null || _gloomSrc.Count == 0) return null;
+
+                const int GW = 112, GH = 136;
+                var tex = new Texture2D(GW, GH, TextureFormat.RGBA32, false)
+                {
+                    filterMode = FilterMode.Point,
+                    wrapMode = TextureWrapMode.Clamp,
+                };
+                var px = new Color32[GW * GH];
+                var rnd = new System.Random(20260101);
+
+                float span = Mathf.Max(20f, (H - _gloomTop) * 0.55f);
+                bool any = false;
+
+                for (int y = 0; y < GH; y++)
+                    for (int x = 0; x < GW; x++)
+                    {
+                        float u = (x + 0.5f) / GW;
+                        float v = (y + 0.5f) / GH;              // снизу вверх, как в текстуре
+                        float cy = (1f - v) * H;                // та же высота, но сверху вниз
+
+                        // где вообще что-то нарисовано: лампы и подвижные части не в счёт
+                        float cover = 0f;
+                        foreach (var l in _gloomSrc)
+                        {
+                            if (l == null || l.Tex == null) continue;
+                            if (l.IsLamp || l.IsElevator || l.IsCable) continue;
+                            float a = l.Tex.GetPixelBilinear(u, v).a;
+                            if (a > cover) cover = a;
+                        }
+                        if (cover <= 0.02f) { px[y * GW + x] = new Color32(0, 0, 0, 0); continue; }
+
+                        // набор плотности сверху вниз, кромка может идти наклонно
+                        float t = (cy - _gloomTop - (u - 0.5f) * _gloomSlope) / span;
+                        t = Mathf.Clamp01(t);
+                        t = t * t * (3f - 2f * t);
+
+                        float a2 = cover * t * (0.76f + 0.24f * (float)rnd.NextDouble());
+                        a2 = Mathf.Round(a2 * 10f) / 10f;       // ступени, а не плавность
+                        if (a2 > 0.01f) any = true;
+                        px[y * GW + x] = new Color32(0, 0, 0, (byte)(Mathf.Clamp01(a2) * 255f));
+                    }
+
+                if (!any) return null;
+                tex.SetPixels32(px);
+                tex.Apply(false, false);
+                _gloomSpr = Sprite.Create(tex, new Rect(0, 0, GW, GH), new Vector2(0f, 1f), 100f, 0,
+                                          SpriteMeshType.FullRect);
+                Plugin.Log?.LogInfo($"[map] полумрак выкроен по рисунку, сход с {_gloomTop:0}");
+                return _gloomSpr;
+            }
+            catch (System.Exception e)
+            {
+                Plugin.Log?.LogWarning($"[map] полумрак не выкроен: {e.Message}");
+                return null;
+            }
+        }
+
+        private List<MapImages.Layer> _gloomSrc;
+        private Sprite _gloomSpr;
 
         /// <summary>Пятно света под лампой, нарисованной на слое.</summary>
         private void AddLampGlow(float x, float y)
