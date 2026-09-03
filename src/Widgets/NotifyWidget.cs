@@ -63,7 +63,7 @@ namespace LCBridgeOverlay
             if (!_awakeSfxPlayed)
             {
                 _awakeSfxPlayed = true;
-                RadarSfx.PlayOn();
+                if (ConfigSettings.NotifySound.Value) RadarSfx.PlayNews();
             }
         }
 
@@ -97,11 +97,8 @@ namespace LCBridgeOverlay
             // разгораемся быстро, гаснем медленно — так спокойнее для глаза
             _wake = Mathf.MoveTowards(_wake, wantAwake ? 1f : 0f, dt / (wantAwake ? FadeIn : FadeOut));
 
-            if (!wantAwake && _awakeSfxPlayed && _wake <= 0.001f)
-            {
-                _awakeSfxPlayed = false;
-                RadarSfx.PlayOff();
-            }
+            // затихание молча: оповещение — это событие, а не пара «включили/выключили»
+            if (!wantAwake && _awakeSfxPlayed && _wake <= 0.001f) _awakeSfxPlayed = false;
         }
 
         /// <summary>
@@ -303,9 +300,31 @@ namespace LCBridgeOverlay
             catch { }
         }
 
-        // вверх на включении, вниз на выключении — привычная пара «сигнал пришёл / ушёл»
+        // вверх на включении, вниз на выключении — привычная пара «сигнал пришёл /
+        // ушёл». Ими же отзывается ручное открытие и закрытие оверлея по клавише.
         public static void PlayOn() { Ensure(); Play(_on, 1.5f); }
         public static void PlayOff() { Ensure(); Play(_off, 0.82f); }
+
+        /// <summary>
+        /// Оповещение: что-то произошло. Звук СВОЙ, не тот, которым оверлей
+        /// открывается и закрывается, — иначе новость было не отличить от того,
+        /// что панель просто показали.
+        /// </summary>
+        public static void PlayNews()
+        {
+            try
+            {
+                Ensure();
+                var hud = HUDManager.Instance;
+                var clip = hud != null ? (hud.globalNotificationSFX ?? hud.profitQuotaDaysLeftCalmSFX) : null;
+                if (clip == null) { Play(_on, 1.22f); return; }   // на крайний случай — бустером
+                var src = Source();
+                if (src == null) return;
+                src.pitch = 1.12f;
+                src.PlayOneShot(clip, 0.5f);
+            }
+            catch { }
+        }
 
         public static void Forget() { _searched = false; _on = null; _off = null; }
     }

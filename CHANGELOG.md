@@ -1,5 +1,13 @@
 # Changelog — LCBridgeOverlay
 
+## 1.16.0
+- **The dropship's flame is drawn in line, like everything around it** — an outline of the same picture, in the theme colour — and sits higher, so it issues from the ship rather than hanging beneath it.
+- **The dark reaches higher and is heavier**, and its fade now falls across the lift tunnel instead of being stretched over half the schematic.
+- **The eclipse's discs are round again.** Sun and moon cross the sky as rings of a fixed radius, so their segments never changed size and never had their tilt recomputed — every arc kept the tilt of wherever it was built, and the circles came out ragged. The weather now keeps its perspective current, as the dropship and the marks already do.
+- **The timer no longer flashes on the schematic.** A rebuilt panel makes a new timer box at full width, and it showed for a frame before the collapse animation caught up; the collapse is now applied the moment the panel is built.
+- **Something happening has a sound of its own,** distinct from the overlay appearing.
+- **The old open and close signals now answer the key** that shows and hides the overlay, which is what they always sounded like they were for. `NotifySound` turns all of it off.
+
 ## 1.15.7
 - **The dark falls on the background of the complex and on nothing else.** The outlines, the rails and the lamps lie over that background at full strength and dimming them only made the schematic harder to read. Background is told from linework by its transparency, which is how it is drawn.
 - **Lamps stay yellow and simply go dim when the power is off.** In a single combined image they had no layer of their own to dim, so they are lifted out into one automatically.

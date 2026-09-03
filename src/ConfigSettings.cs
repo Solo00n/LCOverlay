@@ -63,6 +63,7 @@ namespace LCBridgeOverlay
                                           ColorEclipse, ColorFog, ColorDust, ColorMeteor;
         public static ConfigEntry<bool> NotifyMode;           // панель спит и просыпается на новости
         public static ConfigEntry<float> NotifyHoldSeconds;   // сколько держать её разбуженной
+        public static ConfigEntry<bool> NotifySound;          // озвучивать новости и показ панели
         public static ConfigEntry<bool> EventPlateAutoHide;   // плашка ивента гаснет сама
         public static ConfigEntry<float> EventPlateSeconds;   // сколько её держать после посадки
         public static ConfigEntry<bool> TeamDeaths;           // считать смерти всей команды
@@ -265,10 +266,13 @@ namespace LCBridgeOverlay
             ColorMeteor  = cfg.Bind("Widgets", "ColorMeteor",  "Red",    cdesc);
 
             NotifyMode = cfg.Bind("Behavior", "NotifyMode", false,
-                "Режим уведомлений: панель не висит на экране постоянно, а спит невидимой и разгорается только когда что-то изменилось. Над ней появляется мельтешащая папка, она влетает в панель и растворяется, изменившиеся цифры коротко мерцают. Включение и выключение озвучены радар-бустером.");
+                "Режим уведомлений: панель не висит на экране постоянно, а спит невидимой и разгорается только когда что-то изменилось. Над ней появляется мельтешащая папка, она влетает в панель и растворяется, изменившиеся цифры коротко мерцают. Новость отзывается коротким оповещением (см. NotifySound).");
 
             NotifyHoldSeconds = cfg.Bind("Behavior", "NotifyHoldSeconds", 6f,
                 "Сколько секунд панель остаётся видимой после последней новости.");
+            NotifySound = cfg.Bind("Behavior", "NotifySound", true,
+                "Звук: короткое оповещение, когда что-то произошло, и пара сигналов на открытие "
+                + "и закрытие оверлея клавишей.");
 
             EventPlateAutoHide = cfg.Bind("Behavior", "EventPlateAutoHide", false,
                 "Плашка ивента не висит весь день, а всплывает дважды: на 10 секунд после посадки и на 5 при отлёте. В режиме уведомлений так и без этой настройки.");

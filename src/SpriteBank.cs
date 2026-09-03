@@ -72,6 +72,28 @@ namespace LCBridgeOverlay
 
         private static readonly Dictionary<string, Sprite> _point = new Dictionary<string, Sprite>();
 
+        /// <summary>
+        /// Векторный контур картинки независимо от выбранного стиля иконок. Нужен
+        /// огню доставщика: он должен быть из тех же линий, что и вся схема, даже
+        /// когда монстры показаны как есть.
+        /// </summary>
+        public static Sprite VectorOf(string key)
+        {
+            if (string.IsNullOrEmpty(key)) return null;
+            Sprite got;
+            if (_vector.TryGetValue(key, out got)) return got;
+            try
+            {
+                var src = GetRaw(key);
+                if (src != null && src.texture != null) got = Outline(src.texture);
+            }
+            catch { }
+            _vector[key] = got;
+            return got;
+        }
+
+        private static readonly Dictionary<string, Sprite> _vector = new Dictionary<string, Sprite>();
+
         /// <summary>Исходная картинка из ресурсов, без стилизации.</summary>
         public static Sprite GetRaw(string key)
         {

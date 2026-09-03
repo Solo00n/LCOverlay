@@ -106,7 +106,26 @@ namespace LCBridgeOverlay
             var img = go.GetComponent<Image>();
             img.color = col;
             img.raycastTarget = false;
+            _all.Add(img);
             return img;
+        }
+
+        private readonly List<Image> _all = new List<Image>();
+
+        /// <summary>
+        /// Погода ездит по схеме, не меняя размера — солнце с луной обходят небо
+        /// кольцами постоянного радиуса. Наклон же вшивается в меш и пересчитывается
+        /// только при смене размера, поэтому дуги оставались перекошенными по старым
+        /// местам и круги выходили рваными. Пусть перекладываются каждый кадр.
+        /// </summary>
+        public void KeepWarped()
+        {
+            foreach (var im in _all)
+            {
+                if (im == null) continue;
+                var w = im.GetComponent<PerspectiveWarp>();
+                if (w != null) w.Continuous = true;
+            }
         }
 
         private static void Place(RectTransform rt, float x1, float y1, float x2, float y2, float th)
@@ -125,6 +144,7 @@ namespace LCBridgeOverlay
         public void Rebuild(List<string> kinds, bool fogInside)
         {
             for (int i = _host.childCount - 1; i >= 0; i--) Object.Destroy(_host.GetChild(i).gameObject);
+            _all.Clear();
             _drops.Clear(); _splash.Clear(); _fogLines.Clear(); _meteors.Clear();
             _bolt.Clear(); _sun.Clear(); _moon.Clear();
             _waterLine = _waterRipple = null;

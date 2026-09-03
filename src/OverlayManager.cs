@@ -198,6 +198,9 @@ namespace LCBridgeOverlay
                 _dirty = false;
                 EnsureFonts();
                 Refresh();
+                // новая коробка таймера рождается во всю ширину: сворачиваем её
+                // ТУТ ЖЕ, иначе на схеме таймер мелькает один кадр
+                ApplyTimerCollapse();
             }
 
             // перспектива запечена под старый размер панели — при изменении высоты
@@ -355,7 +358,17 @@ namespace LCBridgeOverlay
                 var p = DataParser.Current;
                 bool onShip = p != null && p.onShip;
                 if (ConfigSettings.AlwaysVisible.Value || onShip)
+                {
                     _userHidden = !_userHidden;
+                    // Пара «сигнал пришёл / ушёл» теперь отзывается именно на то,
+                    // что оверлей открыли или закрыли рукой: раньше она уходила на
+                    // пробуждение в режиме уведомлений, где смысла в ней не было.
+                    if (ConfigSettings.NotifySound.Value)
+                    {
+                        if (_userHidden) RadarSfx.PlayOff();
+                        else RadarSfx.PlayOn();
+                    }
+                }
             }
             if (KeyPressed(ConfigSettings.TimerPauseKeyParsed))
                 _timerRunning = !_timerRunning;
@@ -634,22 +647,32 @@ namespace LCBridgeOverlay
             _mapT = Mathf.MoveTowards(_mapT, want ? 1f : 0f, dt / 0.55f);
             _mobRail?.SetRailsVisible(_mapT < 0.999f);
 
-            // коробка таймера сворачивается, и глаз сам уезжает в центр шапки
-            if (_timerBoxLE != null)
-            {
-                float e = 1f - Mathf.Pow(1f - _mapT, 3f);
-                float wide = Mathf.Lerp(205f, 0f, e);
-                _timerBoxLE.preferredWidth = wide;
-                _timerBoxLE.minWidth = wide;
-                if (_timerBox != null && _timerBox.activeSelf != (wide > 1f))
-                    _timerBox.SetActive(wide > 1f);
-            }
+            ApplyTimerCollapse();
 
             _map.Refresh(p, want, _mapT);
             if (want) _map.ApplyFonts(_fontBody, _fontBig);
         }
 
         private bool _mapShown;
+        /// <summary>
+        /// Свернуть коробку таймера под текущее состояние схемы; глаз при этом сам
+        /// уезжает в центр шапки.
+        ///
+        /// Зовётся не только каждый кадр, но и СРАЗУ после пересборки панели: новая
+        /// коробка рождается во всю ширину и активной, и до первого кадра анимации
+        /// таймер успевал мелькнуть поверх схемы.
+        /// </summary>
+        private void ApplyTimerCollapse()
+        {
+            if (_timerBoxLE == null) return;
+            float e = 1f - Mathf.Pow(1f - _mapT, 3f);
+            float wide = Mathf.Lerp(205f, 0f, e);
+            _timerBoxLE.preferredWidth = wide;
+            _timerBoxLE.minWidth = wide;
+            if (_timerBox != null && _timerBox.activeSelf != (wide > 1f))
+                _timerBox.SetActive(wide > 1f);
+        }
+
         private GameObject _timerBox;
         private LayoutElement _timerBoxLE;
         private float _mapT;            // 0 корабль … 1 схема, для плавных переходов

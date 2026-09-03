@@ -1051,7 +1051,7 @@ namespace LCBridgeOverlay
         private void UpdateGloom(float dt)
         {
             if (float.IsNaN(_gloomTop))
-                _gloomTop = _elevCar != null ? Mathf.Max(0f, _elevCarTop - 24f) : RoomTop;
+                _gloomTop = _elevCar != null ? Mathf.Max(0f, _elevCarTop - 34f) : RoomTop;
 
             if (_darkNoise == null)
             {
@@ -1084,7 +1084,7 @@ namespace LCBridgeOverlay
             }
 
             _gloom = Mathf.MoveTowards(_gloom, _lightsOn ? 0f : 1f, dt / 1.2f);
-            _darkNoise.color = new Color(1f, 1f, 1f, 0.5f * _gloom);
+            _darkNoise.color = new Color(1f, 1f, 1f, 0.78f * _gloom);
             _darkNoise.enabled = _gloom > 0.01f;
 
             float glow = (1f - _gloom) * (0.30f + 0.06f * Mathf.Sin(_lightPulse));
@@ -1124,7 +1124,10 @@ namespace LCBridgeOverlay
                 var px = new Color32[GW * GH];
                 var rnd = new System.Random(20260101);
 
-                float span = Mathf.Max(20f, (H - _gloomTop) * 0.55f);
+                // Сход короткий и приходится РОВНО на тоннель лифта: ниже него
+                // темно в полную силу, выше — чисто. Растянутый на полсхемы
+                // сход уводил темноту едва ли не к самому низу.
+                float span = 52f;
                 bool any = false;
 
                 for (int y = 0; y < GH; y++)
@@ -1823,7 +1826,8 @@ namespace LCBridgeOverlay
                 // как у всякого огня, и разворачивать их было незачем
                 frt.pivot = new Vector2(0.5f, 1f);
                 _flameImg = go.GetComponent<Image>();
-                _flameImg.sprite = SpriteBank.RawPoint("flame");
+                // одними линиями, как и вся схема вокруг
+                _flameImg.sprite = SpriteBank.VectorOf("flame") ?? SpriteBank.RawPoint("flame");
                 _flameImg.raycastTarget = false;
                 Warp();
             }
@@ -1839,11 +1843,13 @@ namespace LCBridgeOverlay
             float wide = Mathf.Lerp(30f, 52f, k) * (0.9f + 0.16f * n1) * scale;
 
             var rt = (RectTransform)_flameImg.transform;
-            rt.anchoredPosition = new Vector2(x, -(y - 2f));
+            // чуть выше среза сопла: иначе огонь висел под кораблём, а не бил из него
+            rt.anchoredPosition = new Vector2(x, -(y - 9f));
             rt.sizeDelta = new Vector2(wide, len);
             rt.localRotation = Quaternion.Euler(0f, 0f, tilt);
             _flameImg.enabled = true;
-            _flameImg.color = new Color(1f, 1f, 1f, 0.88f + 0.12f * n1);
+            // цвет темы, как у доставщика и у построек
+            _flameImg.color = OverlayStyle.WithA(S.Frame, 0.8f + 0.2f * n1);
         }
 
         private Image _flameImg;
@@ -2026,6 +2032,8 @@ namespace LCBridgeOverlay
                 {
                     if (_fx == null) { _fx = new MapWeatherFx(); _fx.Init(_art, S, W, H, Ground); }
                     _fx.Rebuild(kinds, fogInside);
+                    Warp();
+                    _fx.KeepWarped();
                 }
             }
 
