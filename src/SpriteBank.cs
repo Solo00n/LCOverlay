@@ -310,6 +310,61 @@ namespace LCBridgeOverlay
             return made;
         }
 
+        /// <summary>
+        /// Контур + залитая нутрянка одной картинкой.
+        ///
+        /// Заливка раньше была отдельным Image поверх иконки, и сколько её ни
+        /// подгоняй — она всё равно расходилась с контуром. Здесь расходиться
+        /// нечему: обе части лежат в ОДНОМ спрайте. Уровень 0..Levels задаёт, на
+        /// сколько плотна нутрянка; шагов достаточно, чтобы переход читался плавным.
+        /// </summary>
+        public const int FillLevels = 16;
+
+        public static Sprite GetOutlineFilled(string key, int level)
+        {
+            if (string.IsNullOrEmpty(key)) return null;
+            level = Mathf.Clamp(level, 0, FillLevels);
+            string ck = "of:" + key + ":" + level;
+            if (_styled.TryGetValue(ck, out var got)) return got;
+
+            Sprite made = null;
+            try
+            {
+                var src = GetRaw(key);
+                if (src != null && src.texture != null)
+                {
+                    var tex = src.texture;
+                    int w = tex.width, h = tex.height;
+                    var px = tex.GetPixels32();
+                    var outPx = new Color32[w * h];
+                    byte inner = (byte)Mathf.RoundToInt(255f * level / FillLevels);
+
+                    bool Solid(int x, int y) =>
+                        x >= 0 && y >= 0 && x < w && y < h && px[y * w + x].a > 90;
+
+                    int th = Mathf.Max(2, Mathf.RoundToInt(Mathf.Max(w, h) / 55f));
+                    for (int y = 0; y < h; y++)
+                        for (int x = 0; x < w; x++)
+                        {
+                            if (!Solid(x, y)) { outPx[y * w + x] = new Color32(0, 0, 0, 0); continue; }
+                            bool edge = false;
+                            for (int d = 1; d <= th && !edge; d++)
+                                edge = !Solid(x - d, y) || !Solid(x + d, y) ||
+                                       !Solid(x, y - d) || !Solid(x, y + d);
+                            outPx[y * w + x] = new Color32(255, 255, 255, edge ? (byte)255 : inner);
+                        }
+
+                    var dst = new Texture2D(w, h, TextureFormat.RGBA32, false);
+                    dst.SetPixels32(outPx);
+                    made = Wrap(dst, FilterMode.Bilinear);
+                }
+            }
+            catch { }
+            if (made == null) made = Get(key);
+            _styled[ck] = made;
+            return made;
+        }
+
         /// <summary>Квантование канала до 5 ступеней — узнаваемая палитра старых игр.</summary>
         private static byte Q(int v) => (byte)Mathf.Clamp(Mathf.RoundToInt(v / 51f) * 51, 0, 255);
 

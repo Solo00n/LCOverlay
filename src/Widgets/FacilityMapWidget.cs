@@ -40,6 +40,8 @@ namespace LCBridgeOverlay
         private readonly List<Vector4> _outPaths = new List<Vector4>();  // и снаружи тоже
         private readonly List<float> _nearSmooth = new List<float>();    // сглаженная близость
         private readonly List<float> _face = new List<float>();          // куда смотрит иконка
+        private readonly List<float> _faceHold = new List<float>();      // и её удержанное значение
+        private readonly List<Vector2> _sep = new List<Vector2>();       // сглаженный расход
         private float _arrive = 1f;   // 0 метки ещё летят с краёв, 1 на местах
         private string _wxKind = "?";   // что сейчас нарисовано
         private string _wxRaw;          // последняя сырая строка погоды
@@ -933,6 +935,8 @@ namespace LCBridgeOverlay
             var want = new Vector2[dots.Count];
             _face.Clear();
             for (int q = 0; q < dots.Count; q++) _face.Add(1f);
+            while (_faceHold.Count < dots.Count) _faceHold.Add(1f);
+            while (_sep.Count < dots.Count) _sep.Add(Vector2.zero);
             for (int i = 0; i < n; i++)
             {
                 Vector2 off = Vector2.zero;
@@ -946,38 +950,49 @@ namespace LCBridgeOverlay
                     var pos = Vector2.Lerp(a, b, Mathf.SmoothStep(0f, 1f, ph));
                     off = new Vector2(pos.x, -pos.y) - slots[i].anchoredPosition;
 
-                    // Картинки нарисованы смотрящими влево, поэтому отражаем только
-                    // тех, кто идёт слева направо.
+                    // Куда идём. У самого разворота ph и ahead почти равны, и знак
+                    // прыгал туда-сюда — иконка мелко дёргалась. Поэтому у точек
+                    // разворота направление НЕ меняем, а держим прежнее.
                     float ahead = Mathf.PingPong(t * sp + i * 0.41f + 0.03f, 1f);
-                    bool goingRight = (ahead > ph) == (b.x >= a.x);
-                    _face[i] = goingRight ? -1f : 1f;
+                    if (ph > 0.06f && ph < 0.94f)
+                    {
+                        bool goingRight = (ahead > ph) == (b.x >= a.x);
+                        _faceHold[i] = goingRight ? -1f : 1f;
+                    }
+                    _face[i] = _faceHold.Count > i ? _faceHold[i] : 1f;
                 }
                 want[i] = off + new Vector2(0f, IconLift);
             }
 
             // и раздвигаем тех, кто налез друг на друга: иначе иконки перекрываются
             // и вместо двух зверей видно одного
+            // Расталкивание считаем в отдельный вектор и ПОДМЕШИВАЕМ его плавно.
+            // Раньше оно применялось сразу и целиком: две метки у порога расстояния
+            // толкали друг друга каждый кадр туда-обратно — это и было дрожание.
             const float MinSep = 34f;
-            for (int pass = 0; pass < 2; pass++)
-                for (int i = 0; i < n; i++)
-                    for (int j = i + 1; j < n; j++)
-                    {
-                        if (i >= slots.Count || j >= slots.Count) continue;
-                        var pi = slots[i].anchoredPosition + want[i];
-                        var pj = slots[j].anchoredPosition + want[j];
-                        var d = pj - pi;
-                        float dist2 = d.magnitude;
-                        if (dist2 >= MinSep || dist2 < 0.001f) continue;
-                        // Расходятся ПО ДУГЕ навстречу друг другу: один по часовой,
-                        // другой против. Прямое расталкивание выглядело как рывок,
-                        // а так это читается как «разошлись, обойдя друг друга».
-                        var n2 = d.normalized;
-                        var tangent = new Vector2(-n2.y, n2.x);
-                        float need = (MinSep - dist2) * 0.5f;
-                        var push = n2 * (need * 0.45f) + tangent * (need * 0.85f);
-                        want[i] -= push;
-                        want[j] += push;
-                    }
+            var push = new Vector2[dots.Count];
+            for (int i = 0; i < n; i++)
+                for (int j = i + 1; j < n; j++)
+                {
+                    if (i >= slots.Count || j >= slots.Count) continue;
+                    var pi = slots[i].anchoredPosition + want[i];
+                    var pj = slots[j].anchoredPosition + want[j];
+                    var d = pj - pi;
+                    float dist2 = d.magnitude;
+                    if (dist2 >= MinSep || dist2 < 0.001f) continue;
+                    var n2 = d.normalized;
+                    var tangent = new Vector2(-n2.y, n2.x);
+                    float need = (MinSep - dist2) * 0.5f;
+                    var p2 = n2 * (need * 0.45f) + tangent * (need * 0.85f);
+                    push[i] -= p2;
+                    push[j] += p2;
+                }
+            for (int i = 0; i < n; i++)
+            {
+                while (_sep.Count <= i) _sep.Add(Vector2.zero);
+                _sep[i] = Vector2.Lerp(_sep[i], push[i], 1f - Mathf.Exp(-dt * 4f));
+                want[i] += _sep[i];
+            }
 
             for (int i = 0; i < dots.Count; i++)
             {
@@ -1005,7 +1020,8 @@ namespace LCBridgeOverlay
                 _nearSmooth[i] = Mathf.MoveTowards(_nearSmooth[i], nearTarget, dt / 0.7f);
                 float near = _nearSmooth[i];
 
-                var spr = MobIconFor(raw);
+                // Контур и заливка — ОДИН спрайт: разъезжаться нечему.
+                var spr = MobIconFilled(raw, near);
                 if (spr != null && img.sprite != spr) img.sprite = spr;
 
                 float phase = i * 1.7f;
@@ -1045,11 +1061,8 @@ namespace LCBridgeOverlay
                 col.a = Mathf.MoveTowards(img.color.a, a2, dt * 4f);
                 img.color = col;
 
-                // Заливку двигаем ПОСЛЕ иконки. Раньше она копировала положение до
-                // того, как оно выставлено, и отставала на кадр — на улице, где шаг
-                // широкий, это читалось как сдвинутый силуэт и как «вторая рыба».
                 var fills = walking ? _inFill : _outFill;
-                UpdateFillMark(i < fills.Count ? fills[i] : null, rt, raw, near);
+                if (i < fills.Count && fills[i] != null) fills[i].enabled = false;
             }
         }
 
@@ -1065,6 +1078,27 @@ namespace LCBridgeOverlay
                 return m.Success ? int.Parse(m.Groups[1].Value) : 1;
             }
             catch { return 1; }
+        }
+
+        /// <summary>
+        /// Иконка с нутрянкой по близости. В контурном стиле заливка вшита в сам
+        /// спрайт; в остальных стилях иконка и так сплошная, и ничего не нужно.
+        /// </summary>
+        private static Sprite MobIconFilled(string raw, float near)
+        {
+            try
+            {
+                string key = MobRailWidget.IconKeyPublic(raw);
+                if (string.IsNullOrEmpty(key)) return NotifyWidget.Folder();
+                if (!MobRailWidget.TintedIconStylePublic()) return SpriteBank.Get(key);
+
+                // в покое нутрянка уже чуть видна, вплотную — залита целиком
+                float k = Mathf.Clamp01(near);
+                k = k * k * (3f - 2f * k);
+                int lvl = Mathf.RoundToInt(Mathf.Lerp(4f, SpriteBank.FillLevels, k));
+                return SpriteBank.GetOutlineFilled(key, lvl);
+            }
+            catch { return NotifyWidget.Folder(); }
         }
 
         private static Sprite MobIconFor(string raw, bool solid = false)

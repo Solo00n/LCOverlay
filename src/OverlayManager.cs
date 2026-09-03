@@ -634,7 +634,7 @@ namespace LCBridgeOverlay
         /// <summary>Сели на луну — показать ивент на 10 секунд.</summary>
         public void NotifyDayStarted()
         {
-            _eventShowUntil = Time.unscaledTime + 10f;
+            _eventShowUntil = Time.unscaledTime + Mathf.Max(1f, ConfigSettings.EventPlateSeconds.Value);
             _notify?.WakeUp();
             Plugin.Log?.LogInfo("[notify] начало дня — плашка ивента на 10 с.");
         }
@@ -663,7 +663,8 @@ namespace LCBridgeOverlay
             bool leaving = ShipLeavingNow();
             if (leaving && !_wasLeavingForEvent)
             {
-                _eventShowUntil = Time.unscaledTime + 5f;
+                _eventShowUntil = Time.unscaledTime +
+                                  Mathf.Max(1f, ConfigSettings.EventPlateSeconds.Value * 0.5f);
                 Plugin.Log?.LogInfo("[notify] отлёт — плашка ивента на 5 с.");
             }
             _wasLeavingForEvent = leaving;

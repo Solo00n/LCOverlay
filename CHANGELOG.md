@@ -1,5 +1,11 @@
 # Changelog — LCBridgeOverlay
 
+## 1.13.1
+- **Outline and fill can no longer come apart.** They were two images kept in step by copying one transform onto the other, and however carefully that was done something always drifted. They are one sprite now, the interior baked in at sixteen densities and chosen by distance, so there is nothing left to misalign.
+- **Creatures stopped twitching as they walk.** Two of them near the spacing threshold shoved each other back and forth every frame; the push is now eased in rather than applied whole. Facing also flickered at each turn, where the direction is genuinely ambiguous, so it is held through the turn instead.
+- **Rain stays its own colour during a storm** — the storm colour belongs to the lightning, and yellow rain looked absurd.
+- **`EventPlateSeconds` sets how long the event plate stays** after landing (ten by default, half that on departure).
+
 ## 1.13.0
 - **Traps appear on the schematic**, gathered in the top-right corner inside the building. They keep the panel's rules — hidden until scanned where that is required, faded by distance, growing with numbers — but they do not wander: they are fixtures, and in the corner they stay clear of the creatures.
 

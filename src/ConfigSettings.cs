@@ -64,6 +64,7 @@ namespace LCBridgeOverlay
         public static ConfigEntry<bool> NotifyMode;           // панель спит и просыпается на новости
         public static ConfigEntry<float> NotifyHoldSeconds;   // сколько держать её разбуженной
         public static ConfigEntry<bool> EventPlateAutoHide;   // плашка ивента гаснет сама
+        public static ConfigEntry<float> EventPlateSeconds;   // сколько её держать после посадки
         public static ConfigEntry<bool> TeamDeaths;           // считать смерти всей команды
         public static ConfigEntry<bool> DeathsOnlyOnLeave;    // засчитывать смерти только при отлёте с луны
         public static ConfigEntry<bool> HideOnPopups;         // прятать оверлей на игровых окнах
@@ -271,6 +272,9 @@ namespace LCBridgeOverlay
 
             EventPlateAutoHide = cfg.Bind("Behavior", "EventPlateAutoHide", false,
                 "Плашка ивента не висит весь день, а всплывает дважды: на 10 секунд после посадки и на 5 при отлёте. В режиме уведомлений так и без этой настройки.");
+
+            EventPlateSeconds = cfg.Bind("Behavior", "EventPlateSeconds", 10f,
+                "Сколько секунд плашка ивента висит после посадки. При отлёте она показывается вдвое короче.");
 
             // [WebSocket]
             WebSocketEnabled = cfg.Bind("WebSocket", "Enabled", false,

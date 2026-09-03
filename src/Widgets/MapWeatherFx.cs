@@ -139,7 +139,9 @@ namespace LCBridgeOverlay
             if (_rain || _storm)
                 for (int i = 0; i < 20; i++)
                 {
-                    var img = Line(0f, 0f, 3f, 9f, 1.5f, WxColor(_storm ? "storm" : "rain", 0.75f));
+                    // дождь всегда своего цвета: в грозу жёлтые капли выглядели нелепо,
+                    // грозовой цвет достаётся только молнии
+                    var img = Line(0f, 0f, 3f, 9f, 1.5f, WxColor("rain", 0.75f));
                     _drops.Add(new Drop
                     {
                         Rt = (RectTransform)img.transform, Img = img,
