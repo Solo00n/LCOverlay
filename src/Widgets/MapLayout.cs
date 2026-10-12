@@ -52,6 +52,10 @@ namespace LCBridgeOverlay
                 {
                     string own = Path.Combine(Path.Combine(MapImages.Dir, theme), "map.txt");
                     if (File.Exists(own)) path = own;
+                    // У темы свой рисунок, а своего map.txt нет — общий не берём: там
+                    // места монстров под шахту, и в особняке они разбегались по пещерам,
+                    // которых на его рисунке нет. Пусть работают места темы по умолчанию.
+                    else if (MapImages.DirFor(theme) != MapImages.Dir) return null;
                 }
                 if (!File.Exists(path)) return null;
                 var lay = new MapLayout();

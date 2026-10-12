@@ -1,5 +1,11 @@
 # Changelog — LCBridgeOverlay
 
+## 1.18.1
+- **In the mansion, creatures inside stay in the house and those outside on the meadow.** A theme with its own drawing was still borrowing the mine's monster places from the shared `map.txt`, so they wandered through caves the mansion doesn't have. Such a theme now uses only its own `map.txt`, or its built-in places.
+- **Rain strikes the mansion's roof** — both slopes up to the ridge — instead of stopping at one height across the whole house, in mid-air above the eaves.
+- **Splashes rise from wherever the drop landed.** They were always drawn on the ground line, even for drops that hit a roof.
+- **In the mansion, floodwater rises from the bottom of the meadow** towards the creatures outside, across the full width, rather than in a strip at the left edge.
+
 ## 1.18.0
 - **Each interior can have a schematic of its own.** Layers placed in a subfolder named for the theme — `mansion`, `gordion`, `mineshaft`, `facility` — replace the shared set for that theme; a theme without one keeps the shared schematic, which is how the facility still uses the caves. A `map.txt` beside them sets that theme's monster places.
 - **The Mansion and the Company building on Gordion get their own drawings.** Gordion is recognised by the moon rather than an interior, since it has none, and with no breaker there it never goes dark. In the mansion only the house darkens, not the meadow beneath it.

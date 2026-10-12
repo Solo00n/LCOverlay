@@ -24,7 +24,7 @@ namespace LCBridgeOverlay
 
         // ---- элементы ----
         private class Drop { public RectTransform Rt; public Image Img; public float X, Y, Sp, Len; }
-        private class Splash { public RectTransform A, B; public Image ImgA, ImgB; public float Life = -1f; public float X; }
+        private class Splash { public RectTransform A, B; public Image ImgA, ImgB; public float Life = -1f; public float X, Y; }
         private class Meteor { public RectTransform[] Seg; public Image[] Img; public float X, Y, Sp; }
 
         private readonly List<Drop> _drops = new List<Drop>();
@@ -39,6 +39,24 @@ namespace LCBridgeOverlay
         private bool _rain, _storm, _flood, _eclipse, _fog, _meteor;
         private float _boltAt = -99f, _boltNext = 2.5f;
         private float _bx1, _bx2, _broof;   // здание: дождь падает НА него
+        private float _peakX = -1f, _peakY;  // конёк двускатной крыши; -1 — крыша плоская
+        private float _fx1 = -1f, _fx2, _fyLow, _fyHigh;   // своя полоса воды; -1 — как у шахты
+
+        /// <summary>
+        /// Крыша двускатная: от свесов (высота broof у краёв здания) к коньку.
+        /// Без этого капли останавливались на одной высоте поперёк всего дома —
+        /// над скатами, в пустом воздухе.
+        /// </summary>
+        public void SetRoofPeak(float x, float y) { _peakX = x; _peakY = y; }
+
+        /// <summary>
+        /// Где стоит и докуда поднимается вода: полоса по ширине x1…x2, уровень от
+        /// yLow (начало дня) к yHigh (конец).
+        /// </summary>
+        public void SetFlood(float x1, float x2, float yLow, float yHigh)
+        {
+            _fx1 = x1; _fx2 = x2; _fyLow = yLow; _fyHigh = yHigh;
+        }
 
         /// <summary>Сила помех от тумана: 0 нет, 1 максимум. Её берут иконки монстров.</summary>
         public float FogAmount { get; private set; }
@@ -319,8 +337,8 @@ namespace LCBridgeOverlay
                 }
                 float k = sp.Life;
                 float r = Mathf.Lerp(1f, 7f, k);
-                Place(sp.A, sp.X, Ground, sp.X + r, Ground - r * 0.8f, 1.5f);
-                Place(sp.B, sp.X, Ground, sp.X - r, Ground - r * 0.8f, 1.5f);
+                Place(sp.A, sp.X, sp.Y, sp.X + r, sp.Y - r * 0.8f, 1.5f);
+                Place(sp.B, sp.X, sp.Y, sp.X - r, sp.Y - r * 0.8f, 1.5f);
                 var col = OverlayStyle.WithA(S.Frame, 0.6f * (1f - k));
                 sp.ImgA.color = sp.ImgB.color = col;
             }
@@ -332,15 +350,25 @@ namespace LCBridgeOverlay
                 // подземелье: пещеры и комнаты красить нельзя.
                 // К концу дня вода поднимается заметно выше, чем раньше.
                 float prog = FloodProgress();
-                float y = Mathf.Lerp(Ground + 4f, Ground - 46f, prog);
-
-                // И НЕ заходит на здание: оно стоит на земле, затапливать его нечем.
-                // Поэтому линия обрывается у его левой стены.
-                float right = Mathf.Min(W - 8f, _bx1 - 4f);
-                if (right < 12f) right = 12f;
-                Place((RectTransform)_waterLine.transform, 8f, y, right, y, 2.5f);
-                Place((RectTransform)_waterRipple.transform, 16f, y + 5f + Mathf.Sin(t * 1.6f) * 1.5f,
-                      Mathf.Max(20f, right - 8f), y + 5f + Mathf.Sin(t * 1.6f + 1f) * 1.5f, 1.5f);
+                float y, left, right;
+                if (_fx1 >= 0f)
+                {
+                    // у темы своя полоса: вода поднимается снизу по всей ширине
+                    y = Mathf.Lerp(_fyLow, _fyHigh, prog);
+                    left = _fx1; right = _fx2;
+                }
+                else
+                {
+                    y = Mathf.Lerp(Ground + 4f, Ground - 46f, prog);
+                    // И НЕ заходит на здание: оно стоит на земле, затапливать его нечем.
+                    // Поэтому линия обрывается у его левой стены.
+                    left = 8f;
+                    right = Mathf.Min(W - 8f, _bx1 - 4f);
+                    if (right < 12f) right = 12f;
+                }
+                Place((RectTransform)_waterLine.transform, left, y, right, y, 2.5f);
+                Place((RectTransform)_waterRipple.transform, left + 8f, y + 5f + Mathf.Sin(t * 1.6f) * 1.5f,
+                      Mathf.Max(left + 12f, right - 8f), y + 5f + Mathf.Sin(t * 1.6f + 1f) * 1.5f, 1.5f);
 
             }
 
@@ -397,18 +425,27 @@ namespace LCBridgeOverlay
 
         /// <summary>Точка попадает на здание (значит перекрыта им).</summary>
         private bool Behind(float x, float y) =>
-            x >= _bx1 && x <= _bx2 && y >= _broof && y <= Ground;
+            x >= _bx1 && x <= _bx2 && y >= RoofAt(x) && y <= Ground;
 
         /// <summary>Высота поверхности в этой точке: крыша здания либо земля.</summary>
         private float SurfaceAt(float x) =>
-            (x >= _bx1 && x <= _bx2) ? _broof : Ground;
+            (x >= _bx1 && x <= _bx2) ? RoofAt(x) : Ground;
+
+        /// <summary>Высота крыши над этой точкой — плоской или по скату к коньку.</summary>
+        private float RoofAt(float x)
+        {
+            if (_peakX < 0f) return _broof;
+            float t = x < _peakX ? (x - _bx1) / Mathf.Max(1f, _peakX - _bx1)
+                                 : (_bx2 - x) / Mathf.Max(1f, _bx2 - _peakX);
+            return Mathf.Lerp(_broof, _peakY, Mathf.Clamp01(t));
+        }
 
         private void PopSplash(float x, float y)
         {
             foreach (var sp in _splash)
             {
                 if (sp.Life >= 0f) continue;
-                sp.Life = 0f; sp.X = x;
+                sp.Life = 0f; sp.X = x; sp.Y = y;   // на крыше брызги летят с крыши
                 sp.ImgA.enabled = sp.ImgB.enabled = true;
                 return;
             }

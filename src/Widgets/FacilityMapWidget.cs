@@ -2087,7 +2087,18 @@ namespace LCBridgeOverlay
                 }
                 else
                 {
-                    if (_fx == null) { _fx = new MapWeatherFx(); _fx.Init(_art, S, W, H, Ground); }
+                    if (_fx == null)
+                    {
+                        _fx = new MapWeatherFx();
+                        _fx.Init(_art, S, W, H, Ground);
+                        if (_builtFor == "mansion")
+                        {
+                            // дождь бьёт по скатам: конёк по центру, свесы у краёв дома
+                            _fx.SetRoofPeak(165f, 6f);
+                            // вода идёт снизу по лугу, там, где ходят уличные монстры
+                            _fx.SetFlood(4f, W - 4f, CaveBottom, Ground + 40f);
+                        }
+                    }
                     _fx.Rebuild(kinds, fogInside);
                     Warp();
                     _fx.KeepWarped();
@@ -2137,7 +2148,7 @@ namespace LCBridgeOverlay
                     Ground = 252f;
                     RoomTop = 96f; RoomBottom = 248f; RoomLeft = 72f; RoomRight = 260f;
                     CaveTop = 258f; CaveBottom = 396f;
-                    BuildX1 = 40f; BuildX2 = 290f; BuildRoofY = 8f;
+                    BuildX1 = 40f; BuildX2 = 290f; BuildRoofY = 92f;   // свесы; конёк задан отдельно
                     ShipX = 306f;                   // справа от дома, на свободной земле
                     _gloomTop = 92f; _gloomBottom = 250f;   // темнеет дом, а не луг
                     break;
