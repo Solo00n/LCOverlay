@@ -76,10 +76,36 @@ namespace LCBridgeOverlay
         /// <summary>Сетка, в которой считается фон и по которой кроится полумрак.</summary>
         public const int GloomW = 220, GloomH = 268;
 
+        /// <summary>
+        /// Пиксель вообще нарисован?
+        ///
+        /// Макет можно вести двумя способами, и оба законны: прозрачностью (белая
+        /// линия, фон той же белой с альфой 30) или краской по чёрному холсту, как
+        /// привычнее в Aseprite. Поэтому чёрное в полную силу значит пустоту, а не
+        /// чёрную краску: иначе весь холст уходил бы под схему сплошной плитой.
+        /// </summary>
+        private static bool Visible(Color32 c)
+        {
+            return c.a > 8 && Mathf.Max(c.r, Mathf.Max(c.g, c.b)) > 10;
+        }
+
+        /// <summary>
+        /// Насколько пиксель плотен: прозрачность, помноженная на яркость. Так оба
+        /// способа ведения макета сходятся к одному числу — белый с альфой 30 и
+        /// серый 30 в полную силу дают почти одинаково слабый фон.
+        ///
+        /// Степень 0.75 поднимает полутона: в лоб серые рельсы и трубы проваливались.
+        /// </summary>
+        private static float Presence(Color32 c)
+        {
+            float luma = Mathf.Max(c.r, Mathf.Max(c.g, c.b)) / 255f;
+            return (c.a / 255f) * Mathf.Pow(luma, 0.75f);
+        }
+
         /// <summary>Пиксель жёлтый — значит лампа, на каком бы слое он ни лежал.</summary>
         private static bool IsLampPixel(Color32 c)
         {
-            return c.a > 8 && c.r > 150 && c.g > 120 && c.r - c.b > 80;
+            return Visible(c) && c.r > 150 && c.g > 120 && c.r - c.b > 80;
         }
 
         public static string Dir
@@ -91,24 +117,48 @@ namespace LCBridgeOverlay
             }
         }
 
-        private static List<Layer> _cache;
-        private static bool _scanned;
-
-        /// <summary>Слои из папки, или null если её нет / она пуста.</summary>
-        public static List<Layer> Load()
+        /// <summary>
+        /// Папка слоёв под конкретную тему: особняк, завод, шахта, Гордион.
+        ///
+        /// Своя подпапка перекрывает общую. Нет подпапки — берётся общий набор из
+        /// корня, поэтому завод и шахта делят одну схему с пещерами, пока заводу не
+        /// нарисуют собственную.
+        /// </summary>
+        public static string DirFor(string theme)
         {
-            if (_scanned) return _cache;
-            _scanned = true;
             try
             {
-                if (!Directory.Exists(Dir))
+                if (!string.IsNullOrEmpty(theme))
                 {
-                    Directory.CreateDirectory(Dir);
+                    string sub = Path.Combine(Dir, theme);
+                    if (Directory.Exists(sub) && Directory.GetFiles(sub, "*.png").Length > 0) return sub;
+                }
+            }
+            catch { }
+            return Dir;
+        }
+
+        private static readonly Dictionary<string, List<Layer>> _cache =
+            new Dictionary<string, List<Layer>>();
+
+        /// <summary>Слои темы, или null если папки нет / она пуста.</summary>
+        public static List<Layer> Load(string theme = null)
+        {
+            string key = theme ?? "";
+            List<Layer> hit;
+            if (_cache.TryGetValue(key, out hit)) return hit;
+            _cache[key] = null;                    // чтобы пустую папку не перечитывать каждый кадр
+            try
+            {
+                string dir = DirFor(theme);
+                if (!Directory.Exists(dir))
+                {
+                    Directory.CreateDirectory(dir);
                     WriteReadme();
                     return null;
                 }
 
-                var files = Directory.GetFiles(Dir, "*.png");
+                var files = Directory.GetFiles(dir, "*.png");
                 if (files == null || files.Length == 0) return null;
                 Array.Sort(files, StringComparer.OrdinalIgnoreCase);
 
@@ -139,9 +189,9 @@ namespace LCBridgeOverlay
                 }
 
                 if (list.Count == 0) return null;
-                Plugin.Log?.LogInfo($"[map] схема из картинок: слоёв {list.Count} ({Dir}).");
-                _cache = list;
-                return _cache;
+                Plugin.Log?.LogInfo($"[map] схема «{key}»: слоёв {list.Count} ({dir}).");
+                _cache[key] = list;
+                return list;
             }
             catch (Exception e)
             {
@@ -166,7 +216,7 @@ namespace LCBridgeOverlay
                 int x0 = w, y0 = h, x1 = -1, y1 = -1;
                 for (int y = 0; y < h; y++)
                     for (int x = 0; x < w; x++)
-                        if (px[y * w + x].a > 8)
+                        if (Visible(px[y * w + x]))
                         {
                             if (x < x0) x0 = x;
                             if (x > x1) x1 = x;
@@ -181,7 +231,7 @@ namespace LCBridgeOverlay
                 for (int i = 0; i < px.Length; i++)
                 {
                     var c = px[i];
-                    if (c.a <= 8) continue;
+                    if (!Visible(c)) continue;
                     opaque++;
                     int mx = Mathf.Max(c.r, Mathf.Max(c.g, c.b));
                     int mn = Mathf.Min(c.r, Mathf.Min(c.g, c.b));
@@ -206,8 +256,9 @@ namespace LCBridgeOverlay
                         int k = (GloomH - 1 - gy) * GloomW + gx;
                         hits[k]++;
                         var c = px[y * w + x];
-                        if (c.a > 8) cover[k] += 1f;
-                        if (c.a > 8 && c.a < 200) back[k] += 1f;
+                        if (!Visible(c)) continue;
+                        cover[k] += 1f;
+                        if (Presence(c) < 0.72f) back[k] += 1f;
                     }
                 }
                 for (int i = 0; i < back.Length; i++)
@@ -308,7 +359,7 @@ namespace LCBridgeOverlay
                 for (int i = 0; i < src.Length; i++)
                 {
                     var c = src[i];
-                    if (c.a <= 8) { dst[i] = new Color32(0, 0, 0, 0); continue; }
+                    if (!Visible(c)) { dst[i] = new Color32(0, 0, 0, 0); continue; }
                     int mx = Mathf.Max(c.r, Mathf.Max(c.g, c.b));
                     int mn = Mathf.Min(c.r, Mathf.Min(c.g, c.b));
                     if (mx - mn > 30)
@@ -318,10 +369,10 @@ namespace LCBridgeOverlay
                         dst[i] = (!layer.IsLamp && IsLampPixel(c)) ? new Color32(0, 0, 0, 0) : c;
                         continue;
                     }
-                    // Серое поднимаем: в лоб оно давало половинную яркость темы и
-                    // рельсы с колёсами тонули. Белое остаётся белым.
-                    float k = 0.55f + 0.45f * (mx / 255f);
-                    dst[i] = new Color32((byte)(fr * k), (byte)(fg * k), (byte)(fb * k), c.a);
+                    // Цвет темы в полную силу, а вся «сила» рисунка уходит в
+                    // прозрачность: так белая линия, белый фон с альфой 30 и серая
+                    // труба по чёрному холсту ложатся одинаково верно.
+                    dst[i] = new Color32(fr, fg, fb, (byte)(Mathf.Clamp01(Presence(c)) * 255f));
                 }
 
                 var tex = new Texture2D(layer.Tex.width, layer.Tex.height, TextureFormat.RGBA32, false)
@@ -380,8 +431,7 @@ namespace LCBridgeOverlay
         /// <summary>Сбросить кэш — чтобы подхватить поправленные файлы без перезапуска.</summary>
         public static void Forget()
         {
-            _scanned = false;
-            _cache = null;
+            _cache.Clear();
         }
 
         private static void WriteReadme()
@@ -399,6 +449,11 @@ namespace LCBridgeOverlay
   *cave*   пещеры: красятся в цвет опасности темы
   *elev*   кабина лифта: ездит вместе с настоящей
   *cable*  тросы лифта: видны только выше потолка кабины
+
+Рисовать можно двумя способами — мод понимает оба:
+  прозрачностью: белая линия, фон той же белой с альфой ~30;
+  краской по чёрному: чёрное считается пустотой, яркость задаёт плотность.
+Жёлтым — только лампы: их мод вынимает в свой слой и гасит со щитком.
   *guide*  направляющий слой, в игру НЕ идёт
   прочее   конструкция, красится в цвет темы
 
