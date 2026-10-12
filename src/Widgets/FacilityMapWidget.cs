@@ -24,7 +24,7 @@ namespace LCBridgeOverlay
     {
         // холст схемы: рисуем в этих координатах, потом всё масштабируется целиком
         private const float W = 330f, H = 400f;
-        private const float Ground = 96f;       // линия поверхности (сверху вниз)
+        private float Ground = 96f;             // линия поверхности (сверху вниз), своя у темы
 
         private OverlayManager _mgr;
         private OverlayStyle S;
@@ -260,13 +260,14 @@ namespace LCBridgeOverlay
             // Порядок источников: картинки из папки, потом текстовый файл, потом
             // встроенный рисунок. Так свой макет можно принести и картинками,
             // и координатами, ничего не пересобирая.
-            var imgs = MapImages.Load();
+            ApplyZones(interior);
+            var imgs = MapImages.Load(interior);
             if (imgs != null && imgs.Count > 0)
             {
                 _gloomSrc = imgs;
                 DrawFromImages(imgs);
                 ResolveElevatorRange();
-                var slotsLay = MapLayout.Load();
+                var slotsLay = MapLayout.Load(interior);
                 if (slotsLay != null) AddSlotsFromLayout(slotsLay);
                 if (_inDots.Count == 0 && _outDots.Count == 0) DefaultSlots();
                 SortInsidePathsByFloor();
@@ -276,7 +277,7 @@ namespace LCBridgeOverlay
                 return;
             }
 
-            var lay = MapLayout.Load();
+            var lay = MapLayout.Load(interior);
             if (lay != null && DrawFromLayout(lay))
             {
                 _builtFor = interior ?? "";
@@ -701,22 +702,38 @@ namespace LCBridgeOverlay
         /// <summary>Запасные места, если их нигде не задали.</summary>
         private void DefaultSlots()
         {
+            // уличные — цепочкой чуть выше линии земли (у особняка — по лугу под ней)
+            bool below = _builtFor == "mansion";
+            float oy = below ? Ground + 34f : Ground - 18f;
             for (int i = 0; i < 8; i++)
             {
-                float x = 20f + i * 22f;
-                _outPaths.Add(new Vector4(x - 20f, 78f, x + 20f, 78f));
-                var sl = Slot(x - 20f, 78f);
+                float x = 20f + i * ((W - 60f) / 7f);
+                float y = oy + (below ? (i % 2) * 36f : 0f);
+                _outPaths.Add(new Vector4(x - 16f, y, x + 16f, y));
+                var sl = Slot(x - 16f, y);
                 _outSlots.Add(sl); _outFill.Add(MakeMark(sl, "Fill")); _outDots.Add(Dot(sl));
             }
+
             _inPaths.Clear();
-            var paths = new[]
-            {
-                new Vector4(56f, 210f, 140f, 210f), new Vector4(160f, 210f, 244f, 210f),
-                new Vector4(70f, 192f, 150f, 192f), new Vector4(180f, 192f, 266f, 192f),
-                new Vector4(62f, 276f, 106f, 288f), new Vector4(120f, 296f, 156f, 312f),
-                new Vector4(140f, 330f, 190f, 328f), new Vector4(206f, 322f, 246f, 340f),
-                new Vector4(250f, 352f, 288f, 356f), new Vector4(170f, 336f, 214f, 330f),
-            };
+            Vector4[] paths;
+            if (_builtFor == "mansion")
+                paths = new[]
+                {
+                    new Vector4(84f, 240f, 150f, 240f), new Vector4(180f, 240f, 250f, 240f),
+                    new Vector4(70f, 148f, 106f, 148f), new Vector4(226f, 148f, 262f, 148f),
+                    new Vector4(130f, 212f, 200f, 212f), new Vector4(140f, 120f, 190f, 120f),
+                };
+            else if (_builtFor == "gordion")
+                paths = new Vector4[0];          // комплекса на Гордионе нет
+            else
+                paths = new[]
+                {
+                    new Vector4(56f, 210f, 140f, 210f), new Vector4(160f, 210f, 244f, 210f),
+                    new Vector4(70f, 192f, 150f, 192f), new Vector4(180f, 192f, 266f, 192f),
+                    new Vector4(62f, 276f, 106f, 288f), new Vector4(120f, 296f, 156f, 312f),
+                    new Vector4(140f, 330f, 190f, 328f), new Vector4(206f, 322f, 246f, 340f),
+                    new Vector4(250f, 352f, 288f, 356f), new Vector4(170f, 336f, 214f, 330f),
+                };
             foreach (var seg in paths)
             {
                 _inPaths.Add(seg);
@@ -1005,7 +1022,7 @@ namespace LCBridgeOverlay
             if (!alive || p == null) return;
 
             float dt = Time.unscaledDeltaTime;
-            string interior = p.interiorType ?? "";
+            string interior = ThemeFor(p);
             if (_builtFor == null || _builtFor != interior) Build(interior);
 
             _moonText.text = (p.moonName ?? "- -").ToUpperInvariant();
@@ -1087,6 +1104,11 @@ namespace LCBridgeOverlay
 
         private void UpdateGloom(float dt)
         {
+            if (_noGloom)
+            {
+                if (_darkNoise != null) _darkNoise.enabled = false;
+                return;
+            }
             if (float.IsNaN(_gloomTop))
                 _gloomTop = _elevCar != null ? Mathf.Max(0f, _elevCarTop - 34f) : RoomTop;
 
@@ -1113,7 +1135,7 @@ namespace LCBridgeOverlay
                 else
                 {
                     // схема собрана линиями — обрезать не по чему
-                    float span = Mathf.Max(20f, H - _gloomTop);
+                    float span = Mathf.Max(20f, _gloomBottom - _gloomTop);
                     rt.anchoredPosition = new Vector2(0f, -_gloomTop);
                     rt.sizeDelta = new Vector2(W, span);
                     _darkNoise.sprite = SpriteBank.GloomGrad(_gloomSlope * W / span);
@@ -1181,6 +1203,8 @@ namespace LCBridgeOverlay
                             if (a > cover) cover = a;
                         }
                         if (cover <= 0.02f) { px[y * GW + x] = new Color32(0, 0, 0, 0); continue; }
+                        // ниже границы темы не темнеет: у особняка там луг, а не дом
+                        if (cy > _gloomBottom) { px[y * GW + x] = new Color32(0, 0, 0, 0); continue; }
 
                         // набор плотности сверху вниз, кромка может идти наклонно
                         float t = (cy - _gloomTop - (u - 0.5f) * _gloomSlope) / span;
@@ -1596,7 +1620,8 @@ namespace LCBridgeOverlay
         // Садится СЛЕВА, на траву, а не над кораблём: там пусто и он никому не мешает.
         // Садится СЛЕВА на траву; НИЖЕ линии земли — так он стоит на ней, а не
         // висит над. Заходит из правого верхнего угла.
-        private const float ShipX = 62f, ShipGroundY = Ground + 9f;
+        private float ShipX = 62f;
+        private float ShipGroundY => Ground + 9f;
         private const float ShipFallSecs = 8f;      // ровно столько идёт посадка
         private const float ShipHoverAt = 6f;       // с этой секунды висит у земли
         private const float ShipDropAt = 7f;        // с этой — опускается на неё
@@ -2076,10 +2101,66 @@ namespace LCBridgeOverlay
 
         // Границы зон на холсте — эффекты по ним ориентируются. Значения совпадают с
         // тем, что нарисовано; при своём макете правятся здесь же.
-        private const float RoomTop = 158f, RoomBottom = 236f;
-        private const float RoomLeft = 30f, RoomRight = 318f;
-        private const float BuildX1 = 192f, BuildX2 = 318f, BuildRoofY = 22f;
-        private const float CaveTop = 250f, CaveBottom = 384f;
+        private float RoomTop = 158f, RoomBottom = 236f;
+        private float RoomLeft = 30f, RoomRight = 318f;
+        private float BuildX1 = 192f, BuildX2 = 318f, BuildRoofY = 22f;
+        private float CaveTop = 250f, CaveBottom = 384f;
+        private float _gloomBottom = H;         // ниже — не темнеет (у особняка это луг)
+        private bool _noGloom;                  // у Гордиона нет щитка — и темнеть нечему
+
+        /// <summary>
+        /// Тема схемы: особняк, завод, шахта или Гордион.
+        ///
+        /// Гордион — луна, а не интерьер: комплекса там нет, поэтому ловим его по
+        /// имени луны. Остальное — по интерьеру. Своя тема без своей папки слоёв
+        /// рисуется общей схемой: так завод пока живёт на схеме с пещерами.
+        /// </summary>
+        private static string ThemeFor(BridgePayload p)
+        {
+            string moon = (p?.moonName ?? "").ToLowerInvariant();
+            if (moon.Contains("gordion") || moon.Contains("company")) return "gordion";
+            return (p?.interiorType ?? "").Trim().ToLowerInvariant();
+        }
+
+        /// <summary>
+        /// Где у темы что лежит на холсте: линия земли, помещения, порода, постройка,
+        /// место посадки. По этим границам ходят погода, дропшип, ловушки и тьма.
+        /// Значения сняты с нарисованных макетов; у темы без своего макета — шахтные.
+        /// </summary>
+        private void ApplyZones(string theme)
+        {
+            _gloomBottom = H; _noGloom = false;
+            switch (theme)
+            {
+                case "mansion":
+                    // дом занимает верх, под ним линия земли и луг с уличными монстрами
+                    Ground = 252f;
+                    RoomTop = 96f; RoomBottom = 248f; RoomLeft = 72f; RoomRight = 260f;
+                    CaveTop = 258f; CaveBottom = 396f;
+                    BuildX1 = 40f; BuildX2 = 290f; BuildRoofY = 8f;
+                    ShipX = 306f;                   // справа от дома, на свободной земле
+                    _gloomTop = 92f; _gloomBottom = 250f;   // темнеет дом, а не луг
+                    break;
+
+                case "gordion":
+                    // палуба посадочного моста, справа стена компании
+                    Ground = 283f;
+                    RoomTop = 300f; RoomBottom = 396f; RoomLeft = 20f; RoomRight = 290f;
+                    CaveTop = 300f; CaveBottom = 396f;
+                    BuildX1 = 298f; BuildX2 = 330f; BuildRoofY = 18f;
+                    ShipX = 70f;
+                    _noGloom = true;
+                    break;
+
+                default:                            // шахта, завод и всё прочее
+                    Ground = 96f;
+                    RoomTop = 158f; RoomBottom = 236f; RoomLeft = 30f; RoomRight = 318f;
+                    CaveTop = 250f; CaveBottom = 384f;
+                    BuildX1 = 192f; BuildX2 = 318f; BuildRoofY = 22f;
+                    ShipX = 62f;
+                    break;
+            }
+        }
 
         /// <summary>Помехи от тумана для иконок монстров: 0 нет, 1 максимум.</summary>
         private float FogNoise => _fx != null ? _fx.FogAmount : 0f;

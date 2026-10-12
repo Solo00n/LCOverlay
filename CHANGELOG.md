@@ -1,5 +1,11 @@
 # Changelog — LCBridgeOverlay
 
+## 1.18.0
+- **Each interior can have a schematic of its own.** Layers placed in a subfolder named for the theme — `mansion`, `gordion`, `mineshaft`, `facility` — replace the shared set for that theme; a theme without one keeps the shared schematic, which is how the facility still uses the caves. A `map.txt` beside them sets that theme's monster places.
+- **The Mansion and the Company building on Gordion get their own drawings.** Gordion is recognised by the moon rather than an interior, since it has none, and with no breaker there it never goes dark. In the mansion only the house darkens, not the meadow beneath it.
+- **The ground line, the building, the dropship's landing spot and the default monster places now come from the theme** instead of being fixed to the mine.
+- **A layer can be painted on a black canvas.** Opaque black now means empty rather than black paint, and a pixel's weight is its opacity times its brightness — so white at low alpha and dark grey painted solid come out the same. Art drawn on black used to arrive as one solid slab of the theme colour.
+
 ## 1.17.1
 - **The dark stopped being a square.** A sheet spanning the full canvas ran past the drawing at its sides and foot, and those edges read as a box against the planet behind. Density is still one plain vertical gradient, but it is now clipped to the silhouette of the schematic — the whole silhouette, so the cart on the lower floor darkens along with everything else. The grain is gone with it: the gradient alone sets the density.
 

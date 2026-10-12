@@ -42,13 +42,20 @@ namespace LCBridgeOverlay
         }
 
         /// <summary>Прочитать файл схемы, или null если его нет / он пуст.</summary>
-        public static MapLayout Load()
+        public static MapLayout Load(string theme = null)
         {
             try
             {
-                if (!File.Exists(Path_)) return null;
+                // у темы может быть свой map.txt рядом со своими слоями
+                string path = Path_;
+                if (!string.IsNullOrEmpty(theme))
+                {
+                    string own = Path.Combine(Path.Combine(MapImages.Dir, theme), "map.txt");
+                    if (File.Exists(own)) path = own;
+                }
+                if (!File.Exists(path)) return null;
                 var lay = new MapLayout();
-                foreach (var raw in File.ReadAllLines(Path_, Encoding.UTF8))
+                foreach (var raw in File.ReadAllLines(path, Encoding.UTF8))
                 {
                     string line = raw.Trim();
                     if (line.Length == 0 || line[0] == '#') continue;
